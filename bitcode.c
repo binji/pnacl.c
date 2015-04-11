@@ -10,9 +10,9 @@
 #include <string.h>
 
 /* TODO(binji): handle variable sizes */
+#define PN_ARENA_SIZE (1*1024*1024)
 #define PN_MAX_BLOCK_ABBREV_OP 10
 #define PN_MAX_BLOCK_ABBREV 100
-#define PN_MAX_TYPES 1000
 #define PN_MAX_FUNCTIONS 30000
 #define PN_MAX_FUNCTION_ARGS 20
 #define PN_MAX_FUNCTION_NAME 256
@@ -424,7 +424,7 @@ typedef struct PNModule {
   uint32_t num_functions;
   PNFunction functions[PN_MAX_FUNCTIONS];
   uint32_t num_types;
-  PNType types[PN_MAX_TYPES];
+  PNType* types;
   uint32_t num_constants;
   PNConstant constants[PN_MAX_CONSTANTS];
   uint32_t num_global_vars;
@@ -462,6 +462,7 @@ typedef struct PNBlockInfoContext {
   PNValue values[PN_MAX_VALUES];
   PNBool use_relative_ids;
   PNModule* module;
+  PNArena arena;
 } PNBlockInfoContext;
 
 static void pn_arena_init(PNArena* arena, uint32_t size) {
@@ -488,7 +489,6 @@ static void* pn_arena_alloc(PNArena* arena, uint32_t size) {
   void* ret = (uint8_t*)arena->data + arena->size;
   arena->size += size;
   arena->last_alloc = ret;
-  TRACE("pn_arena_alloc(%p, %u) => %p\n", arena, size, ret);
   return ret;
 }
 
@@ -501,7 +501,6 @@ static void* pn_arena_allocz(PNArena* arena, uint32_t size) {
 static void* pn_arena_realloc(PNArena* arena, void* p, uint32_t new_size) {
   if (p) {
     if (p != arena->last_alloc) {
-      TRACE("pn_arena_realloc(%p, %p, %u) => XXX\n", arena, p, new_size);
       FATAL(
           "Attempting to realloc, but it was not the last allocation:\n"
           "p = %p, last_alloc = %p\n",
@@ -511,7 +510,6 @@ static void* pn_arena_realloc(PNArena* arena, void* p, uint32_t new_size) {
     arena->size = (uint8_t*)p - (uint8_t*)arena->data;
   }
   void* ret = pn_arena_alloc(arena, new_size);
-  TRACE("pn_arena_realloc(%p, %p, %u) => %p\n", arena, p, new_size, ret);
   assert(!p || ret == p);
   return ret;
 }
@@ -702,10 +700,11 @@ static PNType* pn_context_get_type(PNBlockInfoContext* context,
 
 static PNType* pn_context_append_type(PNBlockInfoContext* context,
                                       PNTypeId* out_type_id) {
+  PNArena* arena = &context->arena;
   *out_type_id = context->module->num_types;
-  if (*out_type_id >= PN_ARRAY_SIZE(context->module->types)) {
-    FATAL("too many types: %d\n", *out_type_id);
-  }
+  uint32_t new_size = sizeof(PNType) * (context->module->num_types + 1);
+  context->module->types =
+      pn_arena_realloc(arena, context->module->types, new_size);
 
   context->module->num_types++;
   return &context->module->types[*out_type_id];
@@ -2362,6 +2361,7 @@ int main(int argc, char** argv) {
   PNModule* module = malloc(sizeof(PNModule));
   PNBlockInfoContext context = {};
   context.module = module;
+  pn_arena_init(&context.arena, PN_ARENA_SIZE);
 
   uint32_t entry = pn_bitstream_read(&bs, 2);
   TRACE("entry: %d\n", entry);
