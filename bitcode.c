@@ -464,6 +464,17 @@ typedef struct PNBlockInfoContext {
   PNModule* module;
 } PNBlockInfoContext;
 
+static void pn_arena_init(PNArena* arena, uint32_t size) {
+  arena->data = malloc(size);
+  arena->size = 0;
+  arena->capacity = size;
+  arena->last_alloc = NULL;
+}
+
+static void pn_arena_destroy(PNArena* arena) {
+  free(arena->data);
+}
+
 static void* pn_arena_alloc(PNArena* arena, uint32_t size) {
   uint32_t avail = arena->capacity - arena->size;
   if (size > avail) {
@@ -471,19 +482,38 @@ static void* pn_arena_alloc(PNArena* arena, uint32_t size) {
           avail, arena->capacity);
   }
 
+  /* Align to 8 bytes */
+  size = (size + 7) & ~7;
+
   void* ret = (uint8_t*)arena->data + arena->size;
   arena->size += size;
   arena->last_alloc = ret;
+  TRACE("pn_arena_alloc(%p, %u) => %p\n", arena, size, ret);
   return ret;
 }
 
-static void* pn_arena_realloc(PNArena* arena, void* p, uint32_t new_size) {
-  if (p != arena->last_alloc) {
-    FATAL("Attempting to realloc, but it was not the last allocation.\n");
-  }
+static void* pn_arena_allocz(PNArena* arena, uint32_t size) {
+  void* p = pn_arena_alloc(arena, size);
+  memset(p, 0, size);
+  return p;
+}
 
-  arena->size = (uint8_t*)p - (uint8_t*)arena->data;
-  return pn_arena_alloc(arena, new_size);
+static void* pn_arena_realloc(PNArena* arena, void* p, uint32_t new_size) {
+  if (p) {
+    if (p != arena->last_alloc) {
+      TRACE("pn_arena_realloc(%p, %p, %u) => XXX\n", arena, p, new_size);
+      FATAL(
+          "Attempting to realloc, but it was not the last allocation:\n"
+          "p = %p, last_alloc = %p\n",
+          p, arena->last_alloc);
+    }
+
+    arena->size = (uint8_t*)p - (uint8_t*)arena->data;
+  }
+  void* ret = pn_arena_alloc(arena, new_size);
+  TRACE("pn_arena_realloc(%p, %p, %u) => %p\n", arena, p, new_size, ret);
+  assert(!p || ret == p);
+  return ret;
 }
 
 static PNArenaMark pn_arena_mark(PNArena* arena) {
