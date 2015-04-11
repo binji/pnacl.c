@@ -17,7 +17,6 @@
 #define PN_MAX_FUNCTION_ARGS 20
 #define PN_MAX_FUNCTION_NAME 256
 #define PN_MAX_VALUES 50000
-#define PN_MAX_CONSTANTS 100000
 #define PN_MAX_GLOBAL_VARS 20000
 #define PN_MAX_INITIALIZERS 30000
 #define PN_MAX_INSTRUCTIONS 1000000
@@ -426,7 +425,7 @@ typedef struct PNModule {
   uint32_t num_types;
   PNType* types;
   uint32_t num_constants;
-  PNConstant constants[PN_MAX_CONSTANTS];
+  PNConstant* constants;
   uint32_t num_global_vars;
   PNGlobalVar global_vars[PN_MAX_GLOBAL_VARS];
   uint32_t num_initializers;
@@ -743,10 +742,11 @@ static PNConstant* pn_context_get_constant(PNBlockInfoContext* context,
 
 static PNConstant* pn_context_append_constant(PNBlockInfoContext* context,
                                               PNConstantId* out_constant_id) {
+  PNArena* arena = &context->arena;
   *out_constant_id = context->module->num_constants;
-  if (*out_constant_id >= PN_ARRAY_SIZE(context->module->constants)) {
-    FATAL("too many constants: %d\n", *out_constant_id);
-  }
+  uint32_t new_size = sizeof(PNConstant) * (context->module->num_constants + 1);
+  context->module->constants =
+      pn_arena_realloc(arena, context->module->constants, new_size);
 
   context->module->num_constants++;
   return &context->module->constants[*out_constant_id];
