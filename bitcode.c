@@ -1973,12 +1973,12 @@ static void pn_function_block_read(PNBlockInfoContext* context,
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
-            int32_t size = pn_record_read_int32(&reader, "size");
-            int32_t alignment =
+            instruction->size = pn_record_read_int32(&reader, "size");
+            instruction->alignment =
                 (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
-            (void)size;
-            (void)alignment;
-            TRACE("  %%%d. alloca %%%d align=%d\n", value_id, size, alignment);
+
+            TRACE("  %%%d. alloca %%%d align=%d\n", value_id, instruction->size,
+                  instruction->alignment);
             break;
           }
 
@@ -1993,18 +1993,17 @@ static void pn_function_block_read(PNBlockInfoContext* context,
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
-            PNValueId src = pn_record_read_int32(&reader, "src");
+            instruction->src_id = pn_record_read_int32(&reader, "src");
             if (context->use_relative_ids) {
-              src = value_id - src;
+              instruction->src_id = value_id - instruction->src_id;
             }
-            PNTypeId type_id = pn_record_read_int32(&reader, "type_id");
-            int32_t alignment =
+            instruction->alignment =
                 (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
+            instruction->type_id = pn_record_read_int32(&reader, "type_id");
 
-            (void)type_id;
-            (void)alignment;
-            TRACE("  %%%d. load src:%%%d type:%d align=%d\n", value_id, src,
-                  type_id, alignment);
+            TRACE("  %%%d. load src:%%%d type:%d align=%d\n", value_id,
+                  instruction->src_id, instruction->type_id,
+                  instruction->alignment);
             break;
           }
 
@@ -2014,16 +2013,18 @@ static void pn_function_block_read(PNBlockInfoContext* context,
                 PNInstructionStore, context, function, &instruction_id);
             instruction->code = code;
 
-            PNValueId dest = pn_record_read_int32(&reader, "dest");
-            PNValueId value = pn_record_read_int32(&reader, "value");
+            instruction->dest_id = pn_record_read_int32(&reader, "dest");
+            instruction->value_id = pn_record_read_int32(&reader, "value");
             if (context->use_relative_ids) {
-              dest = context->num_values - dest;
-              value = context->num_values - value;
+              instruction->dest_id = context->num_values - instruction->dest_id;
+              instruction->value_id =
+                  context->num_values - instruction->value_id;
             }
-            int32_t alignment = pn_record_read_int32(&reader, "alignment");
-            alignment = (1 << alignment) >> 1;
-            TRACE("  store dest:%%%d value:%%%d align=%d\n", dest, value,
-                  alignment);
+            instruction->alignment =
+                (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
+            TRACE("  store dest:%%%d value:%%%d align=%d\n",
+                  instruction->dest_id, instruction->value_id,
+                  instruction->alignment);
             break;
           }
 
