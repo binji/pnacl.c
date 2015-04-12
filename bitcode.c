@@ -16,7 +16,7 @@
 #define PN_MAX_BLOCK_ABBREV_OP 10
 #define PN_MAX_BLOCK_ABBREV 100
 #define PN_MAX_FUNCTIONS 30000
-#define PN_MAX_FUNCTION_ARGS 20
+#define PN_MAX_FUNCTION_ARGS 15
 #define PN_MAX_FUNCTION_NAME 256
 
 #define PN_FALSE 0
@@ -1278,9 +1278,11 @@ static void pn_type_block_read(PNBlockInfoContext* context, PNBitStream* bs) {
             TRACE("%d: type function is_varargs:%d ret:%d ", type_id,
                   type->is_varargs, type->return_type);
 
-            while (pn_record_try_read_uint32(
-                &reader, &type->arg_types[type->num_args])) {
-              TRACE("%d ", type->arg_types[type->num_args]);
+            PNTypeId arg_type_id;
+            while (pn_record_try_read_uint32(&reader, &arg_type_id)) {
+              assert(type->num_args < PN_ARRAY_SIZE(type->arg_types));
+              type->arg_types[type->num_args] = arg_type_id;
+              TRACE("%d ", arg_type_id);
               type->num_args++;
             }
             TRACE("\n");
