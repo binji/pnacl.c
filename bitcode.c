@@ -10,15 +10,13 @@
 #include <string.h>
 
 /* TODO(binji): handle variable sizes */
-#define PN_ARENA_SIZE (1*1024*1024)
+#define PN_ARENA_SIZE (4*1024*1024)
 #define PN_VALUE_ARENA_SIZE (1*1024*1024)
 #define PN_MAX_BLOCK_ABBREV_OP 10
 #define PN_MAX_BLOCK_ABBREV 100
 #define PN_MAX_FUNCTIONS 30000
 #define PN_MAX_FUNCTION_ARGS 20
 #define PN_MAX_FUNCTION_NAME 256
-#define PN_MAX_GLOBAL_VARS 20000
-#define PN_MAX_INITIALIZERS 30000
 #define PN_MAX_INSTRUCTIONS 1000000
 
 #define PN_FALSE 0
@@ -427,9 +425,7 @@ typedef struct PNModule {
   uint32_t num_constants;
   PNConstant* constants;
   uint32_t num_global_vars;
-  PNGlobalVar global_vars[PN_MAX_GLOBAL_VARS];
-  uint32_t num_initializers;
-  PNInitializer initializers[PN_MAX_INITIALIZERS];
+  PNGlobalVar* global_vars;
   uint32_t num_instructions;
   PNInstruction instructions[PN_MAX_INSTRUCTIONS];
 } PNModule;
@@ -761,42 +757,6 @@ static PNGlobalVar* pn_context_get_global_var(PNBlockInfoContext* context,
   }
 
   return &context->module->global_vars[global_var_id];
-}
-
-static PNGlobalVar* pn_context_append_global_var(
-    PNBlockInfoContext* context,
-    PNGlobalVarId* out_global_var_id) {
-  *out_global_var_id = context->module->num_global_vars;
-  if (*out_global_var_id >= PN_ARRAY_SIZE(context->module->global_vars)) {
-    FATAL("too many global_vars: %d\n", *out_global_var_id);
-  }
-
-  context->module->num_global_vars++;
-  return &context->module->global_vars[*out_global_var_id];
-}
-
-static PNInitializer* pn_context_get_initializer(
-    PNBlockInfoContext* context,
-    PNInitializerId initializer_id) {
-  if (initializer_id < 0 ||
-      initializer_id >= context->module->num_initializers) {
-    FATAL("accessing invalid initializer %d (max %d)", initializer_id,
-          context->module->num_initializers);
-  }
-
-  return &context->module->initializers[initializer_id];
-}
-
-static PNInitializer* pn_context_append_initializer(
-    PNBlockInfoContext* context,
-    PNInitializerId* out_initializer_id) {
-  *out_initializer_id = context->module->num_initializers;
-  if (*out_initializer_id >= PN_ARRAY_SIZE(context->module->initializers)) {
-    FATAL("too many initializers: %d\n", *out_initializer_id);
-  }
-
-  context->module->num_initializers++;
-  return &context->module->initializers[*out_initializer_id];
 }
 
 static PNInstruction* pn_context_get_instruction(
@@ -1358,6 +1318,9 @@ static void pn_globalvar_block_read(PNBlockInfoContext* context,
 
   PNGlobalVar* global_var = NULL;
 
+  uint32_t num_global_vars = 0;
+  PNInitializerId initializer_id = 0;
+
   while (!pn_bitstream_at_end(bs)) {
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
@@ -1383,14 +1346,18 @@ static void pn_globalvar_block_read(PNBlockInfoContext* context,
 
         switch (code) {
           case PN_GLOBALVAR_CODE_VAR: {
-            PNGlobalVarId global_var_id;
-            global_var = pn_context_append_global_var(context, &global_var_id);
+            PNGlobalVarId global_var_id = context->module->num_global_vars++;
+            assert(global_var_id < num_global_vars);
+
+            global_var = &context->module->global_vars[global_var_id];
             global_var->alignment =
                 (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
             global_var->is_constant =
                 pn_record_read_int32(&reader, "is_constant") != 0;
             global_var->num_initializers = 1;
-            global_var->initializers = context->module->initializers;
+            global_var->initializers =
+                pn_arena_alloc(&context->arena, sizeof(PNInitializer));
+            initializer_id = 0;
 
             PNValueId value_id;
             PNValue* value = pn_context_append_value(context, &value_id);
@@ -1405,6 +1372,9 @@ static void pn_globalvar_block_read(PNBlockInfoContext* context,
           case PN_GLOBALVAR_CODE_COMPOUND: {
             global_var->num_initializers =
                 pn_record_read_int32(&reader, "num_initializers");
+            global_var->initializers = pn_arena_realloc(
+                &context->arena, global_var->initializers,
+                global_var->num_initializers * sizeof(PNInitializer));
 
             TRACE("  compound. num initializers: %d\n",
                   global_var->num_initializers);
@@ -1412,9 +1382,9 @@ static void pn_globalvar_block_read(PNBlockInfoContext* context,
           }
 
           case PN_GLOBALVAR_CODE_ZEROFILL: {
-            PNInitializerId initializer_id;
+            assert(initializer_id < global_var->num_initializers);
             PNInitializer* initializer =
-                pn_context_append_initializer(context, &initializer_id);
+                &global_var->initializers[initializer_id++];
             initializer->code = code;
             initializer->num_bytes = pn_record_read_int32(&reader, "num_bytes");
 
@@ -1423,9 +1393,9 @@ static void pn_globalvar_block_read(PNBlockInfoContext* context,
           }
 
           case PN_GLOBALVAR_CODE_DATA: {
-            PNInitializerId initializer_id;
+            assert(initializer_id < global_var->num_initializers);
             PNInitializer* initializer =
-                pn_context_append_initializer(context, &initializer_id);
+                &global_var->initializers[initializer_id++];
             initializer->code = code;
 
             /* TODO(binji): optimize */
@@ -1458,9 +1428,9 @@ static void pn_globalvar_block_read(PNBlockInfoContext* context,
           }
 
           case PN_GLOBALVAR_CODE_RELOC: {
-            PNInitializerId initializer_id;
+            assert(initializer_id < global_var->num_initializers);
             PNInitializer* initializer =
-                pn_context_append_initializer(context, &initializer_id);
+                &global_var->initializers[initializer_id++];
             initializer->code = code;
             initializer->index = pn_record_read_int32(&reader, "reloc index");
             initializer->addend = 0;
@@ -1473,10 +1443,12 @@ static void pn_globalvar_block_read(PNBlockInfoContext* context,
           }
 
           case PN_GLOBALVAR_CODE_COUNT: {
-            /* TODO(binji): use this to allocate space for global vars? */
-            uint32_t count = pn_record_read_uint32(&reader, "global var count");
-            (void)count;
-            TRACE("global var count: %d\n", count);
+            num_global_vars =
+                pn_record_read_uint32(&reader, "global var count");
+            context->module->global_vars = pn_arena_alloc(
+                &context->arena, num_global_vars * sizeof(PNGlobalVar));
+
+            TRACE("global var count: %d\n", num_global_vars);
             break;
           }
 
