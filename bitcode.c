@@ -11,12 +11,12 @@
 
 /* TODO(binji): handle variable sizes */
 #define PN_ARENA_SIZE (1*1024*1024)
+#define PN_VALUE_ARENA_SIZE (1*1024*1024)
 #define PN_MAX_BLOCK_ABBREV_OP 10
 #define PN_MAX_BLOCK_ABBREV 100
 #define PN_MAX_FUNCTIONS 30000
 #define PN_MAX_FUNCTION_ARGS 20
 #define PN_MAX_FUNCTION_NAME 256
-#define PN_MAX_VALUES 50000
 #define PN_MAX_GLOBAL_VARS 20000
 #define PN_MAX_INITIALIZERS 30000
 #define PN_MAX_INSTRUCTIONS 1000000
@@ -458,10 +458,11 @@ typedef struct PNBlockInfoContext {
   uint32_t num_abbrevs;
   PNBlockAbbrevs block_abbrev_map[PN_MAX_BLOCK_IDS];
   uint32_t num_values;
-  PNValue values[PN_MAX_VALUES];
+  PNValue* values;
   PNBool use_relative_ids;
   PNModule* module;
   PNArena arena;
+  PNArena value_arena;
 } PNBlockInfoContext;
 
 static void pn_arena_init(PNArena* arena, uint32_t size) {
@@ -833,10 +834,10 @@ static PNValue* pn_context_get_value(PNBlockInfoContext* context,
 
 static PNValue* pn_context_append_value(PNBlockInfoContext* context,
                                         PNValueId* out_value_id) {
+  PNArena* arena = &context->value_arena;
   *out_value_id = context->num_values;
-  if (*out_value_id >= PN_ARRAY_SIZE(context->values)) {
-    FATAL("too many values: %d\n", *out_value_id);
-  }
+  uint32_t new_size = sizeof(PNValue) * (context->num_values + 1);
+  context->values = pn_arena_realloc(arena, context->values, new_size);
 
   context->num_values++;
   return &context->values[*out_value_id];
@@ -2362,6 +2363,7 @@ int main(int argc, char** argv) {
   PNBlockInfoContext context = {};
   context.module = module;
   pn_arena_init(&context.arena, PN_ARENA_SIZE);
+  pn_arena_init(&context.value_arena, PN_VALUE_ARENA_SIZE);
 
   uint32_t entry = pn_bitstream_read(&bs, 2);
   TRACE("entry: %d\n", entry);
