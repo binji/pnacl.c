@@ -1847,56 +1847,55 @@ static void pn_function_block_read(PNBlockInfoContext* context,
             instruction->default_bb_id =
                 pn_record_read_uint32(&reader, "default bb");
 
-#if 0
-            /* TODO(binji): allocate PNSwitchCases and PNSwitchCaseValues for
-             * storing */
             int32_t c = 0;
-            int32_t num_cases = pn_record_read_int32(&reader, "num cases");
-            for (c = 0; c < num_cases; ++c) {
-              int32_t num_values = pn_record_read_int32(&reader, "num values");
+            instruction->num_cases = pn_record_read_int32(&reader, "num cases");
+            instruction->cases =
+                pn_arena_alloc(&context->instruction_arena,
+                               sizeof(PNSwitchCase) * instruction->num_cases);
+
+            for (c = 0; c < instruction->num_cases; ++c) {
+              PNSwitchCase* switch_case = &instruction->cases[c];
+              switch_case->num_values =
+                  pn_record_read_int32(&reader, "num values");
+              switch_case->values = pn_arena_alloc(
+                  &context->instruction_arena,
+                  sizeof(PNSwitchCaseValue) * switch_case->num_values);
 
               int32_t i;
-              for (i = 0; i < num_values; ++i) {
-                PNBool is_single = pn_record_read_int32(&reader, "is_single");
-                int32_t low = pn_decode_sign_rotated_value(
+              for (i = 0; i < switch_case->num_values; ++i) {
+                PNSwitchCaseValue* value = &switch_case->values[i];
+                value->is_single = pn_record_read_int32(&reader, "is_single");
+                value->low = pn_decode_sign_rotated_value(
                     pn_record_read_int32(&reader, "low"));
-                if (!is_single) {
-                  int32_t high = pn_decode_sign_rotated_value(
+                if (!value->is_single) {
+                  value->high = pn_decode_sign_rotated_value(
                       pn_record_read_int32(&reader, "high"));
                 }
               }
-              PNBlockId bb = pn_record_read_int32(&reader, "bb");
+              switch_case->bb_id = pn_record_read_int32(&reader, "bb");
             }
-            TRACE("  switch type:%d value:%%%d [default:%d]", type_id, value,
-                  default_bb);
-#else
-            int32_t c = 0;
-            int32_t num_cases = pn_record_read_int32(&reader, "num cases");
-            for (c = 0; c < num_cases; ++c) {
-              int32_t num_values = pn_record_read_int32(&reader, "num values");
+
+            TRACE("  switch type:%d value:%%%d [default:%d]",
+                  instruction->type_id, instruction->value_id,
+                  instruction->default_bb_id);
+
+            for (c = 0; c < instruction->num_cases; ++c) {
+              PNSwitchCase* switch_case = &instruction->cases[c];
               TRACE(" [");
 
               int32_t i;
-              for (i = 0; i < num_values; ++i) {
-                PNBool is_single = pn_record_read_int32(&reader, "is_single");
-                int32_t low = pn_decode_sign_rotated_value(
-                    pn_record_read_int32(&reader, "low"));
-                if (is_single) {
-                  (void)low;
-                  TRACE("[%%%d] ", low);
+              for (i = 0; i < switch_case->num_values; ++i) {
+                PNSwitchCaseValue* value = &switch_case->values[i];
+                if (value->is_single) {
+                  TRACE("[%%%d] ", value->low);
                 } else {
-                  int32_t high = pn_decode_sign_rotated_value(
-                      pn_record_read_int32(&reader, "high"));
-                  (void)high;
-                  TRACE("[%%%d,%%%d] ", low, high);
+                  TRACE("[%%%d,%%%d] ", value->low, value->high);
                 }
               }
-              PNBlockId bb = pn_record_read_int32(&reader, "bb");
-              (void)bb;
-              TRACE("=> bb:%d]", bb);
+              TRACE("=> bb:%d]", switch_case->bb_id);
             }
             TRACE("\n");
-#endif
+
             is_terminator = PN_TRUE;
             break;
           }
