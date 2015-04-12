@@ -1881,7 +1881,6 @@ static void pn_function_block_read(PNBlockInfoContext* context,
                 pn_context_append_instruction(context, &instruction_id);
             instruction->code = code;
 
-#if 0
             instruction->switch_.type_id =
                 pn_record_read_uint32(&reader, "type_id");
 
@@ -1891,6 +1890,7 @@ static void pn_function_block_read(PNBlockInfoContext* context,
             instruction->switch_.default_bb_id =
                 pn_record_read_uint32(&reader, "default bb");
 
+#if 0
             /* TODO(binji): allocate PNSwitchCases and PNSwitchCaseValues for
              * storing */
             int32_t c = 0;
