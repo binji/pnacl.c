@@ -788,7 +788,7 @@ static void* pn_function_append_instruction(
   PNArena* arena = &context->instruction_arena;
 
   *out_instruction_id = function->num_instructions++;
-  return pn_arena_alloc(arena, instruction_size);
+  return pn_arena_allocz(arena, instruction_size);
 }
 
 #define PN_FUNCTION_APPEND_INSTRUCTION(type, context, function, id) \
@@ -1918,15 +1918,15 @@ static void pn_function_block_read(PNBlockInfoContext* context,
             PNInstructionPhi* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
                 PNInstructionPhi, context, function, &instruction_id);
             instruction->code = code;
+            instruction->type_id = pn_record_read_int32(&reader, "type_id");
 
-            PNTypeId type_id = pn_record_read_int32(&reader, "type_id");
             PNValueId value_id;
             PNValue* value = pn_context_append_value(context, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
-            (void)type_id;
-            TRACE("  %%%d. phi type:%d", value_id, type_id);
+            instruction->num_incoming = 0;
+
             while (1) {
               PNBlockId bb;
               PNValueId value;
@@ -1940,7 +1940,23 @@ static void pn_function_block_read(PNBlockInfoContext* context,
               if (!pn_record_try_read_uint32(&reader, &bb)) {
                 FATAL("unable to read phi bb index\n");
               }
-              TRACE(" bb:%d=>%%%d", bb, value);
+
+              instruction->incoming = pn_arena_realloc(
+                  &context->instruction_arena, instruction->incoming,
+                  sizeof(PNPhiIncoming) * (instruction->num_incoming + 1));
+
+              PNPhiIncoming* incoming =
+                  &instruction->incoming[instruction->num_incoming];
+              incoming->bb_id = bb;
+              incoming->value_id = value;
+              instruction->num_incoming++;
+            }
+
+            TRACE("  %%%d. phi type:%d", value_id, instruction->type_id);
+            int32_t i;
+            for (i = 0; i < instruction->num_incoming; ++i) {
+              TRACE(" bb:%d=>%%%d", instruction->incoming[i].bb_id,
+                    instruction->incoming[i].value_id);
             }
             TRACE("\n");
             break;
@@ -2340,6 +2356,10 @@ int main(int argc, char** argv) {
   assert(block_id == PN_BLOCKID_MODULE);
   pn_module_block_read(&context, &bs);
   TRACE("done\n");
+
+  TRACE("arena: %u\n", context.arena.size);
+  TRACE("value arena: %u\n", context.value_arena.size);
+  TRACE("instruction arena: %u\n", context.instruction_arena.size);
 
   return 0;
 }
