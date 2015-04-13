@@ -1708,13 +1708,14 @@ static void pn_function_block_read(PNBlockInfoContext* context,
 
       case PN_ENTRY_SUBBLOCK: {
         uint32_t id = pn_bitstream_read_vbr(bs, 8);
-        TRACE("*** SUBBLOCK %d\n", id);
         switch (id) {
           case PN_BLOCKID_CONSTANTS:
+            TRACE("*** SUBBLOCK CONSTANTS (%d)\n", id);
             pn_constants_block_read(context, bs);
             break;
 
           case PN_BLOCKID_VALUE_SYMTAB:
+            TRACE("*** SUBBLOCK VALUE_SYMTAB (%d)\n", id);
             pn_value_symtab_block_read(context, bs);
             break;
 
@@ -2233,21 +2234,25 @@ static void pn_module_block_read(PNBlockInfoContext* context, PNBitStream* bs) {
       case PN_ENTRY_SUBBLOCK: {
         uint32_t id = pn_bitstream_read_vbr(bs, 8);
 
-        TRACE("*** SUBBLOCK %d\n", id);
         switch (id) {
           case PN_BLOCKID_BLOCKINFO:
+            TRACE("*** SUBBLOCK BLOCKINFO (%d)\n", id);
             pn_blockinfo_block_read(context, bs);
             break;
           case PN_BLOCKID_TYPE:
+            TRACE("*** SUBBLOCK TYPE (%d)\n", id);
             pn_type_block_read(context, bs);
             break;
           case PN_BLOCKID_GLOBALVAR:
+            TRACE("*** SUBBLOCK GLOBALVAR (%d)\n", id);
             pn_globalvar_block_read(context, bs);
             break;
           case PN_BLOCKID_VALUE_SYMTAB:
+            TRACE("*** SUBBLOCK VALUE_SYMTAB (%d)\n", id);
             pn_value_symtab_block_read(context, bs);
             break;
           case PN_BLOCKID_FUNCTION: {
+            TRACE("*** SUBBLOCK FUNCTION (%d)\n", id);
             uint32_t old_num_values = context->num_values;
             while (pn_context_get_function(context, function_id)->is_proto) {
               function_id++;
@@ -2260,6 +2265,7 @@ static void pn_module_block_read(PNBlockInfoContext* context, PNBitStream* bs) {
             break;
           }
           default:
+            TRACE("*** SUBBLOCK (BAD) (%d)\n", id);
             FATAL("bad block id %d\n", id);
         }
 
