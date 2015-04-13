@@ -1020,6 +1020,19 @@ static uint32_t pn_record_read_uint32(PNRecordReader* reader,
   return value;
 }
 
+static float pn_record_read_float(PNRecordReader* reader, const char* name) {
+  int32_t value;
+  if (!pn_record_try_read_int32(reader, &value)) {
+    FATAL("unable to read %s.\n", name);
+  }
+
+  assert(sizeof(float) == sizeof(int32_t));
+  float float_value;
+  memcpy(&float_value, &value, sizeof(float));
+
+  return float_value;
+}
+
 static PNValueId pn_record_read_value_id(PNRecordReader* reader,
                                          const char* name,
                                          PNBool use_relative_ids,
@@ -1617,8 +1630,7 @@ static void pn_constants_block_read(PNBlockInfoContext* context,
           }
 
           case PN_CONSTANTS_CODE_FLOAT: {
-            /* TODO(binji): read this as a float */
-            float data = pn_record_read_int32(&reader, "float value");
+            float data = pn_record_read_float(&reader, "float value");
 
             PNConstantId constant_id;
             PNConstant* constant =
