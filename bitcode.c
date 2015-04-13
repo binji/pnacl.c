@@ -331,8 +331,8 @@ typedef struct PNInstructionStore {
 
 typedef struct PNInstructionCmp2 {
   PNFunctionCode code;
-  PNValueId value_id0;
-  PNValueId value_id1;
+  PNValueId value0_id;
+  PNValueId value1_id;
   PNCmp2 opcode;
 } PNInstructionCmp2;
 
@@ -343,6 +343,12 @@ typedef struct PNInstructionVselect {
   PNValueId false_value_id;
 } PNInstructionVselect;
 
+typedef struct PNInstructionForwardtyperef {
+  PNFunctionCode code;
+  PNValueId value_id;
+  PNValueId type_id;
+} PNInstructionForwardtyperef;
+
 typedef struct PNInstructionCall {
   PNFunctionCode code;
   PNBool is_indirect;
@@ -351,7 +357,7 @@ typedef struct PNInstructionCall {
   PNValueId callee_id;
   PNTypeId return_type_id;
   uint32_t num_args;
-  PNValueId arg_ids[PN_MAX_FUNCTION_ARGS];
+  PNValueId* arg_ids;
 } PNInstructionCall;
 
 typedef struct PNFunction {
@@ -2051,16 +2057,16 @@ static void pn_function_block_read(PNBlockInfoContext* context,
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
-            PNValueId value0 = pn_record_read_int32(&reader, "value 0");
-            PNValueId value1 = pn_record_read_int32(&reader, "value 1");
+            instruction->value0_id = pn_record_read_int32(&reader, "value 0");
+            instruction->value1_id = pn_record_read_int32(&reader, "value 1");
             if (context->use_relative_ids) {
-              value0 = value_id - value0;
-              value1 = value_id - value1;
+              instruction->value0_id = value_id - instruction->value0_id;
+              instruction->value1_id = value_id - instruction->value1_id;
             }
-            int32_t opcode = pn_record_read_int32(&reader, "opcode");
-            (void)opcode;
+            instruction->opcode = pn_record_read_int32(&reader, "opcode");
             TRACE("  %%%d. cmp2 op:%s(%d) %%%d %%%d\n", value_id,
-                  pn_cmp2_get_name(opcode), opcode, value0, value1);
+                  pn_cmp2_get_name(instruction->opcode), instruction->opcode,
+                  instruction->value0_id, instruction->value1_id);
             break;
           }
 
@@ -2075,28 +2081,36 @@ static void pn_function_block_read(PNBlockInfoContext* context,
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
-            PNValueId true_value = pn_record_read_int32(&reader, "true_value");
-            PNValueId false_value =
+            instruction->true_value_id =
+                pn_record_read_int32(&reader, "true_value");
+            instruction->false_value_id =
                 pn_record_read_int32(&reader, "false_value");
-            PNValueId cond = pn_record_read_int32(&reader, "cond");
+            instruction->cond_id = pn_record_read_int32(&reader, "cond");
             if (context->use_relative_ids) {
-              true_value = value_id - true_value;
-              false_value = value_id - false_value;
-              cond = value_id - cond;
+              instruction->true_value_id =
+                  value_id - instruction->true_value_id;
+              instruction->false_value_id =
+                  value_id - instruction->false_value_id;
+              instruction->cond_id = value_id - instruction->cond_id;
             }
-            TRACE("  %%%d. vselect %%%d ? %%%d : %%%d\n", value_id, cond,
-                  true_value, false_value);
+            TRACE("  %%%d. vselect %%%d ? %%%d : %%%d\n", value_id,
+                  instruction->cond_id, instruction->true_value_id,
+                  instruction->false_value_id);
             break;
           }
 
           case PN_FUNCTION_CODE_INST_FORWARDTYPEREF: {
-            /* TODO(binji): First value is the value index, what is the second?
-             */
-            int32_t ftr1 = pn_record_read_int32(&reader, "ftr1");
-            int32_t ftr2 = pn_record_read_int32(&reader, "ftr2");
-            (void)ftr1;
-            (void)ftr2;
-            TRACE("  forwardtyperef %d %d\n", ftr1, ftr2);
+            PNInstructionId instruction_id;
+            PNInstructionForwardtyperef* instruction =
+                PN_FUNCTION_APPEND_INSTRUCTION(PNInstructionForwardtyperef,
+                                               context, function,
+                                               &instruction_id);
+
+            instruction->code = code;
+            instruction->value_id = pn_record_read_int32(&reader, "value");
+            instruction->type_id = pn_record_read_int32(&reader, "type");
+            TRACE("  forwardtyperef %d %d\n", instruction->value_id,
+                  instruction->type_id);
             break;
           }
 
@@ -2107,61 +2121,79 @@ static void pn_function_block_read(PNBlockInfoContext* context,
                 PNInstructionCall, context, function, &instruction_id);
             instruction->code = code;
 
-            PNBool is_indirect = code == PN_FUNCTION_CODE_INST_CALL_INDIRECT;
+            instruction->is_indirect =
+                code == PN_FUNCTION_CODE_INST_CALL_INDIRECT;
             int32_t cc_info = pn_record_read_int32(&reader, "cc_info");
-            PNBool is_tail_call = cc_info & 1;
-            int32_t calling_convention = cc_info >> 1;
-            (void)is_tail_call;
-            (void)calling_convention;
-            PNValueId callee = pn_record_read_uint32(&reader, "callee");
+            instruction->is_tail_call = cc_info & 1;
+            instruction->calling_convention = cc_info >> 1;
+
+            instruction->callee_id = pn_record_read_uint32(&reader, "callee");
             if (context->use_relative_ids) {
-              callee = context->num_values - callee;
+              instruction->callee_id =
+                  context->num_values - instruction->callee_id;
             }
 
             const char* name = NULL;
             PNTypeId type_id;
-            PNTypeId return_type_id;
-            if (is_indirect) {
-              return_type_id = pn_record_read_int32(&reader, "return_type");
+            if (instruction->is_indirect) {
+              instruction->return_type_id =
+                  pn_record_read_int32(&reader, "return_type");
             } else {
-              PNFunction* function = pn_context_get_function(context, callee);
+              PNFunction* function =
+                  pn_context_get_function(context, instruction->callee_id);
               type_id = function->type_id;
               PNType* function_type = pn_context_get_type(context, type_id);
               assert(function_type->code == PN_TYPE_CODE_FUNCTION);
-              return_type_id = function_type->return_type;
+              instruction->return_type_id = function_type->return_type;
               name = function->name;
             }
 
-            PNType* return_type = pn_context_get_type(context, return_type_id);
+            PNType* return_type =
+                pn_context_get_type(context, instruction->return_type_id);
             PNBool is_return_type_void = return_type->code == PN_TYPE_CODE_VOID;
-            TRACE("  ");
             PNValueId value_id;
             if (!is_return_type_void) {
               PNValue* value = pn_context_append_value(context, &value_id);
               value->code = PN_VALUE_CODE_LOCAL_VAR;
               value->index = instruction_id;
-
-              TRACE("%%%d. ", value_id);
             } else {
               value_id = context->num_values;
             }
-            TRACE("call ");
-            if (is_indirect) {
-              TRACE("indirect ");
-            }
-            if (name && name[0]) {
-              TRACE("%%%d(%s) ", callee, name);
-            } else {
-              TRACE("%%%d ", callee);
-            }
-            TRACE("args:");
+
+            instruction->num_args = 0;
 
             int32_t arg;
             while (pn_record_try_read_int32(&reader, &arg)) {
               if (context->use_relative_ids) {
                 arg = value_id - arg;
               }
-              TRACE(" %%%d", arg);
+
+              instruction->arg_ids = pn_arena_realloc(
+                  &context->instruction_arena, instruction->arg_ids,
+                  sizeof(PNValueId) * (instruction->num_args + 1));
+
+              instruction->arg_ids[instruction->num_args] = arg;
+              instruction->num_args++;
+            }
+
+            TRACE("  ");
+            if (!is_return_type_void) {
+              TRACE("%%%d. ", value_id);
+            }
+            TRACE("call ");
+            if (instruction->is_indirect) {
+              TRACE("indirect ");
+            }
+            if (name && name[0]) {
+              TRACE("%%%d(%s) ", instruction->callee_id, name);
+            } else {
+              TRACE("%%%d ", instruction->callee_id);
+            }
+            TRACE("args:");
+
+            int32_t i;
+            for (i = 0; i < instruction->num_args; ++i) {
+              TRACE(" %%%d", instruction->arg_ids[i]);
             }
             TRACE("\n");
 
