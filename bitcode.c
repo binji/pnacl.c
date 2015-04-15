@@ -1915,9 +1915,9 @@ static void pn_function_block_read(PNModule* module,
               for (i = 0; i < switch_case->num_values; ++i) {
                 PNSwitchCaseValue* value = &switch_case->values[i];
                 if (value->is_single) {
-                  TRACE("[%%%d] ", value->low);
+                  TRACE("[%d] ", value->low);
                 } else {
-                  TRACE("[%%%d,%%%d] ", value->low, value->high);
+                  TRACE("[%d,%d] ", value->low, value->high);
                 }
               }
               TRACE("=> bb:%d]", switch_case->bb_id);
