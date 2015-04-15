@@ -2022,10 +2022,8 @@ static void pn_function_block_read(PNModule* module,
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
-            instruction->src_id = pn_record_read_int32(&reader, "src");
-            if (context->use_relative_ids) {
-              instruction->src_id = value_id - instruction->src_id;
-            }
+            instruction->src_id = pn_record_read_value_id(
+                &reader, "src", context->use_relative_ids, value_id);
             instruction->alignment =
                 (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
             instruction->type_id = pn_record_read_int32(&reader, "type_id");
@@ -2042,13 +2040,11 @@ static void pn_function_block_read(PNModule* module,
                 PNInstructionStore, module, function, cur_bb, &instruction_id);
             instruction->code = code;
 
-            instruction->dest_id = pn_record_read_int32(&reader, "dest");
-            instruction->value_id = pn_record_read_int32(&reader, "value");
-            if (context->use_relative_ids) {
-              instruction->dest_id = module->num_values - instruction->dest_id;
-              instruction->value_id =
-                  module->num_values - instruction->value_id;
-            }
+            instruction->dest_id = pn_record_read_value_id(
+                &reader, "dest", context->use_relative_ids, module->num_values);
+            instruction->value_id = pn_record_read_value_id(
+                &reader, "value", context->use_relative_ids,
+                module->num_values);
             instruction->alignment =
                 (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
             TRACE("  store dest:%%%d value:%%%d align=%d\n",
@@ -2068,12 +2064,10 @@ static void pn_function_block_read(PNModule* module,
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
-            instruction->value0_id = pn_record_read_int32(&reader, "value 0");
-            instruction->value1_id = pn_record_read_int32(&reader, "value 1");
-            if (context->use_relative_ids) {
-              instruction->value0_id = value_id - instruction->value0_id;
-              instruction->value1_id = value_id - instruction->value1_id;
-            }
+            instruction->value0_id = pn_record_read_value_id(
+                &reader, "value 0", context->use_relative_ids, value_id);
+            instruction->value1_id = pn_record_read_value_id(
+                &reader, "value 1", context->use_relative_ids, value_id);
             instruction->opcode = pn_record_read_int32(&reader, "opcode");
             TRACE("  %%%d. cmp2 op:%s(%d) %%%d %%%d\n", value_id,
                   pn_cmp2_get_name(instruction->opcode), instruction->opcode,
@@ -2092,18 +2086,12 @@ static void pn_function_block_read(PNModule* module,
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
-            instruction->true_value_id =
-                pn_record_read_int32(&reader, "true_value");
-            instruction->false_value_id =
-                pn_record_read_int32(&reader, "false_value");
-            instruction->cond_id = pn_record_read_int32(&reader, "cond");
-            if (context->use_relative_ids) {
-              instruction->true_value_id =
-                  value_id - instruction->true_value_id;
-              instruction->false_value_id =
-                  value_id - instruction->false_value_id;
-              instruction->cond_id = value_id - instruction->cond_id;
-            }
+            instruction->true_value_id = pn_record_read_value_id(
+                &reader, "true_value", context->use_relative_ids, value_id);
+            instruction->false_value_id = pn_record_read_value_id(
+                &reader, "false_value", context->use_relative_ids, value_id);
+            instruction->cond_id = pn_record_read_value_id(
+                &reader, "cond", context->use_relative_ids, value_id);
             TRACE("  %%%d. vselect %%%d ? %%%d : %%%d\n", value_id,
                   instruction->cond_id, instruction->true_value_id,
                   instruction->false_value_id);
@@ -2138,11 +2126,9 @@ static void pn_function_block_read(PNModule* module,
             instruction->is_tail_call = cc_info & 1;
             instruction->calling_convention = cc_info >> 1;
 
-            instruction->callee_id = pn_record_read_uint32(&reader, "callee");
-            if (context->use_relative_ids) {
-              instruction->callee_id =
-                  module->num_values - instruction->callee_id;
-            }
+            instruction->callee_id = pn_record_read_value_id(
+                &reader, "callee", context->use_relative_ids,
+                module->num_values);
 
             const char* name = NULL;
             PNTypeId type_id;
