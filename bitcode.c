@@ -261,8 +261,13 @@ typedef struct PNPhiIncoming {
   PNValueId value_id;
 } PNPhiIncoming;
 
+typedef struct PNInstruction {
+  PNFunctionCode code;
+} PNInstruction;
+
 typedef struct PNInstructionBinop {
   PNFunctionCode code;
+  PNValueId result_value_id;
   PNValueId value_id0;
   PNValueId value_id1;
   PNBinOp opcode;
@@ -271,6 +276,7 @@ typedef struct PNInstructionBinop {
 
 typedef struct PNInstructionCast {
   PNFunctionCode code;
+  PNValueId result_value_id;
   PNValueId value_id;
   PNTypeId type_id;
   PNCast opcode;
@@ -303,6 +309,7 @@ typedef struct PNInstructionUnreachable {
 
 typedef struct PNInstructionPhi {
   PNFunctionCode code;
+  PNValueId result_value_id;
   PNTypeId type_id;
   uint32_t num_incoming;
   PNPhiIncoming* incoming;
@@ -310,12 +317,14 @@ typedef struct PNInstructionPhi {
 
 typedef struct PNInstructionAlloca {
   PNFunctionCode code;
+  PNValueId result_value_id;
   PNValueId size_id;
   uint32_t alignment;
 } PNInstructionAlloca;
 
 typedef struct PNInstructionLoad {
   PNFunctionCode code;
+  PNValueId result_value_id;
   PNValueId src_id;
   PNTypeId type_id;
   uint32_t alignment;
@@ -330,6 +339,7 @@ typedef struct PNInstructionStore {
 
 typedef struct PNInstructionCmp2 {
   PNFunctionCode code;
+  PNValueId result_value_id;
   PNValueId value0_id;
   PNValueId value1_id;
   PNCmp2 opcode;
@@ -337,6 +347,7 @@ typedef struct PNInstructionCmp2 {
 
 typedef struct PNInstructionVselect {
   PNFunctionCode code;
+  PNValueId result_value_id;
   PNValueId cond_id;
   PNValueId true_value_id;
   PNValueId false_value_id;
@@ -350,6 +361,7 @@ typedef struct PNInstructionForwardtyperef {
 
 typedef struct PNInstructionCall {
   PNFunctionCode code;
+  PNValueId result_value_id;
   PNBool is_indirect;
   PNBool is_tail_call;
   uint32_t calling_convention;
@@ -836,6 +848,248 @@ static void* pn_function_append_instruction(
 
 #define PN_FUNCTION_APPEND_INSTRUCTION(type, module, function, bb, id) \
   (type*) pn_function_append_instruction(module, function, bb, sizeof(type), id)
+
+static PNInstruction* pn_instruction_next(PNInstruction* instruction) {
+  uint8_t* p = (uint8_t*)instruction;
+
+#define INST_CASE(M, T) \
+  case M:               \
+    p += sizeof(T);     \
+    break;
+
+  switch (instruction->code) {
+    INST_CASE(PN_FUNCTION_CODE_INST_BINOP, PNInstructionBinop)
+    INST_CASE(PN_FUNCTION_CODE_INST_CAST, PNInstructionCast)
+    INST_CASE(PN_FUNCTION_CODE_INST_RET, PNInstructionRet)
+    INST_CASE(PN_FUNCTION_CODE_INST_BR, PNInstructionBr)
+    INST_CASE(PN_FUNCTION_CODE_INST_UNREACHABLE, PNInstructionUnreachable)
+    INST_CASE(PN_FUNCTION_CODE_INST_ALLOCA, PNInstructionAlloca)
+    INST_CASE(PN_FUNCTION_CODE_INST_LOAD, PNInstructionLoad)
+    INST_CASE(PN_FUNCTION_CODE_INST_STORE, PNInstructionStore)
+    INST_CASE(PN_FUNCTION_CODE_INST_CMP2, PNInstructionCmp2)
+    INST_CASE(PN_FUNCTION_CODE_INST_VSELECT, PNInstructionVselect)
+    INST_CASE(PN_FUNCTION_CODE_INST_FORWARDTYPEREF, PNInstructionForwardtyperef)
+
+#undef INST_CASE
+
+    case PN_FUNCTION_CODE_INST_SWITCH: {
+      PNInstructionSwitch* inst = (PNInstructionSwitch*)instruction;
+      p += sizeof(PNInstructionSwitch);
+      p += sizeof(PNSwitchCase) * inst->num_cases;
+      int32_t c;
+      for (c = 0; c < inst->num_cases; ++c) {
+        PNSwitchCase* switch_case = &inst->cases[c];
+        p += sizeof(PNSwitchCaseValue) * switch_case->num_values;
+      }
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_PHI: {
+      PNInstructionPhi* inst = (PNInstructionPhi*)instruction;
+      p += sizeof(PNInstructionPhi);
+      p += sizeof(PNPhiIncoming) * inst->num_incoming;
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_CALL:
+    case PN_FUNCTION_CODE_INST_CALL_INDIRECT: {
+      PNInstructionCall* inst = (PNInstructionCall*)instruction;
+      p += sizeof(PNInstructionCall);
+      p += sizeof(PNValueId) * inst->num_args;
+      break;
+    }
+
+    default:
+      FATAL("Invalid instruction code: %d\n", instruction->code);
+      break;
+  }
+
+  // TODO(binji): this requires knowledge that the arena aligns to 8 bytes. Do
+  // something less fragile.
+  p = (uint8_t*)(((intptr_t)p + 7) & ~7);
+
+  return (PNInstruction*)p;
+}
+
+static void pn_instruction_trace(PNModule* module, PNInstruction* instruction) {
+  switch (instruction->code) {
+    case PN_FUNCTION_CODE_INST_BINOP: {
+      PNInstructionBinop* inst = (PNInstructionBinop*)instruction;
+      TRACE("  %%%d. binop op:%s(%d) %%%d %%%d (flags:%d)\n",
+            inst->result_value_id, pn_binop_get_name(inst->opcode),
+            inst->opcode, inst->value_id0, inst->value_id1, inst->flags);
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_CAST: {
+      PNInstructionCast* inst = (PNInstructionCast*)instruction;
+      TRACE("  %%%d. cast op:%s(%d) %%%d type:%d\n", inst->result_value_id,
+            pn_cast_get_name(inst->opcode), inst->opcode, inst->value_id,
+            inst->type_id);
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_RET: {
+      PNInstructionRet* inst = (PNInstructionRet*)instruction;
+      if (inst->value_id != PN_INVALID_VALUE_ID) {
+        TRACE("  ret %%%d\n", inst->value_id);
+      } else {
+        TRACE("  ret\n");
+      }
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_BR: {
+      PNInstructionBr* inst = (PNInstructionBr*)instruction;
+      if (inst->false_bb_id != PN_INVALID_BLOCK_ID) {
+        TRACE("  br %%%d ? %d : %d\n", inst->value_id, inst->true_bb_id,
+              inst->false_bb_id);
+      } else {
+        TRACE("  br %d\n", inst->true_bb_id);
+      }
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_SWITCH: {
+      PNInstructionSwitch* inst = (PNInstructionSwitch*)instruction;
+      TRACE("  switch type:%d value:%%%d [default:%d]", inst->type_id,
+            inst->value_id, inst->default_bb_id);
+
+      uint32_t c;
+      for (c = 0; c < inst->num_cases; ++c) {
+        PNSwitchCase* switch_case = &inst->cases[c];
+        TRACE(" [");
+
+        int32_t i;
+        for (i = 0; i < switch_case->num_values; ++i) {
+          PNSwitchCaseValue* value = &switch_case->values[i];
+          if (value->is_single) {
+            TRACE("[%d] ", value->low);
+          } else {
+            TRACE("[%d,%d] ", value->low, value->high);
+          }
+        }
+        TRACE("=> bb:%d]", switch_case->bb_id);
+      }
+      TRACE("\n");
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_UNREACHABLE:
+      TRACE("  unreachable\n");
+      break;
+
+    case PN_FUNCTION_CODE_INST_PHI: {
+      PNInstructionPhi* inst = (PNInstructionPhi*)instruction;
+      TRACE("  %%%d. phi type:%d", inst->result_value_id, inst->type_id);
+      int32_t i;
+      for (i = 0; i < inst->num_incoming; ++i) {
+        TRACE(" bb:%d=>%%%d", inst->incoming[i].bb_id,
+              inst->incoming[i].value_id);
+      }
+      TRACE("\n");
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_ALLOCA: {
+      PNInstructionAlloca* inst = (PNInstructionAlloca*)instruction;
+      TRACE("  %%%d. alloca %%%d align=%d\n", inst->result_value_id,
+            inst->size_id, inst->alignment);
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_LOAD: {
+      PNInstructionLoad* inst = (PNInstructionLoad*)instruction;
+      TRACE("  %%%d. load src:%%%d type:%d align=%d\n", inst->result_value_id,
+            inst->src_id, inst->type_id, inst->alignment);
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_STORE: {
+      PNInstructionStore* inst = (PNInstructionStore*)instruction;
+      TRACE("  store dest:%%%d value:%%%d align=%d\n", inst->dest_id,
+            inst->value_id, inst->alignment);
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_CMP2: {
+      PNInstructionCmp2* inst = (PNInstructionCmp2*)instruction;
+      TRACE("  %%%d. cmp2 op:%s(%d) %%%d %%%d\n", inst->result_value_id,
+          pn_cmp2_get_name(inst->opcode), inst->opcode, inst->value0_id,
+          inst->value1_id);
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_VSELECT: {
+      PNInstructionVselect* inst = (PNInstructionVselect*)instruction;
+      TRACE("  %%%d. vselect %%%d ? %%%d : %%%d\n", inst->result_value_id,
+            inst->cond_id, inst->true_value_id, inst->false_value_id);
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_FORWARDTYPEREF: {
+      PNInstructionForwardtyperef* inst =
+          (PNInstructionForwardtyperef*)instruction;
+      TRACE("  forwardtyperef %d %d\n", inst->value_id, inst->type_id);
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_CALL:
+    case PN_FUNCTION_CODE_INST_CALL_INDIRECT: {
+      PNInstructionCall* inst = (PNInstructionCall*)instruction;
+      PNType* return_type =
+          pn_module_get_type(module, inst->return_type_id);
+      PNBool is_return_type_void = return_type->code == PN_TYPE_CODE_VOID;
+      TRACE("  ");
+      if (!is_return_type_void) {
+        TRACE("%%%d. ", inst->result_value_id);
+      }
+      TRACE("call ");
+      const char* name = NULL;
+      if (inst->is_indirect) {
+        TRACE("indirect ");
+      } else {
+        PNFunction* called_function =
+            pn_module_get_function(module, inst->callee_id);
+        name = called_function->name;
+      }
+      if (name && name[0]) {
+        TRACE("%%%d(%s) ", inst->callee_id, name);
+      } else {
+        TRACE("%%%d ", inst->callee_id);
+      }
+      TRACE("args:");
+
+      int32_t i;
+      for (i = 0; i < inst->num_args; ++i) {
+        TRACE(" %%%d", inst->arg_ids[i]);
+      }
+      TRACE("\n");
+      break;
+    }
+
+    default:
+      FATAL("Invalid instruction code: %d\n", instruction->code);
+      break;
+  }
+}
+
+static void pn_basic_block_trace(PNModule* module, PNBasicBlock* bb) {
+  PNInstruction* instruction = (PNInstruction*)bb->instructions;
+  uint32_t i;
+  for (i = 0; i < bb->num_instructions; ++i) {
+    pn_instruction_trace(module, instruction);
+    instruction = pn_instruction_next(instruction);
+  }
+}
+
+static void pn_function_trace(PNModule* module, PNFunction* function) {
+  uint32_t i;
+  for (i = 0; i < function->num_bbs; ++i) {
+    TRACE("bb:%d\n", i);
+    pn_basic_block_trace(module, &function->bbs[i]);
+  }
+}
 
 static const char* pn_type_describe(PNModule* module, PNTypeId type_id) {
   PNType* type = pn_module_get_type(module, type_id);
@@ -1748,6 +2002,8 @@ static void pn_function_block_read(PNModule* module,
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
+        pn_function_trace(module, function);
+
         TRACE("*** END BLOCK\n");
         pn_bitstream_align_32(bs);
         return;
@@ -1796,7 +2052,6 @@ static void pn_function_block_read(PNModule* module,
 
         if (prev_bb_id != cur_bb_id) {
           assert(cur_bb_id < function->num_bbs);
-          TRACE("bb:%d\n", cur_bb_id);
           prev_bb_id = cur_bb_id;
           cur_bb = &function->bbs[cur_bb_id];
         }
@@ -1819,6 +2074,7 @@ static void pn_function_block_read(PNModule* module,
             value->index = instruction_id;
 
             instruction->code = code;
+            instruction->result_value_id = value_id;
             instruction->value_id0 = pn_record_read_value_id(
                 &reader, "value 0", context->use_relative_ids, value_id);
             instruction->value_id1 = pn_record_read_value_id(
@@ -1828,11 +2084,6 @@ static void pn_function_block_read(PNModule* module,
 
             /* optional */
             pn_record_try_read_int32(&reader, &instruction->flags);
-
-            TRACE("  %%%d. binop op:%s(%d) %%%d %%%d (flags:%d)\n", value_id,
-                  pn_binop_get_name(instruction->opcode), instruction->opcode,
-                  instruction->value_id0, instruction->value_id1,
-                  instruction->flags);
             break;
           }
 
@@ -1840,7 +2091,6 @@ static void pn_function_block_read(PNModule* module,
             PNInstructionId instruction_id;
             PNInstructionCast* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
                 PNInstructionCast, module, function, cur_bb, &instruction_id);
-            instruction->code = code;
 
             PNValueId value_id;
             PNValue* value =
@@ -1849,14 +2099,11 @@ static void pn_function_block_read(PNModule* module,
             value->index = instruction_id;
 
             instruction->code = code;
+            instruction->result_value_id = value_id;
             instruction->value_id = pn_record_read_value_id(
                 &reader, "value", context->use_relative_ids, value_id);
             instruction->type_id = pn_record_read_uint32(&reader, "type_id");
             instruction->opcode = pn_record_read_int32(&reader, "opcode");
-
-            TRACE("  %%%d. cast op:%s(%d) %%%d type:%d\n", value_id,
-                  pn_cast_get_name(instruction->opcode), instruction->opcode,
-                  instruction->value_id, instruction->type_id);
             break;
           }
 
@@ -1870,12 +2117,6 @@ static void pn_function_block_read(PNModule* module,
             pn_record_try_read_value_id(
                 &reader, &instruction->value_id, context->use_relative_ids,
                 pn_function_num_values(module, function));
-
-            if (instruction->value_id != PN_INVALID_VALUE_ID) {
-              TRACE("  ret %%%d\n", instruction->value_id);
-            } else {
-              TRACE("  ret\n");
-            }
 
             is_terminator = PN_TRUE;
             break;
@@ -1895,12 +2136,6 @@ static void pn_function_block_read(PNModule* module,
                   pn_function_num_values(module, function));
             }
 
-            if (instruction->false_bb_id != PN_INVALID_BLOCK_ID) {
-              TRACE("  br %%%d ? %d : %d\n", instruction->value_id,
-                    instruction->true_bb_id, instruction->false_bb_id);
-            } else {
-              TRACE("  br %d\n", instruction->true_bb_id);
-            }
             is_terminator = PN_TRUE;
             break;
           }
@@ -1909,7 +2144,6 @@ static void pn_function_block_read(PNModule* module,
             PNInstructionId instruction_id;
             PNInstructionSwitch* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
                 PNInstructionSwitch, module, function, cur_bb, &instruction_id);
-            instruction->code = code;
 
             instruction->type_id = pn_record_read_uint32(&reader, "type_id");
             instruction->value_id = pn_record_read_value_id(
@@ -1918,12 +2152,13 @@ static void pn_function_block_read(PNModule* module,
             instruction->default_bb_id =
                 pn_record_read_uint32(&reader, "default bb");
 
-            int32_t c = 0;
+            instruction->code = code;
             instruction->num_cases = pn_record_read_int32(&reader, "num cases");
             instruction->cases =
                 pn_arena_alloc(&module->instruction_arena,
                                sizeof(PNSwitchCase) * instruction->num_cases);
 
+            int32_t c = 0;
             for (c = 0; c < instruction->num_cases; ++c) {
               PNSwitchCase* switch_case = &instruction->cases[c];
               switch_case->num_values =
@@ -1946,27 +2181,6 @@ static void pn_function_block_read(PNModule* module,
               switch_case->bb_id = pn_record_read_int32(&reader, "bb");
             }
 
-            TRACE("  switch type:%d value:%%%d [default:%d]",
-                  instruction->type_id, instruction->value_id,
-                  instruction->default_bb_id);
-
-            for (c = 0; c < instruction->num_cases; ++c) {
-              PNSwitchCase* switch_case = &instruction->cases[c];
-              TRACE(" [");
-
-              int32_t i;
-              for (i = 0; i < switch_case->num_values; ++i) {
-                PNSwitchCaseValue* value = &switch_case->values[i];
-                if (value->is_single) {
-                  TRACE("[%d] ", value->low);
-                } else {
-                  TRACE("[%d,%d] ", value->low, value->high);
-                }
-              }
-              TRACE("=> bb:%d]", switch_case->bb_id);
-            }
-            TRACE("\n");
-
             is_terminator = PN_TRUE;
             break;
           }
@@ -1978,8 +2192,6 @@ static void pn_function_block_read(PNModule* module,
                                                function, cur_bb,
                                                &instruction_id);
             instruction->code = code;
-
-            TRACE("  unreachable\n");
             is_terminator = PN_TRUE;
             break;
           }
@@ -1988,8 +2200,6 @@ static void pn_function_block_read(PNModule* module,
             PNInstructionId instruction_id;
             PNInstructionPhi* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
                 PNInstructionPhi, module, function, cur_bb, &instruction_id);
-            instruction->code = code;
-            instruction->type_id = pn_record_read_int32(&reader, "type_id");
 
             PNValueId value_id;
             PNValue* value =
@@ -1997,6 +2207,9 @@ static void pn_function_block_read(PNModule* module,
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
+            instruction->code = code;
+            instruction->result_value_id = value_id;
+            instruction->type_id = pn_record_read_int32(&reader, "type_id");
             instruction->num_incoming = 0;
 
             while (1) {
@@ -2023,14 +2236,6 @@ static void pn_function_block_read(PNModule* module,
               incoming->value_id = value;
               instruction->num_incoming++;
             }
-
-            TRACE("  %%%d. phi type:%d", value_id, instruction->type_id);
-            int32_t i;
-            for (i = 0; i < instruction->num_incoming; ++i) {
-              TRACE(" bb:%d=>%%%d", instruction->incoming[i].bb_id,
-                    instruction->incoming[i].value_id);
-            }
-            TRACE("\n");
             break;
           }
 
@@ -2038,7 +2243,6 @@ static void pn_function_block_read(PNModule* module,
             PNInstructionId instruction_id;
             PNInstructionAlloca* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
                 PNInstructionAlloca, module, function, cur_bb, &instruction_id);
-            instruction->code = code;
 
             PNValueId value_id;
             PNValue* value =
@@ -2046,13 +2250,12 @@ static void pn_function_block_read(PNModule* module,
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
+            instruction->code = code;
+            instruction->result_value_id = value_id;
             instruction->size_id = pn_record_read_value_id(
                 &reader, "size", context->use_relative_ids, value_id);
             instruction->alignment =
                 (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
-
-            TRACE("  %%%d. alloca %%%d align=%d\n", value_id,
-                  instruction->size_id, instruction->alignment);
             break;
           }
 
@@ -2060,7 +2263,6 @@ static void pn_function_block_read(PNModule* module,
             PNInstructionId instruction_id;
             PNInstructionLoad* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
                 PNInstructionLoad, module, function, cur_bb, &instruction_id);
-            instruction->code = code;
 
             PNValueId value_id;
             PNValue* value =
@@ -2068,15 +2270,13 @@ static void pn_function_block_read(PNModule* module,
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
+            instruction->code = code;
+            instruction->result_value_id = value_id;
             instruction->src_id = pn_record_read_value_id(
                 &reader, "src", context->use_relative_ids, value_id);
             instruction->alignment =
                 (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
             instruction->type_id = pn_record_read_int32(&reader, "type_id");
-
-            TRACE("  %%%d. load src:%%%d type:%d align=%d\n", value_id,
-                  instruction->src_id, instruction->type_id,
-                  instruction->alignment);
             break;
           }
 
@@ -2084,8 +2284,8 @@ static void pn_function_block_read(PNModule* module,
             PNInstructionId instruction_id;
             PNInstructionStore* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
                 PNInstructionStore, module, function, cur_bb, &instruction_id);
-            instruction->code = code;
 
+            instruction->code = code;
             instruction->dest_id = pn_record_read_value_id(
                 &reader, "dest", context->use_relative_ids,
                 pn_function_num_values(module, function));
@@ -2094,9 +2294,6 @@ static void pn_function_block_read(PNModule* module,
                 pn_function_num_values(module, function));
             instruction->alignment =
                 (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
-            TRACE("  store dest:%%%d value:%%%d align=%d\n",
-                  instruction->dest_id, instruction->value_id,
-                  instruction->alignment);
             break;
           }
 
@@ -2104,7 +2301,6 @@ static void pn_function_block_read(PNModule* module,
             PNInstructionId instruction_id;
             PNInstructionCmp2* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
                 PNInstructionCmp2, module, function, cur_bb, &instruction_id);
-            instruction->code = code;
 
             PNValueId value_id;
             PNValue* value =
@@ -2112,14 +2308,13 @@ static void pn_function_block_read(PNModule* module,
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
+            instruction->code = code;
+            instruction->result_value_id = value_id;
             instruction->value0_id = pn_record_read_value_id(
                 &reader, "value 0", context->use_relative_ids, value_id);
             instruction->value1_id = pn_record_read_value_id(
                 &reader, "value 1", context->use_relative_ids, value_id);
             instruction->opcode = pn_record_read_int32(&reader, "opcode");
-            TRACE("  %%%d. cmp2 op:%s(%d) %%%d %%%d\n", value_id,
-                  pn_cmp2_get_name(instruction->opcode), instruction->opcode,
-                  instruction->value0_id, instruction->value1_id);
             break;
           }
 
@@ -2128,7 +2323,6 @@ static void pn_function_block_read(PNModule* module,
             PNInstructionVselect* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
                 PNInstructionVselect, module, function, cur_bb,
                 &instruction_id);
-            instruction->code = code;
 
             PNValueId value_id;
             PNValue* value =
@@ -2136,15 +2330,14 @@ static void pn_function_block_read(PNModule* module,
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
+            instruction->code = code;
+            instruction->result_value_id = value_id;
             instruction->true_value_id = pn_record_read_value_id(
                 &reader, "true_value", context->use_relative_ids, value_id);
             instruction->false_value_id = pn_record_read_value_id(
                 &reader, "false_value", context->use_relative_ids, value_id);
             instruction->cond_id = pn_record_read_value_id(
                 &reader, "cond", context->use_relative_ids, value_id);
-            TRACE("  %%%d. vselect %%%d ? %%%d : %%%d\n", value_id,
-                  instruction->cond_id, instruction->true_value_id,
-                  instruction->false_value_id);
             break;
           }
 
@@ -2158,8 +2351,6 @@ static void pn_function_block_read(PNModule* module,
             instruction->code = code;
             instruction->value_id = pn_record_read_int32(&reader, "value");
             instruction->type_id = pn_record_read_int32(&reader, "type");
-            TRACE("  forwardtyperef %d %d\n", instruction->value_id,
-                  instruction->type_id);
             break;
           }
 
@@ -2168,19 +2359,17 @@ static void pn_function_block_read(PNModule* module,
             PNInstructionId instruction_id;
             PNInstructionCall* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
                 PNInstructionCall, module, function, cur_bb, &instruction_id);
-            instruction->code = code;
 
+            instruction->code = code;
             instruction->is_indirect =
                 code == PN_FUNCTION_CODE_INST_CALL_INDIRECT;
             int32_t cc_info = pn_record_read_int32(&reader, "cc_info");
             instruction->is_tail_call = cc_info & 1;
             instruction->calling_convention = cc_info >> 1;
-
             instruction->callee_id = pn_record_read_value_id(
                 &reader, "callee", context->use_relative_ids,
                 pn_function_num_values(module, function));
 
-            const char* name = NULL;
             PNTypeId type_id;
             if (instruction->is_indirect) {
               instruction->return_type_id =
@@ -2192,7 +2381,6 @@ static void pn_function_block_read(PNModule* module,
               PNType* function_type = pn_module_get_type(module, type_id);
               assert(function_type->code == PN_TYPE_CODE_FUNCTION);
               instruction->return_type_id = function_type->return_type;
-              name = called_function->name;
             }
 
             PNType* return_type =
@@ -2204,8 +2392,11 @@ static void pn_function_block_read(PNModule* module,
                   pn_function_append_value(module, function, &value_id);
               value->code = PN_VALUE_CODE_LOCAL_VAR;
               value->index = instruction_id;
+
+              instruction->result_value_id = value_id;
             } else {
               value_id = pn_function_num_values(module, function);
+              instruction->result_value_id = PN_INVALID_VALUE_ID;
             }
 
             instruction->num_args = 0;
@@ -2223,28 +2414,6 @@ static void pn_function_block_read(PNModule* module,
               instruction->arg_ids[instruction->num_args] = arg;
               instruction->num_args++;
             }
-
-            TRACE("  ");
-            if (!is_return_type_void) {
-              TRACE("%%%d. ", value_id);
-            }
-            TRACE("call ");
-            if (instruction->is_indirect) {
-              TRACE("indirect ");
-            }
-            if (name && name[0]) {
-              TRACE("%%%d(%s) ", instruction->callee_id, name);
-            } else {
-              TRACE("%%%d ", instruction->callee_id);
-            }
-            TRACE("args:");
-
-            int32_t i;
-            for (i = 0; i < instruction->num_args; ++i) {
-              TRACE(" %%%d", instruction->arg_ids[i]);
-            }
-            TRACE("\n");
-
             break;
           }
 
