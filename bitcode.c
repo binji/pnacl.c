@@ -10,7 +10,7 @@
 #include <string.h>
 
 #define PN_ARENA_SIZE (16*1024*1024)
-#define PN_VALUE_ARENA_SIZE (1*1024*1024)
+#define PN_VALUE_ARENA_SIZE (8*1024*1024)
 #define PN_INSTRUCTION_ARENA_SIZE (32*1024*1024)
 #define PN_MAX_BLOCK_ABBREV_OP 10
 #define PN_MAX_BLOCK_ABBREV 100
@@ -375,6 +375,26 @@ typedef struct PNConstant {
   };
 } PNConstant;
 
+typedef enum PNValueCode {
+  PN_VALUE_CODE_FUNCTION,
+  PN_VALUE_CODE_GLOBAL_VAR,
+  PN_VALUE_CODE_CONSTANT,
+  PN_VALUE_CODE_FUNCTION_ARG,
+  PN_VALUE_CODE_LOCAL_VAR,
+} PNValueCode;
+
+typedef struct PNValue {
+  PNValueCode code;
+  /* Index into the array for the given value code.
+   *   PN_VALUE_CODE_FUNCTION -> PNModule.functions
+   *   PN_VALUE_CODE_GLOBAL_VAR -> PNModule.global_vars
+   *   PN_VALUE_CODE_CONSTANT -> PNFunction.constants
+   *   PN_VALUE_CODE_FUNCTION_ARG -> function argument index
+   *   PN_VALUE_CODE_LOCAL_VAR -> PNFunction instruction index
+   */
+  uint32_t index;
+} PNValue;
+
 typedef struct PNFunction {
   char name[PN_MAX_FUNCTION_NAME];
   PNTypeId type_id;
@@ -385,6 +405,8 @@ typedef struct PNFunction {
   PNConstant* constants;
   uint32_t num_bbs;
   PNBasicBlock* bbs;
+  uint32_t num_values;
+  PNValue* values;
 } PNFunction;
 
 typedef struct PNType {
@@ -425,26 +447,6 @@ typedef struct PNGlobalVar {
   uint32_t num_initializers;
   PNInitializer* initializers;
 } PNGlobalVar;
-
-typedef enum PNValueCode {
-  PN_VALUE_CODE_FUNCTION,
-  PN_VALUE_CODE_GLOBAL_VAR,
-  PN_VALUE_CODE_CONSTANT,
-  PN_VALUE_CODE_FUNCTION_ARG,
-  PN_VALUE_CODE_LOCAL_VAR,
-} PNValueCode;
-
-typedef struct PNValue {
-  PNValueCode code;
-  /* Index into the array for the given value code.
-   *   PN_VALUE_CODE_FUNCTION -> PNModule.functions
-   *   PN_VALUE_CODE_GLOBAL_VAR -> PNModule.global_vars
-   *   PN_VALUE_CODE_CONSTANT -> PNFunction.constants
-   *   PN_VALUE_CODE_FUNCTION_ARG -> function argument index
-   *   PN_VALUE_CODE_LOCAL_VAR -> PNModule.values
-   */
-  uint32_t index;
-} PNValue;
 
 typedef struct PNModule {
   uint32_t version;
@@ -779,6 +781,42 @@ static PNValue* pn_module_append_value(PNModule* module,
 
   module->num_values++;
   return &module->values[*out_value_id];
+}
+
+static uint32_t pn_function_num_values(PNModule* module, PNFunction* function) {
+  return module->num_values + function->num_values;
+}
+
+static PNValue* pn_function_get_value(PNModule* module,
+                                      PNFunction* function,
+                                      PNValueId value_id) {
+  if (value_id < 0) {
+    FATAL("accessing invalid value %d", value_id);
+  } else if (value_id < module->num_values) {
+    return &module->values[value_id];
+  }
+
+  value_id -= module->num_values;
+
+  if (value_id < function->num_values) {
+    return &function->values[value_id];
+  }
+
+  FATAL("accessing invalid value %d (max %d)", value_id,
+        module->num_values + function->num_values);
+}
+
+static PNValue* pn_function_append_value(PNModule* module,
+                                         PNFunction* function,
+                                         PNValueId* out_value_id) {
+  uint32_t index = function->num_values;
+  *out_value_id = module->num_values + index;
+  uint32_t new_size = sizeof(PNValue) * (function->num_values + 1);
+  function->values =
+      pn_arena_realloc(&module->value_arena, function->values, new_size);
+
+  function->num_values++;
+  return &function->values[index];
 }
 
 static void* pn_function_append_instruction(
@@ -1611,7 +1649,8 @@ static void pn_constants_block_read(PNModule* module,
             constant->type_id = cur_type_id;
 
             PNValueId value_id;
-            PNValue* value = pn_module_append_value(module, &value_id);
+            PNValue* value =
+                pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_CONSTANT;
             value->index = constant_id;
 
@@ -1631,7 +1670,8 @@ static void pn_constants_block_read(PNModule* module,
             constant->int_value = data;
 
             PNValueId value_id;
-            PNValue* value = pn_module_append_value(module, &value_id);
+            PNValue* value =
+                pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_CONSTANT;
             value->index = constant_id;
 
@@ -1650,7 +1690,8 @@ static void pn_constants_block_read(PNModule* module,
             constant->float_value = data;
 
             PNValueId value_id;
-            PNValue* value = pn_module_append_value(module, &value_id);
+            PNValue* value =
+                pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_CONSTANT;
             value->index = constant_id;
 
@@ -1693,7 +1734,7 @@ static void pn_function_block_read(PNModule* module,
   uint32_t i;
   for (i = 0; i < function_type->num_args; ++i) {
     PNValueId value_id;
-    PNValue* value = pn_module_append_value(module, &value_id);
+    PNValue* value = pn_function_append_value(module, function, &value_id);
     value->code = PN_VALUE_CODE_FUNCTION_ARG;
     value->index = i;
 
@@ -1772,7 +1813,8 @@ static void pn_function_block_read(PNModule* module,
                 PNInstructionBinop, module, function, cur_bb, &instruction_id);
 
             PNValueId value_id;
-            PNValue* value = pn_module_append_value(module, &value_id);
+            PNValue* value =
+                pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
@@ -1801,7 +1843,8 @@ static void pn_function_block_read(PNModule* module,
             instruction->code = code;
 
             PNValueId value_id;
-            PNValue* value = pn_module_append_value(module, &value_id);
+            PNValue* value =
+                pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
@@ -1824,9 +1867,9 @@ static void pn_function_block_read(PNModule* module,
             instruction->code = code;
             instruction->value_id = PN_INVALID_VALUE_ID;
 
-            pn_record_try_read_value_id(&reader, &instruction->value_id,
-                                        context->use_relative_ids,
-                                        module->num_values);
+            pn_record_try_read_value_id(
+                &reader, &instruction->value_id, context->use_relative_ids,
+                pn_function_num_values(module, function));
 
             if (instruction->value_id != PN_INVALID_VALUE_ID) {
               TRACE("  ret %%%d\n", instruction->value_id);
@@ -1849,7 +1892,7 @@ static void pn_function_block_read(PNModule* module,
             if (pn_record_try_read_uint32(&reader, &instruction->false_bb_id)) {
               instruction->value_id = pn_record_read_value_id(
                   &reader, "value", context->use_relative_ids,
-                  module->num_values);
+                  pn_function_num_values(module, function));
             }
 
             if (instruction->false_bb_id != PN_INVALID_BLOCK_ID) {
@@ -1871,7 +1914,7 @@ static void pn_function_block_read(PNModule* module,
             instruction->type_id = pn_record_read_uint32(&reader, "type_id");
             instruction->value_id = pn_record_read_value_id(
                 &reader, "value", context->use_relative_ids,
-                module->num_values);
+                pn_function_num_values(module, function));
             instruction->default_bb_id =
                 pn_record_read_uint32(&reader, "default bb");
 
@@ -1949,7 +1992,8 @@ static void pn_function_block_read(PNModule* module,
             instruction->type_id = pn_record_read_int32(&reader, "type_id");
 
             PNValueId value_id;
-            PNValue* value = pn_module_append_value(module, &value_id);
+            PNValue* value =
+                pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
@@ -1997,7 +2041,8 @@ static void pn_function_block_read(PNModule* module,
             instruction->code = code;
 
             PNValueId value_id;
-            PNValue* value = pn_module_append_value(module, &value_id);
+            PNValue* value =
+                pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
@@ -2018,7 +2063,8 @@ static void pn_function_block_read(PNModule* module,
             instruction->code = code;
 
             PNValueId value_id;
-            PNValue* value = pn_module_append_value(module, &value_id);
+            PNValue* value =
+                pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
@@ -2041,10 +2087,11 @@ static void pn_function_block_read(PNModule* module,
             instruction->code = code;
 
             instruction->dest_id = pn_record_read_value_id(
-                &reader, "dest", context->use_relative_ids, module->num_values);
+                &reader, "dest", context->use_relative_ids,
+                pn_function_num_values(module, function));
             instruction->value_id = pn_record_read_value_id(
                 &reader, "value", context->use_relative_ids,
-                module->num_values);
+                pn_function_num_values(module, function));
             instruction->alignment =
                 (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
             TRACE("  store dest:%%%d value:%%%d align=%d\n",
@@ -2060,7 +2107,8 @@ static void pn_function_block_read(PNModule* module,
             instruction->code = code;
 
             PNValueId value_id;
-            PNValue* value = pn_module_append_value(module, &value_id);
+            PNValue* value =
+                pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
@@ -2078,11 +2126,13 @@ static void pn_function_block_read(PNModule* module,
           case PN_FUNCTION_CODE_INST_VSELECT: {
             PNInstructionId instruction_id;
             PNInstructionVselect* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionVselect, module, function, cur_bb, &instruction_id);
+                PNInstructionVselect, module, function, cur_bb,
+                &instruction_id);
             instruction->code = code;
 
             PNValueId value_id;
-            PNValue* value = pn_module_append_value(module, &value_id);
+            PNValue* value =
+                pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = instruction_id;
 
@@ -2128,7 +2178,7 @@ static void pn_function_block_read(PNModule* module,
 
             instruction->callee_id = pn_record_read_value_id(
                 &reader, "callee", context->use_relative_ids,
-                module->num_values);
+                pn_function_num_values(module, function));
 
             const char* name = NULL;
             PNTypeId type_id;
@@ -2136,13 +2186,13 @@ static void pn_function_block_read(PNModule* module,
               instruction->return_type_id =
                   pn_record_read_int32(&reader, "return_type");
             } else {
-              PNFunction* function =
+              PNFunction* called_function =
                   pn_module_get_function(module, instruction->callee_id);
-              type_id = function->type_id;
+              type_id = called_function->type_id;
               PNType* function_type = pn_module_get_type(module, type_id);
               assert(function_type->code == PN_TYPE_CODE_FUNCTION);
               instruction->return_type_id = function_type->return_type;
-              name = function->name;
+              name = called_function->name;
             }
 
             PNType* return_type =
@@ -2151,11 +2201,11 @@ static void pn_function_block_read(PNModule* module,
             PNValueId value_id;
             if (!is_return_type_void) {
               PNValue* value =
-                  pn_module_append_value(module, &value_id);
+                  pn_function_append_value(module, function, &value_id);
               value->code = PN_VALUE_CODE_LOCAL_VAR;
               value->index = instruction_id;
             } else {
-              value_id = module->num_values;
+              value_id = pn_function_num_values(module, function);
             }
 
             instruction->num_args = 0;
@@ -2252,15 +2302,12 @@ static void pn_module_block_read(PNModule* module,
             break;
           case PN_BLOCKID_FUNCTION: {
             TRACE("*** SUBBLOCK FUNCTION (%d)\n", id);
-            uint32_t old_num_values = module->num_values;
             while (pn_module_get_function(module, function_id)->is_proto) {
               function_id++;
             }
 
             pn_function_block_read(module, context, bs, function_id);
             function_id++;
-            module->num_values = old_num_values;
-            TRACE("resetting the number of values to %d\n", old_num_values);
             break;
           }
           default:
@@ -2299,6 +2346,12 @@ static void pn_module_block_read(PNModule* module,
                 pn_record_read_int32(&reader, "calling_convention");
             function->is_proto = pn_record_read_int32(&reader, "is_proto");
             function->linkage = pn_record_read_int32(&reader, "linkage");
+            function->num_constants = 0;
+            function->constants = NULL;
+            function->num_bbs = 0;
+            function->bbs = NULL;
+            function->num_values = 0;
+            function->values = NULL;
 
             PNValueId value_id;
             PNValue* value = pn_module_append_value(module, &value_id);
