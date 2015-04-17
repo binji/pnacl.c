@@ -375,6 +375,10 @@ typedef struct PNInstructionCall {
 typedef struct PNBasicBlock {
   uint32_t num_instructions;
   void* instructions;
+  uint32_t num_pred_bbs;
+  PNBasicBlockId* pred_bb_ids;
+  uint32_t num_succ_bbs;
+  PNBasicBlockId* succ_bb_ids;
 } PNBasicBlock;
 
 typedef struct PNConstant {
@@ -866,6 +870,47 @@ static void* pn_function_append_instruction(
 #define PN_FUNCTION_APPEND_INSTRUCTION(type, module, function, bb, id) \
   (type*) pn_function_append_instruction(module, function, bb, sizeof(type), id)
 
+static void pn_basic_block_list_append(PNArena* arena,
+                                       PNBasicBlockId** bb_list,
+                                       uint32_t* num_els,
+                                       PNBasicBlockId bb_id) {
+  *bb_list = pn_arena_realloc(arena, *bb_list,
+                              sizeof(PNBasicBlockId) * (*num_els + 1));
+  (*bb_list)[(*num_els)++] = bb_id;
+}
+
+static void pn_function_calculate_pred_bbs(PNModule* module,
+                                           PNFunction* function) {
+  uint32_t n;
+  for (n = 0; n < function->num_bbs; ++n) {
+    PNBasicBlock* bb = &function->bbs[n];
+    uint32_t m;
+    for (m = 0; m < bb->num_succ_bbs; ++m) {
+      PNBasicBlockId succ_bb_id = bb->succ_bb_ids[m];
+      assert(succ_bb_id < function->num_bbs);
+      PNBasicBlock* succ_bb = &function->bbs[succ_bb_id];
+      succ_bb->num_pred_bbs++;
+    }
+  }
+
+  for (n = 0; n < function->num_bbs; ++n) {
+    PNBasicBlock* bb = &function->bbs[n];
+    bb->pred_bb_ids = pn_arena_alloc(&module->arena,
+                                     sizeof(PNBasicBlockId) * bb->num_pred_bbs);
+    bb->num_pred_bbs = 0;
+  }
+
+  for (n = 0; n < function->num_bbs; ++n) {
+    PNBasicBlock* bb = &function->bbs[n];
+    uint32_t m;
+    for (m = 0; m < bb->num_succ_bbs; ++m) {
+      PNBasicBlockId succ_bb_id = bb->succ_bb_ids[m];
+      PNBasicBlock* succ_bb = &function->bbs[succ_bb_id];
+      succ_bb->pred_bb_ids[succ_bb->num_pred_bbs++] = n;
+    }
+  }
+}
+
 static PNInstruction* pn_instruction_next(PNInstruction* inst) {
   uint8_t* p = (uint8_t*)inst;
 
@@ -1098,7 +1143,17 @@ static void pn_basic_block_trace(PNModule* module, PNBasicBlock* bb) {
 static void pn_function_trace(PNModule* module, PNFunction* function) {
   uint32_t i;
   for (i = 0; i < function->num_bbs; ++i) {
-    TRACE("bb:%d\n", i);
+    PNBasicBlock* bb = &function->bbs[i];
+    TRACE("bb:%d (preds:", i);
+    uint32_t n;
+    for (n = 0; n < bb->num_pred_bbs; ++n) {
+      TRACE(" %d", bb->pred_bb_ids[n]);
+    }
+    TRACE(" succs:");
+    for (n = 0; n < bb->num_succ_bbs; ++n) {
+      TRACE(" %d", bb->succ_bb_ids[n]);
+    }
+    TRACE(")\n");
     pn_basic_block_trace(module, &function->bbs[i]);
   }
 }
@@ -1983,6 +2038,7 @@ static void pn_function_block_read(PNModule* module,
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
+        pn_function_calculate_pred_bbs(module, function);
         pn_function_trace(module, function);
 
         TRACE("*** END BLOCK\n");
@@ -2114,9 +2170,16 @@ static void pn_function_block_read(PNModule* module,
             inst->true_bb_id = pn_record_read_uint32(&reader, "true_bb");
             inst->false_bb_id = PN_INVALID_BLOCK_ID;
 
+            pn_basic_block_list_append(&module->arena, &cur_bb->succ_bb_ids,
+                                       &cur_bb->num_succ_bbs, inst->true_bb_id);
+
             if (pn_record_try_read_uint32(&reader, &inst->false_bb_id)) {
               inst->value_id = pn_record_read_uint32(&reader, "value");
               pn_context_fix_value_ids(context, rel_id, 1, &inst->value_id);
+
+              pn_basic_block_list_append(&module->arena, &cur_bb->succ_bb_ids,
+                                         &cur_bb->num_succ_bbs,
+                                         inst->false_bb_id);
             }
 
             is_terminator = PN_TRUE;
@@ -2131,6 +2194,10 @@ static void pn_function_block_read(PNModule* module,
             inst->type_id = pn_record_read_uint32(&reader, "type_id");
             inst->value_id = pn_record_read_uint32(&reader, "value");
             inst->default_bb_id = pn_record_read_uint32(&reader, "default bb");
+
+            pn_basic_block_list_append(&module->arena, &cur_bb->succ_bb_ids,
+                                       &cur_bb->num_succ_bbs,
+                                       inst->default_bb_id);
 
             pn_context_fix_value_ids(context, rel_id, 1, &inst->value_id);
 
@@ -2161,6 +2228,10 @@ static void pn_function_block_read(PNModule* module,
                 }
               }
               switch_case->bb_id = pn_record_read_int32(&reader, "bb");
+
+              pn_basic_block_list_append(&module->arena, &cur_bb->succ_bb_ids,
+                                         &cur_bb->num_succ_bbs,
+                                         switch_case->bb_id);
             }
 
             is_terminator = PN_TRUE;
