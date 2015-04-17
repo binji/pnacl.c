@@ -13,6 +13,7 @@
 #define PN_ARENA_SIZE (16 * 1024 * 1024)
 #define PN_VALUE_ARENA_SIZE (8 * 1024 * 1024)
 #define PN_INSTRUCTION_ARENA_SIZE (32 * 1024 * 1024)
+#define PN_TEMP_ARENA_SIZE (1 * 1024 * 1024)
 #define PN_MAX_BLOCK_ABBREV_OP 10
 #define PN_MAX_BLOCK_ABBREV 100
 #define PN_MAX_FUNCTION_ARGS 15
@@ -209,6 +210,12 @@ typedef struct PNArenaMark {
   void* last_alloc;
 } PNArenaMark;
 
+typedef struct PNBitSet {
+  uint32_t num_bits_set;
+  uint32_t num_words;
+  uint32_t* words;
+} PNBitSet;
+
 typedef struct PNBitStream {
   uint8_t* data;
   uint32_t data_len;
@@ -271,8 +278,8 @@ typedef struct PNInstruction {
 typedef struct PNInstructionBinop {
   PNFunctionCode code;
   PNValueId result_value_id;
-  PNValueId value_id0;
-  PNValueId value_id1;
+  PNValueId value0_id;
+  PNValueId value1_id;
   PNBinOp opcode;
   int32_t flags;
 } PNInstructionBinop;
@@ -381,6 +388,8 @@ typedef struct PNBasicBlock {
   PNBasicBlockId* pred_bb_ids;
   uint32_t num_succ_bbs;
   PNBasicBlockId* succ_bb_ids;
+  uint32_t num_uses;
+  PNValueId* uses;
 } PNBasicBlock;
 
 typedef struct PNConstant {
@@ -481,6 +490,7 @@ typedef struct PNModule {
   PNArena arena;
   PNArena value_arena;
   PNArena instruction_arena;
+  PNArena temp_arena;
 } PNModule;
 
 typedef struct PNBlockInfoContext {
@@ -549,6 +559,43 @@ static PNArenaMark pn_arena_mark(PNArena* arena) {
 static void pn_arena_reset_to_mark(PNArena* arena, PNArenaMark mark) {
   arena->size = mark.size;
   arena->last_alloc = mark.last_alloc;
+}
+
+static void pn_bitset_init(PNArena* arena, PNBitSet* bitset, int32_t size) {
+  bitset->num_bits_set = 0;
+  bitset->num_words = (size + 31) >> 5;
+  bitset->words =
+      (uint32_t*)pn_arena_allocz(arena, sizeof(uint32_t) * bitset->num_words);
+}
+
+static void pn_bitset_set(PNBitSet* bitset, uint32_t bit, PNBool set) {
+  uint32_t word = bit >> 5;
+  uint32_t mask = 1 << (bit & 31);
+  assert(word < bitset->num_words);
+
+  PNBool was_set = (bitset->words[word] & mask) != 0;
+
+  if (set) {
+    bitset->words[word] |= mask;
+  } else {
+    bitset->words[word] &= ~mask;
+  }
+
+  if (set != was_set) {
+    if (set) {
+      bitset->num_bits_set++;
+    } else {
+      bitset->num_bits_set--;
+    }
+  }
+}
+
+static PNBool pn_bitset_is_set(PNBitSet* bitset, uint32_t bit) {
+  uint32_t word = bit >> 5;
+  uint32_t mask = 1 << (bit & 31);
+  assert(word < bitset->num_words);
+
+  return (bitset->words[word] & mask) != 0;
 }
 
 static const char* pn_binop_get_name(uint32_t op) {
@@ -975,13 +1022,160 @@ static PNInstruction* pn_instruction_next(PNInstruction* inst) {
   return (PNInstruction*)p;
 }
 
+static void pn_basic_block_set_value_use(PNModule* module,
+                                         PNFunction* function,
+                                         PNBitSet* uses,
+                                         PNValueId value_id) {
+  if (value_id >= module->num_values) {
+    value_id -= module->num_values;
+    if (value_id >= function->num_constants) {
+      pn_bitset_set(uses, value_id, PN_TRUE);
+    }
+  }
+}
+
+static void pn_basic_block_calculate_uses(PNModule* module,
+                                          PNFunction* function,
+                                          PNBasicBlock* bb) {
+  PNArenaMark mark = pn_arena_mark(&module->temp_arena);
+  PNBitSet uses;
+
+  pn_bitset_init(&module->temp_arena, &uses, function->num_values);
+
+  PNInstruction* inst = (PNInstruction*)bb->instructions;
+  uint32_t n;
+  for (n = 0; n < bb->num_instructions; ++n) {
+    switch (inst->code) {
+      case PN_FUNCTION_CODE_INST_BINOP: {
+        PNInstructionBinop* i = (PNInstructionBinop*)inst;
+        pn_basic_block_set_value_use(module, function, &uses, i->value0_id);
+        pn_basic_block_set_value_use(module, function, &uses, i->value1_id);
+        break;
+      }
+
+      case PN_FUNCTION_CODE_INST_CAST: {
+        PNInstructionCast* i = (PNInstructionCast*)inst;
+        pn_basic_block_set_value_use(module, function, &uses, i->value_id);
+        break;
+      }
+
+      case PN_FUNCTION_CODE_INST_RET: {
+        PNInstructionRet* i = (PNInstructionRet*)inst;
+        if (i->value_id != PN_INVALID_VALUE_ID) {
+          pn_basic_block_set_value_use(module, function, &uses, i->value_id);
+        }
+        break;
+      }
+
+      case PN_FUNCTION_CODE_INST_BR: {
+        PNInstructionBr* i = (PNInstructionBr*)inst;
+        if (i->value_id != PN_INVALID_VALUE_ID) {
+          pn_basic_block_set_value_use(module, function, &uses, i->value_id);
+        }
+        break;
+      }
+
+      case PN_FUNCTION_CODE_INST_SWITCH: {
+        PNInstructionSwitch* i = (PNInstructionSwitch*)inst;
+        pn_basic_block_set_value_use(module, function, &uses, i->value_id);
+        break;
+      }
+
+      case PN_FUNCTION_CODE_INST_PHI: {
+        PNInstructionPhi* i = (PNInstructionPhi*)inst;
+        int32_t n;
+        for (n = 0; n < i->num_incoming; ++n) {
+          pn_basic_block_set_value_use(module, function, &uses,
+                                       i->incoming[n].value_id);
+        }
+      }
+
+      case PN_FUNCTION_CODE_INST_ALLOCA: {
+        PNInstructionAlloca* i = (PNInstructionAlloca*)inst;
+        pn_basic_block_set_value_use(module, function, &uses, i->size_id);
+        break;
+      }
+
+      case PN_FUNCTION_CODE_INST_LOAD: {
+        PNInstructionLoad* i = (PNInstructionLoad*)inst;
+        pn_basic_block_set_value_use(module, function, &uses, i->src_id);
+        break;
+      }
+
+      case PN_FUNCTION_CODE_INST_STORE: {
+        PNInstructionStore* i = (PNInstructionStore*)inst;
+        pn_basic_block_set_value_use(module, function, &uses, i->dest_id);
+        pn_basic_block_set_value_use(module, function, &uses, i->value_id);
+        break;
+      }
+
+      case PN_FUNCTION_CODE_INST_CMP2: {
+        PNInstructionCmp2* i = (PNInstructionCmp2*)inst;
+        pn_basic_block_set_value_use(module, function, &uses, i->value0_id);
+        pn_basic_block_set_value_use(module, function, &uses, i->value1_id);
+        break;
+      }
+
+      case PN_FUNCTION_CODE_INST_VSELECT: {
+        PNInstructionVselect* i = (PNInstructionVselect*)inst;
+        pn_basic_block_set_value_use(module, function, &uses, i->cond_id);
+        pn_basic_block_set_value_use(module, function, &uses, i->true_value_id);
+        pn_basic_block_set_value_use(module, function, &uses, i->false_value_id);
+        break;
+      }
+
+      case PN_FUNCTION_CODE_INST_CALL:
+      case PN_FUNCTION_CODE_INST_CALL_INDIRECT: {
+        PNInstructionCall* i = (PNInstructionCall*)inst;
+        if (i->is_indirect) {
+          pn_basic_block_set_value_use(module, function, &uses, i->callee_id);
+        }
+
+        uint32_t m;
+        for (m = 0; m < i->num_args; ++m) {
+          pn_basic_block_set_value_use(module, function, &uses, i->arg_ids[m]);
+        }
+        break;
+      }
+
+      case PN_FUNCTION_CODE_INST_UNREACHABLE:
+      case PN_FUNCTION_CODE_INST_FORWARDTYPEREF:
+        break;
+
+      default:
+        FATAL("Invalid instruction code: %d\n", inst->code);
+        break;
+    }
+    inst = pn_instruction_next(inst);
+  }
+
+  bb->uses =
+      pn_arena_alloc(&module->arena, sizeof(PNValueId) * uses.num_bits_set);
+
+  for (n = 0; n < function->num_values; ++n) {
+    if (pn_bitset_is_set(&uses, n)) {
+      bb->uses[bb->num_uses++] = module->num_values + n;
+    }
+  }
+
+  pn_arena_reset_to_mark(&module->temp_arena, mark);
+}
+
+static void pn_function_calculate_uses(PNModule* module,
+                                       PNFunction* function) {
+  uint32_t n;
+  for (n = 0; n < function->num_bbs; ++n) {
+    pn_basic_block_calculate_uses(module, function, &function->bbs[n]);
+  }
+}
+
 static void pn_instruction_trace(PNModule* module, PNInstruction* inst) {
   switch (inst->code) {
     case PN_FUNCTION_CODE_INST_BINOP: {
       PNInstructionBinop* i = (PNInstructionBinop*)inst;
       printf("  %%%d. binop op:%s(%d) %%%d %%%d (flags:%d)\n",
              i->result_value_id, pn_binop_get_name(i->opcode), i->opcode,
-             i->value_id0, i->value_id1, i->flags);
+             i->value0_id, i->value1_id, i->flags);
       break;
     }
 
@@ -1156,7 +1350,11 @@ static void pn_function_trace(PNModule* module, PNFunction* function) {
     for (n = 0; n < bb->num_succ_bbs; ++n) {
       printf(" %d", bb->succ_bb_ids[n]);
     }
-    printf(")\n");
+    printf(")\n uses:");
+    for (n = 0; n < bb->num_uses; ++n) {
+      printf(" %%%d", bb->uses[n]);
+    }
+    printf("\n");
     pn_basic_block_trace(module, &function->bbs[i]);
   }
 }
@@ -2041,6 +2239,7 @@ static void pn_function_block_read(PNModule* module,
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
+        pn_function_calculate_uses(module, function);
         pn_function_calculate_pred_bbs(module, function);
 #if TRACING
         pn_function_trace(module, function);
@@ -2118,13 +2317,13 @@ static void pn_function_block_read(PNModule* module,
 
             inst->code = code;
             inst->result_value_id = value_id;
-            inst->value_id0 = pn_record_read_uint32(&reader, "value 0");
-            inst->value_id1 = pn_record_read_uint32(&reader, "value 1");
+            inst->value0_id = pn_record_read_uint32(&reader, "value 0");
+            inst->value1_id = pn_record_read_uint32(&reader, "value 1");
             inst->opcode = pn_record_read_int32(&reader, "opcode");
             inst->flags = 0;
 
-            pn_context_fix_value_ids(context, rel_id, 2, &inst->value_id0,
-                                     &inst->value_id1);
+            pn_context_fix_value_ids(context, rel_id, 2, &inst->value0_id,
+                                     &inst->value1_id);
 
             /* optional */
             pn_record_try_read_int32(&reader, &inst->flags);
@@ -2672,6 +2871,7 @@ int main(int argc, char** argv) {
   pn_arena_init(&module->arena, PN_ARENA_SIZE);
   pn_arena_init(&module->value_arena, PN_VALUE_ARENA_SIZE);
   pn_arena_init(&module->instruction_arena, PN_INSTRUCTION_ARENA_SIZE);
+  pn_arena_init(&module->temp_arena, PN_TEMP_ARENA_SIZE);
 
   uint32_t entry = pn_bitstream_read(&bs, 2);
   TRACE("entry: %d\n", entry);
