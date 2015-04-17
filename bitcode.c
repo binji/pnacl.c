@@ -4,14 +4,15 @@
 
 #include <assert.h>
 #include <limits.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define PN_ARENA_SIZE (16*1024*1024)
-#define PN_VALUE_ARENA_SIZE (8*1024*1024)
-#define PN_INSTRUCTION_ARENA_SIZE (32*1024*1024)
+#define PN_ARENA_SIZE (16 * 1024 * 1024)
+#define PN_VALUE_ARENA_SIZE (8 * 1024 * 1024)
+#define PN_INSTRUCTION_ARENA_SIZE (32 * 1024 * 1024)
 #define PN_MAX_BLOCK_ABBREV_OP 10
 #define PN_MAX_BLOCK_ABBREV 100
 #define PN_MAX_FUNCTION_ARGS 15
@@ -291,7 +292,7 @@ typedef struct PNInstructionBr {
   PNFunctionCode code;
   PNBasicBlockId true_bb_id;
   PNBasicBlockId false_bb_id; /* Or PN_INVALID_BLOCK_ID */
-  PNValueId value_id;    /* Or PN_INVALID_VALUE_ID */
+  PNValueId value_id;         /* Or PN_INVALID_VALUE_ID */
 } PNInstructionBr;
 
 typedef struct PNInstructionSwitch {
@@ -705,6 +706,23 @@ static PNBool pn_bitstream_at_end(PNBitStream* bs) {
   return byte_offset == bs->data_len;
 }
 
+static void pn_context_fix_value_ids(PNBlockInfoContext* context,
+                                     PNValueId rel_id,
+                                     uint32_t count,
+                                     ...) {
+  if (!context->use_relative_ids)
+    return;
+
+  va_list args;
+  va_start(args, count);
+  uint32_t i;
+  for (i = 0; i < count; ++i) {
+    PNValueId* value_id = va_arg(args, PNValueId*);
+    *value_id = rel_id - *value_id;
+  }
+  va_end(args);
+}
+
 static PNType* pn_module_get_type(PNModule* module, PNTypeId type_id) {
   if (type_id < 0 || type_id >= module->num_types) {
     FATAL("accessing invalid type %d (max %d)", type_id, module->num_types);
@@ -775,8 +793,7 @@ static PNGlobalVar* pn_module_get_global_var(PNModule* module,
   return &module->global_vars[global_var_id];
 }
 
-static PNValue* pn_module_get_value(PNModule* module,
-                                    PNValueId value_id) {
+static PNValue* pn_module_get_value(PNModule* module, PNValueId value_id) {
   if (value_id < 0 || value_id >= module->num_values) {
     FATAL("accessing invalid value %d (max %d)", value_id, module->num_values);
   }
@@ -849,15 +866,15 @@ static void* pn_function_append_instruction(
 #define PN_FUNCTION_APPEND_INSTRUCTION(type, module, function, bb, id) \
   (type*) pn_function_append_instruction(module, function, bb, sizeof(type), id)
 
-static PNInstruction* pn_instruction_next(PNInstruction* instruction) {
-  uint8_t* p = (uint8_t*)instruction;
+static PNInstruction* pn_instruction_next(PNInstruction* inst) {
+  uint8_t* p = (uint8_t*)inst;
 
 #define INST_CASE(M, T) \
   case M:               \
     p += sizeof(T);     \
     break;
 
-  switch (instruction->code) {
+  switch (inst->code) {
     INST_CASE(PN_FUNCTION_CODE_INST_BINOP, PNInstructionBinop)
     INST_CASE(PN_FUNCTION_CODE_INST_CAST, PNInstructionCast)
     INST_CASE(PN_FUNCTION_CODE_INST_RET, PNInstructionRet)
@@ -873,34 +890,34 @@ static PNInstruction* pn_instruction_next(PNInstruction* instruction) {
 #undef INST_CASE
 
     case PN_FUNCTION_CODE_INST_SWITCH: {
-      PNInstructionSwitch* inst = (PNInstructionSwitch*)instruction;
+      PNInstructionSwitch* i = (PNInstructionSwitch*)inst;
       p += sizeof(PNInstructionSwitch);
-      p += sizeof(PNSwitchCase) * inst->num_cases;
+      p += sizeof(PNSwitchCase) * i->num_cases;
       int32_t c;
-      for (c = 0; c < inst->num_cases; ++c) {
-        PNSwitchCase* switch_case = &inst->cases[c];
+      for (c = 0; c < i->num_cases; ++c) {
+        PNSwitchCase* switch_case = &i->cases[c];
         p += sizeof(PNSwitchCaseValue) * switch_case->num_values;
       }
       break;
     }
 
     case PN_FUNCTION_CODE_INST_PHI: {
-      PNInstructionPhi* inst = (PNInstructionPhi*)instruction;
+      PNInstructionPhi* i = (PNInstructionPhi*)inst;
       p += sizeof(PNInstructionPhi);
-      p += sizeof(PNPhiIncoming) * inst->num_incoming;
+      p += sizeof(PNPhiIncoming) * i->num_incoming;
       break;
     }
 
     case PN_FUNCTION_CODE_INST_CALL:
     case PN_FUNCTION_CODE_INST_CALL_INDIRECT: {
-      PNInstructionCall* inst = (PNInstructionCall*)instruction;
+      PNInstructionCall* i = (PNInstructionCall*)inst;
       p += sizeof(PNInstructionCall);
-      p += sizeof(PNValueId) * inst->num_args;
+      p += sizeof(PNValueId) * i->num_args;
       break;
     }
 
     default:
-      FATAL("Invalid instruction code: %d\n", instruction->code);
+      FATAL("Invalid instruction code: %d\n", inst->code);
       break;
   }
 
@@ -911,28 +928,27 @@ static PNInstruction* pn_instruction_next(PNInstruction* instruction) {
   return (PNInstruction*)p;
 }
 
-static void pn_instruction_trace(PNModule* module, PNInstruction* instruction) {
-  switch (instruction->code) {
+static void pn_instruction_trace(PNModule* module, PNInstruction* inst) {
+  switch (inst->code) {
     case PN_FUNCTION_CODE_INST_BINOP: {
-      PNInstructionBinop* inst = (PNInstructionBinop*)instruction;
+      PNInstructionBinop* i = (PNInstructionBinop*)inst;
       TRACE("  %%%d. binop op:%s(%d) %%%d %%%d (flags:%d)\n",
-            inst->result_value_id, pn_binop_get_name(inst->opcode),
-            inst->opcode, inst->value_id0, inst->value_id1, inst->flags);
+            i->result_value_id, pn_binop_get_name(i->opcode), i->opcode,
+            i->value_id0, i->value_id1, i->flags);
       break;
     }
 
     case PN_FUNCTION_CODE_INST_CAST: {
-      PNInstructionCast* inst = (PNInstructionCast*)instruction;
-      TRACE("  %%%d. cast op:%s(%d) %%%d type:%d\n", inst->result_value_id,
-            pn_cast_get_name(inst->opcode), inst->opcode, inst->value_id,
-            inst->type_id);
+      PNInstructionCast* i = (PNInstructionCast*)inst;
+      TRACE("  %%%d. cast op:%s(%d) %%%d type:%d\n", i->result_value_id,
+            pn_cast_get_name(i->opcode), i->opcode, i->value_id, i->type_id);
       break;
     }
 
     case PN_FUNCTION_CODE_INST_RET: {
-      PNInstructionRet* inst = (PNInstructionRet*)instruction;
-      if (inst->value_id != PN_INVALID_VALUE_ID) {
-        TRACE("  ret %%%d\n", inst->value_id);
+      PNInstructionRet* i = (PNInstructionRet*)inst;
+      if (i->value_id != PN_INVALID_VALUE_ID) {
+        TRACE("  ret %%%d\n", i->value_id);
       } else {
         TRACE("  ret\n");
       }
@@ -940,24 +956,24 @@ static void pn_instruction_trace(PNModule* module, PNInstruction* instruction) {
     }
 
     case PN_FUNCTION_CODE_INST_BR: {
-      PNInstructionBr* inst = (PNInstructionBr*)instruction;
-      if (inst->false_bb_id != PN_INVALID_BLOCK_ID) {
-        TRACE("  br %%%d ? %d : %d\n", inst->value_id, inst->true_bb_id,
-              inst->false_bb_id);
+      PNInstructionBr* i = (PNInstructionBr*)inst;
+      if (i->false_bb_id != PN_INVALID_BLOCK_ID) {
+        TRACE("  br %%%d ? %d : %d\n", i->value_id, i->true_bb_id,
+              i->false_bb_id);
       } else {
-        TRACE("  br %d\n", inst->true_bb_id);
+        TRACE("  br %d\n", i->true_bb_id);
       }
       break;
     }
 
     case PN_FUNCTION_CODE_INST_SWITCH: {
-      PNInstructionSwitch* inst = (PNInstructionSwitch*)instruction;
-      TRACE("  switch type:%d value:%%%d [default:%d]", inst->type_id,
-            inst->value_id, inst->default_bb_id);
+      PNInstructionSwitch* i = (PNInstructionSwitch*)inst;
+      TRACE("  switch type:%d value:%%%d [default:%d]", i->type_id, i->value_id,
+            i->default_bb_id);
 
       uint32_t c;
-      for (c = 0; c < inst->num_cases; ++c) {
-        PNSwitchCase* switch_case = &inst->cases[c];
+      for (c = 0; c < i->num_cases; ++c) {
+        PNSwitchCase* switch_case = &i->cases[c];
         TRACE(" [");
 
         int32_t i;
@@ -980,106 +996,102 @@ static void pn_instruction_trace(PNModule* module, PNInstruction* instruction) {
       break;
 
     case PN_FUNCTION_CODE_INST_PHI: {
-      PNInstructionPhi* inst = (PNInstructionPhi*)instruction;
-      TRACE("  %%%d. phi type:%d", inst->result_value_id, inst->type_id);
-      int32_t i;
-      for (i = 0; i < inst->num_incoming; ++i) {
-        TRACE(" bb:%d=>%%%d", inst->incoming[i].bb_id,
-              inst->incoming[i].value_id);
+      PNInstructionPhi* i = (PNInstructionPhi*)inst;
+      TRACE("  %%%d. phi type:%d", i->result_value_id, i->type_id);
+      int32_t n;
+      for (n = 0; n < i->num_incoming; ++n) {
+        TRACE(" bb:%d=>%%%d", i->incoming[n].bb_id, i->incoming[n].value_id);
       }
       TRACE("\n");
       break;
     }
 
     case PN_FUNCTION_CODE_INST_ALLOCA: {
-      PNInstructionAlloca* inst = (PNInstructionAlloca*)instruction;
-      TRACE("  %%%d. alloca %%%d align=%d\n", inst->result_value_id,
-            inst->size_id, inst->alignment);
+      PNInstructionAlloca* i = (PNInstructionAlloca*)inst;
+      TRACE("  %%%d. alloca %%%d align=%d\n", i->result_value_id, i->size_id,
+            i->alignment);
       break;
     }
 
     case PN_FUNCTION_CODE_INST_LOAD: {
-      PNInstructionLoad* inst = (PNInstructionLoad*)instruction;
-      TRACE("  %%%d. load src:%%%d type:%d align=%d\n", inst->result_value_id,
-            inst->src_id, inst->type_id, inst->alignment);
+      PNInstructionLoad* i = (PNInstructionLoad*)inst;
+      TRACE("  %%%d. load src:%%%d type:%d align=%d\n", i->result_value_id,
+            i->src_id, i->type_id, i->alignment);
       break;
     }
 
     case PN_FUNCTION_CODE_INST_STORE: {
-      PNInstructionStore* inst = (PNInstructionStore*)instruction;
-      TRACE("  store dest:%%%d value:%%%d align=%d\n", inst->dest_id,
-            inst->value_id, inst->alignment);
+      PNInstructionStore* i = (PNInstructionStore*)inst;
+      TRACE("  store dest:%%%d value:%%%d align=%d\n", i->dest_id, i->value_id,
+            i->alignment);
       break;
     }
 
     case PN_FUNCTION_CODE_INST_CMP2: {
-      PNInstructionCmp2* inst = (PNInstructionCmp2*)instruction;
-      TRACE("  %%%d. cmp2 op:%s(%d) %%%d %%%d\n", inst->result_value_id,
-          pn_cmp2_get_name(inst->opcode), inst->opcode, inst->value0_id,
-          inst->value1_id);
+      PNInstructionCmp2* i = (PNInstructionCmp2*)inst;
+      TRACE("  %%%d. cmp2 op:%s(%d) %%%d %%%d\n", i->result_value_id,
+            pn_cmp2_get_name(i->opcode), i->opcode, i->value0_id, i->value1_id);
       break;
     }
 
     case PN_FUNCTION_CODE_INST_VSELECT: {
-      PNInstructionVselect* inst = (PNInstructionVselect*)instruction;
-      TRACE("  %%%d. vselect %%%d ? %%%d : %%%d\n", inst->result_value_id,
-            inst->cond_id, inst->true_value_id, inst->false_value_id);
+      PNInstructionVselect* i = (PNInstructionVselect*)inst;
+      TRACE("  %%%d. vselect %%%d ? %%%d : %%%d\n", i->result_value_id,
+            i->cond_id, i->true_value_id, i->false_value_id);
       break;
     }
 
     case PN_FUNCTION_CODE_INST_FORWARDTYPEREF: {
-      PNInstructionForwardtyperef* inst =
-          (PNInstructionForwardtyperef*)instruction;
-      TRACE("  forwardtyperef %d %d\n", inst->value_id, inst->type_id);
+      PNInstructionForwardtyperef* i = (PNInstructionForwardtyperef*)inst;
+      TRACE("  forwardtyperef %d %d\n", i->value_id, i->type_id);
       break;
     }
 
     case PN_FUNCTION_CODE_INST_CALL:
     case PN_FUNCTION_CODE_INST_CALL_INDIRECT: {
-      PNInstructionCall* inst = (PNInstructionCall*)instruction;
-      PNType* return_type =
-          pn_module_get_type(module, inst->return_type_id);
+      PNInstructionCall* i = (PNInstructionCall*)inst;
+      PNType* return_type = pn_module_get_type(module, i->return_type_id);
       PNBool is_return_type_void = return_type->code == PN_TYPE_CODE_VOID;
       TRACE("  ");
       if (!is_return_type_void) {
-        TRACE("%%%d. ", inst->result_value_id);
+        TRACE("%%%d. ", i->result_value_id);
       }
       TRACE("call ");
       const char* name = NULL;
-      if (inst->is_indirect) {
+      if (i->is_indirect) {
         TRACE("indirect ");
       } else {
         PNFunction* called_function =
-            pn_module_get_function(module, inst->callee_id);
+            pn_module_get_function(module, i->callee_id);
         name = called_function->name;
       }
       if (name && name[0]) {
-        TRACE("%%%d(%s) ", inst->callee_id, name);
+        TRACE("%%%d(%s) ", i->callee_id, name);
       } else {
-        TRACE("%%%d ", inst->callee_id);
+        TRACE("%%%d ", i->callee_id);
       }
       TRACE("args:");
 
-      int32_t i;
-      for (i = 0; i < inst->num_args; ++i) {
-        TRACE(" %%%d", inst->arg_ids[i]);
+      int32_t n;
+      for (n = 0; n < i->num_args; ++n) {
+        TRACE(" %%%d", i->arg_ids[n]);
       }
       TRACE("\n");
       break;
     }
 
     default:
-      FATAL("Invalid instruction code: %d\n", instruction->code);
+      FATAL("Invalid instruction code: %d\n", inst->code);
       break;
   }
 }
 
 static void pn_basic_block_trace(PNModule* module, PNBasicBlock* bb) {
-  PNInstruction* instruction = (PNInstruction*)bb->instructions;
+  PNInstruction* inst = (PNInstruction*)bb->instructions;
   uint32_t i;
   for (i = 0; i < bb->num_instructions; ++i) {
-    pn_instruction_trace(module, instruction);
-    instruction = pn_instruction_next(instruction);
+    pn_instruction_trace(module, inst);
+    inst = pn_instruction_next(inst);
   }
 }
 
@@ -1279,24 +1291,6 @@ static PNBool pn_record_try_read_int32(PNRecordReader* reader,
   return ret;
 }
 
-static PNBool pn_record_try_read_value_id(PNRecordReader* reader,
-                                          PNValueId* out_value_id,
-                                          PNBool use_relative_ids,
-                                          PNValueId rel_value_id) {
-  uint32_t value;
-  if (!pn_record_try_read_uint32(reader, &value)) {
-    return PN_FALSE;
-  }
-
-  if (use_relative_ids) {
-    *out_value_id = rel_value_id - value;
-  } else {
-    *out_value_id = value;
-  }
-
-  return PN_TRUE;
-}
-
 static int32_t pn_record_read_int32(PNRecordReader* reader, const char* name) {
   int32_t value;
   if (!pn_record_try_read_int32(reader, &value)) {
@@ -1327,19 +1321,6 @@ static float pn_record_read_float(PNRecordReader* reader, const char* name) {
   memcpy(&float_value, &value, sizeof(float));
 
   return float_value;
-}
-
-static PNValueId pn_record_read_value_id(PNRecordReader* reader,
-                                         const char* name,
-                                         PNBool use_relative_ids,
-                                         PNValueId rel_value_id) {
-  PNValueId value;
-  if (!pn_record_try_read_value_id(reader, &value, use_relative_ids,
-                                   rel_value_id)) {
-    FATAL("unable to read %s.\n", name);
-  }
-
-  return value;
 }
 
 static void pn_record_reader_finish(PNRecordReader* reader) {
@@ -2040,6 +2021,7 @@ static void pn_function_block_read(PNModule* module,
         pn_record_read_code(&reader, &code);
 
         PNBool is_terminator = PN_FALSE;
+        PNValueId rel_id = pn_function_num_values(module, function);
 
         if (code == PN_FUNCTION_CODE_DECLAREBLOCKS) {
           function->num_bbs =
@@ -2063,77 +2045,78 @@ static void pn_function_block_read(PNModule* module,
             break;
 
           case PN_FUNCTION_CODE_INST_BINOP: {
-            PNInstructionId instruction_id;
-            PNInstructionBinop* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionBinop, module, function, cur_bb, &instruction_id);
+            PNInstructionId inst_id;
+            PNInstructionBinop* inst = PN_FUNCTION_APPEND_INSTRUCTION(
+                PNInstructionBinop, module, function, cur_bb, &inst_id);
 
             PNValueId value_id;
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
-            value->index = instruction_id;
+            value->index = inst_id;
 
-            instruction->code = code;
-            instruction->result_value_id = value_id;
-            instruction->value_id0 = pn_record_read_value_id(
-                &reader, "value 0", context->use_relative_ids, value_id);
-            instruction->value_id1 = pn_record_read_value_id(
-                &reader, "value 1", context->use_relative_ids, value_id);
-            instruction->opcode = pn_record_read_int32(&reader, "opcode");
-            instruction->flags = 0;
+            inst->code = code;
+            inst->result_value_id = value_id;
+            inst->value_id0 = pn_record_read_uint32(&reader, "value 0");
+            inst->value_id1 = pn_record_read_uint32(&reader, "value 1");
+            inst->opcode = pn_record_read_int32(&reader, "opcode");
+            inst->flags = 0;
+
+            pn_context_fix_value_ids(context, rel_id, 2, &inst->value_id0,
+                                     &inst->value_id1);
 
             /* optional */
-            pn_record_try_read_int32(&reader, &instruction->flags);
+            pn_record_try_read_int32(&reader, &inst->flags);
             break;
           }
 
           case PN_FUNCTION_CODE_INST_CAST: {
-            PNInstructionId instruction_id;
-            PNInstructionCast* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionCast, module, function, cur_bb, &instruction_id);
+            PNInstructionId inst_id;
+            PNInstructionCast* inst = PN_FUNCTION_APPEND_INSTRUCTION(
+                PNInstructionCast, module, function, cur_bb, &inst_id);
 
             PNValueId value_id;
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
-            value->index = instruction_id;
+            value->index = inst_id;
 
-            instruction->code = code;
-            instruction->result_value_id = value_id;
-            instruction->value_id = pn_record_read_value_id(
-                &reader, "value", context->use_relative_ids, value_id);
-            instruction->type_id = pn_record_read_uint32(&reader, "type_id");
-            instruction->opcode = pn_record_read_int32(&reader, "opcode");
+            inst->code = code;
+            inst->result_value_id = value_id;
+            inst->value_id = pn_record_read_uint32(&reader, "value");
+            inst->type_id = pn_record_read_uint32(&reader, "type_id");
+            inst->opcode = pn_record_read_int32(&reader, "opcode");
+
+            pn_context_fix_value_ids(context, rel_id, 1, &inst->value_id);
             break;
           }
 
           case PN_FUNCTION_CODE_INST_RET: {
-            PNInstructionId instruction_id;
-            PNInstructionRet* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionRet, module, function, cur_bb, &instruction_id);
-            instruction->code = code;
-            instruction->value_id = PN_INVALID_VALUE_ID;
+            PNInstructionId inst_id;
+            PNInstructionRet* inst = PN_FUNCTION_APPEND_INSTRUCTION(
+                PNInstructionRet, module, function, cur_bb, &inst_id);
+            inst->code = code;
+            inst->value_id = PN_INVALID_VALUE_ID;
 
-            pn_record_try_read_value_id(
-                &reader, &instruction->value_id, context->use_relative_ids,
-                pn_function_num_values(module, function));
+            if (pn_record_try_read_uint32(&reader, &inst->value_id)) {
+              pn_context_fix_value_ids(context, rel_id, 1, &inst->value_id);
+            }
 
             is_terminator = PN_TRUE;
             break;
           }
 
           case PN_FUNCTION_CODE_INST_BR: {
-            PNInstructionId instruction_id;
-            PNInstructionBr* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionBr, module, function, cur_bb, &instruction_id);
-            instruction->code = code;
-            instruction->true_bb_id = pn_record_read_uint32(&reader, "true_bb");
-            instruction->false_bb_id = PN_INVALID_BLOCK_ID;
+            PNInstructionId inst_id;
+            PNInstructionBr* inst = PN_FUNCTION_APPEND_INSTRUCTION(
+                PNInstructionBr, module, function, cur_bb, &inst_id);
+            inst->code = code;
+            inst->true_bb_id = pn_record_read_uint32(&reader, "true_bb");
+            inst->false_bb_id = PN_INVALID_BLOCK_ID;
 
-            if (pn_record_try_read_uint32(&reader, &instruction->false_bb_id)) {
-              instruction->value_id = pn_record_read_value_id(
-                  &reader, "value", context->use_relative_ids,
-                  pn_function_num_values(module, function));
+            if (pn_record_try_read_uint32(&reader, &inst->false_bb_id)) {
+              inst->value_id = pn_record_read_uint32(&reader, "value");
+              pn_context_fix_value_ids(context, rel_id, 1, &inst->value_id);
             }
 
             is_terminator = PN_TRUE;
@@ -2141,26 +2124,25 @@ static void pn_function_block_read(PNModule* module,
           }
 
           case PN_FUNCTION_CODE_INST_SWITCH: {
-            PNInstructionId instruction_id;
-            PNInstructionSwitch* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionSwitch, module, function, cur_bb, &instruction_id);
+            PNInstructionId inst_id;
+            PNInstructionSwitch* inst = PN_FUNCTION_APPEND_INSTRUCTION(
+                PNInstructionSwitch, module, function, cur_bb, &inst_id);
 
-            instruction->type_id = pn_record_read_uint32(&reader, "type_id");
-            instruction->value_id = pn_record_read_value_id(
-                &reader, "value", context->use_relative_ids,
-                pn_function_num_values(module, function));
-            instruction->default_bb_id =
-                pn_record_read_uint32(&reader, "default bb");
+            inst->type_id = pn_record_read_uint32(&reader, "type_id");
+            inst->value_id = pn_record_read_uint32(&reader, "value");
+            inst->default_bb_id = pn_record_read_uint32(&reader, "default bb");
 
-            instruction->code = code;
-            instruction->num_cases = pn_record_read_int32(&reader, "num cases");
-            instruction->cases =
+            pn_context_fix_value_ids(context, rel_id, 1, &inst->value_id);
+
+            inst->code = code;
+            inst->num_cases = pn_record_read_int32(&reader, "num cases");
+            inst->cases =
                 pn_arena_alloc(&module->instruction_arena,
-                               sizeof(PNSwitchCase) * instruction->num_cases);
+                               sizeof(PNSwitchCase) * inst->num_cases);
 
             int32_t c = 0;
-            for (c = 0; c < instruction->num_cases; ++c) {
-              PNSwitchCase* switch_case = &instruction->cases[c];
+            for (c = 0; c < inst->num_cases; ++c) {
+              PNSwitchCase* switch_case = &inst->cases[c];
               switch_case->num_values =
                   pn_record_read_int32(&reader, "num values");
               switch_case->values = pn_arena_alloc(
@@ -2186,31 +2168,30 @@ static void pn_function_block_read(PNModule* module,
           }
 
           case PN_FUNCTION_CODE_INST_UNREACHABLE: {
-            PNInstructionId instruction_id;
-            PNInstructionUnreachable* instruction =
-                PN_FUNCTION_APPEND_INSTRUCTION(PNInstructionUnreachable, module,
-                                               function, cur_bb,
-                                               &instruction_id);
-            instruction->code = code;
+            PNInstructionId inst_id;
+            PNInstructionUnreachable* inst = PN_FUNCTION_APPEND_INSTRUCTION(
+                PNInstructionUnreachable, module, function, cur_bb,
+                &inst_id);
+            inst->code = code;
             is_terminator = PN_TRUE;
             break;
           }
 
           case PN_FUNCTION_CODE_INST_PHI: {
-            PNInstructionId instruction_id;
-            PNInstructionPhi* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionPhi, module, function, cur_bb, &instruction_id);
+            PNInstructionId inst_id;
+            PNInstructionPhi* inst = PN_FUNCTION_APPEND_INSTRUCTION(
+                PNInstructionPhi, module, function, cur_bb, &inst_id);
 
             PNValueId value_id;
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
-            value->index = instruction_id;
+            value->index = inst_id;
 
-            instruction->code = code;
-            instruction->result_value_id = value_id;
-            instruction->type_id = pn_record_read_int32(&reader, "type_id");
-            instruction->num_incoming = 0;
+            inst->code = code;
+            inst->result_value_id = value_id;
+            inst->type_id = pn_record_read_int32(&reader, "type_id");
+            inst->num_incoming = 0;
 
             while (1) {
               PNBasicBlockId bb;
@@ -2226,180 +2207,180 @@ static void pn_function_block_read(PNModule* module,
                 FATAL("unable to read phi bb index\n");
               }
 
-              instruction->incoming = pn_arena_realloc(
-                  &module->instruction_arena, instruction->incoming,
-                  sizeof(PNPhiIncoming) * (instruction->num_incoming + 1));
+              inst->incoming = pn_arena_realloc(
+                  &module->instruction_arena, inst->incoming,
+                  sizeof(PNPhiIncoming) * (inst->num_incoming + 1));
 
-              PNPhiIncoming* incoming =
-                  &instruction->incoming[instruction->num_incoming];
+              PNPhiIncoming* incoming = &inst->incoming[inst->num_incoming];
               incoming->bb_id = bb;
               incoming->value_id = value;
-              instruction->num_incoming++;
+              inst->num_incoming++;
             }
             break;
           }
 
           case PN_FUNCTION_CODE_INST_ALLOCA: {
-            PNInstructionId instruction_id;
-            PNInstructionAlloca* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionAlloca, module, function, cur_bb, &instruction_id);
+            PNInstructionId inst_id;
+            PNInstructionAlloca* inst = PN_FUNCTION_APPEND_INSTRUCTION(
+                PNInstructionAlloca, module, function, cur_bb, &inst_id);
 
             PNValueId value_id;
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
-            value->index = instruction_id;
+            value->index = inst_id;
 
-            instruction->code = code;
-            instruction->result_value_id = value_id;
-            instruction->size_id = pn_record_read_value_id(
-                &reader, "size", context->use_relative_ids, value_id);
-            instruction->alignment =
+            inst->code = code;
+            inst->result_value_id = value_id;
+            inst->size_id = pn_record_read_uint32(&reader, "size");
+            inst->alignment =
                 (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
+
+            pn_context_fix_value_ids(context, rel_id, 1, &inst->size_id);
             break;
           }
 
           case PN_FUNCTION_CODE_INST_LOAD: {
-            PNInstructionId instruction_id;
-            PNInstructionLoad* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionLoad, module, function, cur_bb, &instruction_id);
+            PNInstructionId inst_id;
+            PNInstructionLoad* inst = PN_FUNCTION_APPEND_INSTRUCTION(
+                PNInstructionLoad, module, function, cur_bb, &inst_id);
 
             PNValueId value_id;
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
-            value->index = instruction_id;
+            value->index = inst_id;
 
-            instruction->code = code;
-            instruction->result_value_id = value_id;
-            instruction->src_id = pn_record_read_value_id(
-                &reader, "src", context->use_relative_ids, value_id);
-            instruction->alignment =
+            inst->code = code;
+            inst->result_value_id = value_id;
+            inst->src_id = pn_record_read_uint32(&reader, "src");
+            inst->alignment =
                 (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
-            instruction->type_id = pn_record_read_int32(&reader, "type_id");
+            inst->type_id = pn_record_read_int32(&reader, "type_id");
+
+            pn_context_fix_value_ids(context, rel_id, 1, &inst->src_id);
             break;
           }
 
           case PN_FUNCTION_CODE_INST_STORE: {
-            PNInstructionId instruction_id;
-            PNInstructionStore* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionStore, module, function, cur_bb, &instruction_id);
+            PNInstructionId inst_id;
+            PNInstructionStore* inst = PN_FUNCTION_APPEND_INSTRUCTION(
+                PNInstructionStore, module, function, cur_bb, &inst_id);
 
-            instruction->code = code;
-            instruction->dest_id = pn_record_read_value_id(
-                &reader, "dest", context->use_relative_ids,
-                pn_function_num_values(module, function));
-            instruction->value_id = pn_record_read_value_id(
-                &reader, "value", context->use_relative_ids,
-                pn_function_num_values(module, function));
-            instruction->alignment =
+            inst->code = code;
+            inst->dest_id = pn_record_read_uint32(&reader, "dest");
+            inst->value_id = pn_record_read_uint32(&reader, "value");
+            inst->alignment =
                 (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
+
+            pn_context_fix_value_ids(context, rel_id, 2, &inst->dest_id,
+                                     &inst->value_id);
             break;
           }
 
           case PN_FUNCTION_CODE_INST_CMP2: {
-            PNInstructionId instruction_id;
-            PNInstructionCmp2* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionCmp2, module, function, cur_bb, &instruction_id);
+            PNInstructionId inst_id;
+            PNInstructionCmp2* inst = PN_FUNCTION_APPEND_INSTRUCTION(
+                PNInstructionCmp2, module, function, cur_bb, &inst_id);
 
             PNValueId value_id;
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
-            value->index = instruction_id;
+            value->index = inst_id;
 
-            instruction->code = code;
-            instruction->result_value_id = value_id;
-            instruction->value0_id = pn_record_read_value_id(
-                &reader, "value 0", context->use_relative_ids, value_id);
-            instruction->value1_id = pn_record_read_value_id(
-                &reader, "value 1", context->use_relative_ids, value_id);
-            instruction->opcode = pn_record_read_int32(&reader, "opcode");
+            inst->code = code;
+            inst->result_value_id = value_id;
+            inst->value0_id = pn_record_read_uint32(&reader, "value 0");
+            inst->value1_id = pn_record_read_uint32(&reader, "value 1");
+            inst->opcode = pn_record_read_int32(&reader, "opcode");
+
+            pn_context_fix_value_ids(context, rel_id, 2, &inst->value0_id,
+                                     &inst->value1_id);
             break;
           }
 
           case PN_FUNCTION_CODE_INST_VSELECT: {
-            PNInstructionId instruction_id;
-            PNInstructionVselect* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
+            PNInstructionId inst_id;
+            PNInstructionVselect* inst = PN_FUNCTION_APPEND_INSTRUCTION(
                 PNInstructionVselect, module, function, cur_bb,
-                &instruction_id);
+                &inst_id);
 
             PNValueId value_id;
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
-            value->index = instruction_id;
+            value->index = inst_id;
 
-            instruction->code = code;
-            instruction->result_value_id = value_id;
-            instruction->true_value_id = pn_record_read_value_id(
-                &reader, "true_value", context->use_relative_ids, value_id);
-            instruction->false_value_id = pn_record_read_value_id(
-                &reader, "false_value", context->use_relative_ids, value_id);
-            instruction->cond_id = pn_record_read_value_id(
-                &reader, "cond", context->use_relative_ids, value_id);
+            inst->code = code;
+            inst->result_value_id = value_id;
+            inst->true_value_id = pn_record_read_uint32(&reader, "true_value");
+            inst->false_value_id =
+                pn_record_read_uint32(&reader, "false_value");
+            inst->cond_id = pn_record_read_uint32(&reader, "cond");
+
+            pn_context_fix_value_ids(context, rel_id, 3, &inst->true_value_id,
+                                     &inst->false_value_id, &inst->cond_id);
             break;
           }
 
           case PN_FUNCTION_CODE_INST_FORWARDTYPEREF: {
-            PNInstructionId instruction_id;
-            PNInstructionForwardtyperef* instruction =
-                PN_FUNCTION_APPEND_INSTRUCTION(PNInstructionForwardtyperef,
-                                               module, function, cur_bb,
-                                               &instruction_id);
+            PNInstructionId inst_id;
+            PNInstructionForwardtyperef* inst = PN_FUNCTION_APPEND_INSTRUCTION(
+                PNInstructionForwardtyperef, module, function, cur_bb,
+                &inst_id);
 
-            instruction->code = code;
-            instruction->value_id = pn_record_read_int32(&reader, "value");
-            instruction->type_id = pn_record_read_int32(&reader, "type");
+            inst->code = code;
+            inst->value_id = pn_record_read_int32(&reader, "value");
+            inst->type_id = pn_record_read_int32(&reader, "type");
             break;
           }
 
           case PN_FUNCTION_CODE_INST_CALL:
           case PN_FUNCTION_CODE_INST_CALL_INDIRECT: {
-            PNInstructionId instruction_id;
-            PNInstructionCall* instruction = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionCall, module, function, cur_bb, &instruction_id);
+            PNInstructionId inst_id;
+            PNInstructionCall* inst = PN_FUNCTION_APPEND_INSTRUCTION(
+                PNInstructionCall, module, function, cur_bb, &inst_id);
 
-            instruction->code = code;
-            instruction->is_indirect =
-                code == PN_FUNCTION_CODE_INST_CALL_INDIRECT;
+            inst->code = code;
+            inst->is_indirect = code == PN_FUNCTION_CODE_INST_CALL_INDIRECT;
             int32_t cc_info = pn_record_read_int32(&reader, "cc_info");
-            instruction->is_tail_call = cc_info & 1;
-            instruction->calling_convention = cc_info >> 1;
-            instruction->callee_id = pn_record_read_value_id(
-                &reader, "callee", context->use_relative_ids,
-                pn_function_num_values(module, function));
+            inst->is_tail_call = cc_info & 1;
+            inst->calling_convention = cc_info >> 1;
+            inst->callee_id = pn_record_read_uint32(&reader, "callee");
+
+            pn_context_fix_value_ids(context, rel_id, 1, &inst->callee_id);
 
             PNTypeId type_id;
-            if (instruction->is_indirect) {
-              instruction->return_type_id =
+            if (inst->is_indirect) {
+              inst->return_type_id =
                   pn_record_read_int32(&reader, "return_type");
             } else {
               PNFunction* called_function =
-                  pn_module_get_function(module, instruction->callee_id);
+                  pn_module_get_function(module, inst->callee_id);
               type_id = called_function->type_id;
               PNType* function_type = pn_module_get_type(module, type_id);
               assert(function_type->code == PN_TYPE_CODE_FUNCTION);
-              instruction->return_type_id = function_type->return_type;
+              inst->return_type_id = function_type->return_type;
             }
 
             PNType* return_type =
-                pn_module_get_type(module, instruction->return_type_id);
+                pn_module_get_type(module, inst->return_type_id);
             PNBool is_return_type_void = return_type->code == PN_TYPE_CODE_VOID;
             PNValueId value_id;
             if (!is_return_type_void) {
               PNValue* value =
                   pn_function_append_value(module, function, &value_id);
               value->code = PN_VALUE_CODE_LOCAL_VAR;
-              value->index = instruction_id;
+              value->index = inst_id;
 
-              instruction->result_value_id = value_id;
+              inst->result_value_id = value_id;
             } else {
               value_id = pn_function_num_values(module, function);
-              instruction->result_value_id = PN_INVALID_VALUE_ID;
+              inst->result_value_id = PN_INVALID_VALUE_ID;
             }
 
-            instruction->num_args = 0;
+            inst->num_args = 0;
 
             int32_t arg;
             while (pn_record_try_read_int32(&reader, &arg)) {
@@ -2407,12 +2388,12 @@ static void pn_function_block_read(PNModule* module,
                 arg = value_id - arg;
               }
 
-              instruction->arg_ids = pn_arena_realloc(
-                  &module->instruction_arena, instruction->arg_ids,
-                  sizeof(PNValueId) * (instruction->num_args + 1));
+              inst->arg_ids =
+                  pn_arena_realloc(&module->instruction_arena, inst->arg_ids,
+                                   sizeof(PNValueId) * (inst->num_args + 1));
 
-              instruction->arg_ids[instruction->num_args] = arg;
-              instruction->num_args++;
+              inst->arg_ids[inst->num_args] = arg;
+              inst->num_args++;
             }
             break;
           }
