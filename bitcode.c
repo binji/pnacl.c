@@ -390,6 +390,8 @@ typedef struct PNBasicBlock {
   PNBasicBlockId* succ_bb_ids;
   uint32_t num_uses;
   PNValueId* uses;
+  PNValueId first_def_id; /* Or PN_INVALID_BLOCK_ID */
+  PNValueId last_def_id;  /* Or PN_INVALID_BLOCK_ID */
 } PNBasicBlock;
 
 typedef struct PNConstant {
@@ -1350,7 +1352,11 @@ static void pn_function_trace(PNModule* module, PNFunction* function) {
     for (n = 0; n < bb->num_succ_bbs; ++n) {
       printf(" %d", bb->succ_bb_ids[n]);
     }
-    printf(")\n uses:");
+    printf(")\n");
+    if (bb->first_def_id != PN_INVALID_VALUE_ID) {
+      printf(" defs: [%%%d,%%%d]\n", bb->first_def_id, bb->last_def_id);
+    }
+    printf(" uses:");
     for (n = 0; n < bb->num_uses; ++n) {
       printf(" %%%d", bb->uses[n]);
     }
@@ -2232,6 +2238,9 @@ static void pn_function_block_read(PNModule* module,
     TRACE("  %%%d. function arg %d\n", value_id, i);
   }
 
+  PNValueId first_bb_value_id = PN_INVALID_VALUE_ID;
+  /* These are initialized with different values so the first instruction
+   * creates the basic block */
   PNBasicBlockId prev_bb_id = -1;
   PNBasicBlockId cur_bb_id = 0;
   PNBasicBlock* cur_bb = NULL;
@@ -2296,6 +2305,10 @@ static void pn_function_block_read(PNModule* module,
           assert(cur_bb_id < function->num_bbs);
           prev_bb_id = cur_bb_id;
           cur_bb = &function->bbs[cur_bb_id];
+          cur_bb->first_def_id = PN_INVALID_VALUE_ID;
+          cur_bb->last_def_id = PN_INVALID_VALUE_ID;
+
+          first_bb_value_id = pn_function_num_values(module, function);
         }
 
         switch (code) {
@@ -2678,6 +2691,12 @@ static void pn_function_block_read(PNModule* module,
         }
 
         if (is_terminator) {
+          PNValueId last_bb_value_id = pn_function_num_values(module, function);
+          if (last_bb_value_id != first_bb_value_id) {
+            cur_bb->first_def_id = first_bb_value_id;
+            cur_bb->last_def_id = last_bb_value_id - 1;
+          }
+
           cur_bb_id++;
         }
 
