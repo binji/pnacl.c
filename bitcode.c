@@ -1356,11 +1356,13 @@ static void pn_function_trace(PNModule* module, PNFunction* function) {
     if (bb->first_def_id != PN_INVALID_VALUE_ID) {
       printf(" defs: [%%%d,%%%d]\n", bb->first_def_id, bb->last_def_id);
     }
-    printf(" uses:");
-    for (n = 0; n < bb->num_uses; ++n) {
-      printf(" %%%d", bb->uses[n]);
+    if (bb->num_uses) {
+      printf(" uses:");
+      for (n = 0; n < bb->num_uses; ++n) {
+        printf(" %%%d", bb->uses[n]);
+      }
+      printf("\n");
     }
-    printf("\n");
     pn_basic_block_trace(module, &function->bbs[i]);
   }
 }
