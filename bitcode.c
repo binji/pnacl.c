@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define PN_ARENA_SIZE (16 * 1024 * 1024)
+#define PN_ARENA_SIZE (32 * 1024 * 1024)
 #define PN_VALUE_ARENA_SIZE (8 * 1024 * 1024)
 #define PN_INSTRUCTION_ARENA_SIZE (32 * 1024 * 1024)
 #define PN_TEMP_ARENA_SIZE (1 * 1024 * 1024)
@@ -390,8 +390,14 @@ typedef struct PNBasicBlock {
   PNBasicBlockId* succ_bb_ids;
   uint32_t num_uses;
   PNValueId* uses;
+  uint32_t num_phi_uses;
+  PNPhiIncoming* phi_uses;
   PNValueId first_def_id; /* Or PN_INVALID_BLOCK_ID */
   PNValueId last_def_id;  /* Or PN_INVALID_BLOCK_ID */
+  uint32_t num_livein;
+  PNValueId* livein;
+  uint32_t num_liveout;
+  PNValueId* liveout;
 } PNBasicBlock;
 
 typedef struct PNConstant {
@@ -428,6 +434,7 @@ typedef struct PNValue {
 typedef struct PNFunction {
   char name[PN_MAX_FUNCTION_NAME];
   PNTypeId type_id;
+  uint32_t num_args;
   uint32_t calling_convention;
   PNBool is_proto;
   uint32_t linkage;
@@ -494,6 +501,11 @@ typedef struct PNModule {
   PNArena instruction_arena;
   PNArena temp_arena;
 } PNModule;
+
+typedef struct PNLivenessState {
+  PNBitSet* livein;
+  PNBitSet* liveout;
+} PNLivenessState;
 
 typedef struct PNBlockInfoContext {
   uint32_t num_abbrevs;
@@ -1017,8 +1029,8 @@ static PNInstruction* pn_instruction_next(PNInstruction* inst) {
       break;
   }
 
-  // TODO(binji): this requires knowledge that the arena aligns to 8 bytes. Do
-  // something less fragile.
+  /* TODO(binji): this requires knowledge that the arena aligns to 8 bytes. Do
+   * something less fragile. */
   p = (uint8_t*)(((intptr_t)p + 7) & ~7);
 
   return (PNInstruction*)p;
@@ -1030,7 +1042,7 @@ static void pn_basic_block_set_value_use(PNModule* module,
                                          PNValueId value_id) {
   if (value_id >= module->num_values) {
     value_id -= module->num_values;
-    if (value_id >= function->num_constants) {
+    if (value_id >= function->num_args + function->num_constants) {
       pn_bitset_set(uses, value_id, PN_TRUE);
     }
   }
@@ -1087,8 +1099,16 @@ static void pn_basic_block_calculate_uses(PNModule* module,
         PNInstructionPhi* i = (PNInstructionPhi*)inst;
         int32_t n;
         for (n = 0; n < i->num_incoming; ++n) {
-          pn_basic_block_set_value_use(module, function, &uses,
-                                       i->incoming[n].value_id);
+          PNValueId value_id = i->incoming[n].value_id;
+          if (value_id < module->num_values + function->num_args +
+                             function->num_constants) {
+            break;
+          }
+
+          bb->phi_uses =
+              pn_arena_realloc(&module->arena, bb->phi_uses,
+                               sizeof(PNPhiIncoming) * (bb->num_phi_uses + 1));
+          bb->phi_uses[bb->num_phi_uses++] = i->incoming[n];
         }
       }
 
@@ -1122,7 +1142,8 @@ static void pn_basic_block_calculate_uses(PNModule* module,
         PNInstructionVselect* i = (PNInstructionVselect*)inst;
         pn_basic_block_set_value_use(module, function, &uses, i->cond_id);
         pn_basic_block_set_value_use(module, function, &uses, i->true_value_id);
-        pn_basic_block_set_value_use(module, function, &uses, i->false_value_id);
+        pn_basic_block_set_value_use(module, function, &uses,
+                                     i->false_value_id);
         break;
       }
 
@@ -1169,6 +1190,111 @@ static void pn_function_calculate_uses(PNModule* module,
   for (n = 0; n < function->num_bbs; ++n) {
     pn_basic_block_calculate_uses(module, function, &function->bbs[n]);
   }
+}
+
+static void pn_basic_block_calculate_liveness_per_value(PNModule* module,
+                                                        PNFunction* function,
+                                                        PNLivenessState* state,
+                                                        PNBasicBlockId bb_id,
+                                                        PNValueId rel_id) {
+  PNValueId value_id = module->num_values + rel_id;
+  PNBasicBlock* bb = &function->bbs[bb_id];
+  if (value_id >= bb->first_def_id && value_id <= bb->last_def_id) {
+    /* Value killed at definition. */
+    return;
+  }
+
+  if (pn_bitset_is_set(&state->livein[bb_id], rel_id)) {
+    /* Already processed. */
+    return;
+  }
+
+  pn_bitset_set(&state->livein[bb_id], rel_id, PN_TRUE);
+
+  uint32_t n;
+  for (n = 0; n < bb->num_pred_bbs; ++n) {
+    PNBasicBlockId pred_bb_id = bb->pred_bb_ids[n];
+    pn_bitset_set(&state->liveout[pred_bb_id], rel_id, PN_TRUE);
+    pn_basic_block_calculate_liveness_per_value(module, function, state,
+                                                pred_bb_id, rel_id);
+  }
+}
+
+static void pn_basic_block_calculate_liveness(PNModule* module,
+                                              PNFunction* function,
+                                              PNLivenessState* state,
+                                              PNBasicBlockId bb_id) {
+  PNBasicBlock* bb = &function->bbs[bb_id];
+  uint32_t n;
+  for (n = 0; n < bb->num_phi_uses; ++n) {
+    PNPhiIncoming incoming = bb->phi_uses[n];
+    PNValueId rel_id = incoming.value_id - module->num_values;
+    PNBasicBlockId pred_bb_id = incoming.bb_id;
+    pn_bitset_set(&state->liveout[pred_bb_id], rel_id, PN_TRUE);
+    pn_basic_block_calculate_liveness_per_value(module, function, state,
+                                                pred_bb_id, rel_id);
+  }
+
+  for (n = 0; n < bb->num_uses; ++n) {
+    PNValueId value_id = bb->uses[n];
+    PNValueId rel_id = value_id - module->num_values;
+    pn_basic_block_calculate_liveness_per_value(module, function, state, bb_id,
+                                                rel_id);
+  }
+}
+
+static void pn_function_calculate_liveness(PNModule* module,
+                                           PNFunction* function) {
+  PNArenaMark mark = pn_arena_mark(&module->temp_arena);
+
+  PNLivenessState state;
+  state.livein = (PNBitSet*)pn_arena_alloc(
+      &module->temp_arena, sizeof(PNBitSet) * function->num_bbs);
+  state.liveout = (PNBitSet*)pn_arena_alloc(
+      &module->temp_arena, sizeof(PNBitSet) * function->num_bbs);
+
+  uint32_t n;
+  for (n = 0; n < function->num_bbs; ++n) {
+    pn_bitset_init(&module->temp_arena, &state.livein[n], function->num_values);
+    pn_bitset_init(&module->temp_arena, &state.liveout[n],
+                   function->num_values);
+  }
+
+  for (n = function->num_bbs; n > 0; --n) {
+    PNBasicBlockId bb_id = n - 1;
+    pn_basic_block_calculate_liveness(module, function, &state, bb_id);
+  }
+
+  for (n = 0; n < function->num_bbs; ++n) {
+    PNBasicBlock* bb = &function->bbs[n];
+    uint32_t m;
+
+    if (state.livein[n].num_bits_set) {
+      bb->num_livein = 0;
+      bb->livein = pn_arena_alloc(
+          &module->arena, sizeof(PNValueId) * state.livein[n].num_bits_set);
+
+      for (m = 0; m < function->num_values; ++m) {
+        if (pn_bitset_is_set(&state.livein[n], m)) {
+          bb->livein[bb->num_livein++] = module->num_values + m;
+        }
+      }
+    }
+
+    if (state.liveout[n].num_bits_set) {
+      bb->num_liveout = 0;
+      bb->liveout = pn_arena_alloc(
+          &module->arena, sizeof(PNValueId) * state.liveout[n].num_bits_set);
+
+      for (m = 0; m < function->num_values; ++m) {
+        if (pn_bitset_is_set(&state.liveout[n], m)) {
+          bb->liveout[bb->num_liveout++] = module->num_values + m;
+        }
+      }
+    }
+  }
+
+  pn_arena_reset_to_mark(&module->temp_arena, mark);
 }
 
 static void pn_instruction_trace(PNModule* module, PNInstruction* inst) {
@@ -1360,6 +1486,27 @@ static void pn_function_trace(PNModule* module, PNFunction* function) {
       printf(" uses:");
       for (n = 0; n < bb->num_uses; ++n) {
         printf(" %%%d", bb->uses[n]);
+      }
+      printf("\n");
+    }
+    if (bb->num_phi_uses) {
+      printf(" phi uses:");
+      for (n = 0; n < bb->num_phi_uses; ++n) {
+        printf(" bb:%d=>%%%d", bb->phi_uses[n].bb_id, bb->phi_uses[n].value_id);
+      }
+      printf("\n");
+    }
+    if (bb->num_livein) {
+      printf(" livein:");
+      for (n = 0; n < bb->num_livein; ++n) {
+        printf(" %%%d", bb->livein[n]);
+      }
+      printf("\n");
+    }
+    if (bb->num_liveout) {
+      printf(" liveout:");
+      for (n = 0; n < bb->num_liveout; ++n) {
+        printf(" %%%d", bb->liveout[n]);
       }
       printf("\n");
     }
@@ -2221,8 +2368,6 @@ static void pn_function_block_read(PNModule* module,
   pn_block_info_context_get_abbrev(context, PN_BLOCKID_FUNCTION, &abbrevs);
 
   PNFunction* function = pn_module_get_function(module, function_id);
-  PNType* function_type = pn_module_get_type(module, function->type_id);
-  assert(function_type->code == PN_TYPE_CODE_FUNCTION);
 
   if (function->name) {
     TRACE("function %%%d (%s)\n", function_id, function->name);
@@ -2231,7 +2376,7 @@ static void pn_function_block_read(PNModule* module,
   }
 
   uint32_t i;
-  for (i = 0; i < function_type->num_args; ++i) {
+  for (i = 0; i < function->num_args; ++i) {
     PNValueId value_id;
     PNValue* value = pn_function_append_value(module, function, &value_id);
     value->code = PN_VALUE_CODE_FUNCTION_ARG;
@@ -2252,6 +2397,7 @@ static void pn_function_block_read(PNModule* module,
       case PN_ENTRY_END_BLOCK:
         pn_function_calculate_uses(module, function);
         pn_function_calculate_pred_bbs(module, function);
+        pn_function_calculate_liveness(module, function);
 #if TRACING
         pn_function_trace(module, function);
 #endif
@@ -2787,6 +2933,7 @@ static void pn_module_block_read(PNModule* module,
             PNFunctionId function_id;
             PNFunction* function =
                 pn_module_append_function(module, &function_id);
+
             function->type_id = pn_record_read_int32(&reader, "type_id");
             function->calling_convention =
                 pn_record_read_int32(&reader, "calling_convention");
@@ -2798,6 +2945,12 @@ static void pn_module_block_read(PNModule* module,
             function->bbs = NULL;
             function->num_values = 0;
             function->values = NULL;
+
+            /* Cache number of arguments to function */
+            PNType* function_type =
+                pn_module_get_type(module, function->type_id);
+            assert(function_type->code == PN_TYPE_CODE_FUNCTION);
+            function->num_args = function_type->num_args;
 
             PNValueId value_id;
             PNValue* value = pn_module_append_value(module, &value_id);
