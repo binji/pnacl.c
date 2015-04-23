@@ -381,6 +381,16 @@ typedef struct PNInstructionCall {
   PNValueId* arg_ids;
 } PNInstructionCall;
 
+typedef struct PNPhiUse {
+  PNValueId dest_value_id;
+  PNPhiIncoming incoming;
+} PNPhiUse;
+
+typedef struct PNPhiAssign {
+  PNValueId source_value_id;
+  PNValueId dest_value_id;
+} PNPhiAssign;
+
 typedef struct PNBasicBlock {
   uint32_t num_instructions;
   void* instructions;
@@ -391,7 +401,9 @@ typedef struct PNBasicBlock {
   uint32_t num_uses;
   PNValueId* uses;
   uint32_t num_phi_uses;
-  PNPhiIncoming* phi_uses;
+  PNPhiUse* phi_uses;
+  uint32_t num_phi_assigns;
+  PNPhiAssign* phi_assigns;
   PNValueId first_def_id; /* Or PN_INVALID_BLOCK_ID */
   PNValueId last_def_id;  /* Or PN_INVALID_BLOCK_ID */
   uint32_t num_livein;
@@ -1099,16 +1111,13 @@ static void pn_basic_block_calculate_uses(PNModule* module,
         PNInstructionPhi* i = (PNInstructionPhi*)inst;
         int32_t n;
         for (n = 0; n < i->num_incoming; ++n) {
-          PNValueId value_id = i->incoming[n].value_id;
-          if (value_id < module->num_values + function->num_args +
-                             function->num_constants) {
-            break;
-          }
-
           bb->phi_uses =
               pn_arena_realloc(&module->arena, bb->phi_uses,
-                               sizeof(PNPhiIncoming) * (bb->num_phi_uses + 1));
-          bb->phi_uses[bb->num_phi_uses++] = i->incoming[n];
+                               sizeof(PNPhiUse) * (bb->num_phi_uses + 1));
+
+          PNPhiUse* use = &bb->phi_uses[bb->num_phi_uses++];
+          use->dest_value_id = i->result_value_id;
+          use->incoming = i->incoming[n];
         }
       }
 
@@ -1227,9 +1236,14 @@ static void pn_basic_block_calculate_liveness(PNModule* module,
   PNBasicBlock* bb = &function->bbs[bb_id];
   uint32_t n;
   for (n = 0; n < bb->num_phi_uses; ++n) {
-    PNPhiIncoming incoming = bb->phi_uses[n];
-    PNValueId rel_id = incoming.value_id - module->num_values;
-    PNBasicBlockId pred_bb_id = incoming.bb_id;
+    PNPhiIncoming* incoming = &bb->phi_uses[n].incoming;
+    if (incoming->value_id <
+        module->num_values + function->num_args + function->num_constants) {
+      break;
+    }
+
+    PNValueId rel_id = incoming->value_id - module->num_values;
+    PNBasicBlockId pred_bb_id = incoming->bb_id;
     pn_bitset_set(&state->liveout[pred_bb_id], rel_id, PN_TRUE);
     pn_basic_block_calculate_liveness_per_value(module, function, state,
                                                 pred_bb_id, rel_id);
@@ -1295,6 +1309,44 @@ static void pn_function_calculate_liveness(PNModule* module,
   }
 
   pn_arena_reset_to_mark(&module->temp_arena, mark);
+}
+
+static void pn_function_calculate_phi_assigns(PNModule* module,
+                                              PNFunction* function) {
+  uint32_t n;
+  for (n = 0; n < function->num_bbs; ++n) {
+    PNBasicBlock* bb = &function->bbs[n];
+    uint32_t m;
+    for (m = 0; m < bb->num_phi_uses; ++m) {
+      PNPhiUse* use = &bb->phi_uses[m];
+      assert(use->incoming.bb_id < function->num_bbs);
+
+      PNBasicBlock* incoming_bb = &function->bbs[use->incoming.bb_id];
+      incoming_bb->num_phi_assigns++;
+    }
+  }
+
+  for (n = 0; n < function->num_bbs; ++n) {
+    PNBasicBlock* bb = &function->bbs[n];
+
+    bb->phi_assigns = pn_arena_alloc(&module->arena,
+                                     sizeof(PNPhiAssign) * bb->num_phi_assigns);
+    bb->num_phi_assigns = 0;
+  }
+
+  for (n = 0; n < function->num_bbs; ++n) {
+    PNBasicBlock* bb = &function->bbs[n];
+    uint32_t m;
+    for (m = 0; m < bb->num_phi_uses; ++m) {
+      PNPhiUse* use = &bb->phi_uses[m];
+      PNBasicBlock* incoming_bb = &function->bbs[use->incoming.bb_id];
+      PNPhiAssign* assign =
+          &incoming_bb->phi_assigns[incoming_bb->num_phi_assigns++];
+
+      assign->dest_value_id = use->dest_value_id;
+      assign->source_value_id = use->incoming.value_id;
+    }
+  }
 }
 
 static void pn_instruction_trace(PNModule* module, PNInstruction* inst) {
@@ -1492,7 +1544,16 @@ static void pn_function_trace(PNModule* module, PNFunction* function) {
     if (bb->num_phi_uses) {
       printf(" phi uses:");
       for (n = 0; n < bb->num_phi_uses; ++n) {
-        printf(" bb:%d=>%%%d", bb->phi_uses[n].bb_id, bb->phi_uses[n].value_id);
+        printf(" bb:%d=>%%%d", bb->phi_uses[n].incoming.bb_id,
+               bb->phi_uses[n].incoming.value_id);
+      }
+      printf("\n");
+    }
+    if (bb->num_phi_assigns) {
+      printf(" phi assigns:");
+      for (n = 0; n < bb->num_phi_assigns; ++n) {
+        printf(" %%%d<=%%%d", bb->phi_assigns[n].dest_value_id,
+               bb->phi_assigns[n].source_value_id);
       }
       printf("\n");
     }
@@ -2397,6 +2458,7 @@ static void pn_function_block_read(PNModule* module,
       case PN_ENTRY_END_BLOCK:
         pn_function_calculate_uses(module, function);
         pn_function_calculate_pred_bbs(module, function);
+        pn_function_calculate_phi_assigns(module, function);
         pn_function_calculate_liveness(module, function);
 #if TRACING
         pn_function_trace(module, function);
