@@ -23,9 +23,10 @@
 #define PN_TRUE 1
 
 #define PN_INVALID_VALUE_ID ((PNValueId)~0)
-#define PN_INVALID_BLOCK_ID ((PNBlockId)~0)
+#define PN_INVALID_BLOCK_ID ((PNBasicBlockId)~0)
 
 #define TRACING 1
+#define PRINT_STATS 1
 
 #if TRACING
 #define TRACE(...) printf(__VA_ARGS__)
@@ -41,16 +42,16 @@
 
 #define PN_ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
-typedef int PNBool;
-typedef uint32_t PNTypeId;
-typedef uint32_t PNValueId;
+typedef uint8_t PNBool;
+typedef uint16_t PNTypeId;
+typedef uint16_t PNValueId;
 typedef uint32_t PNFunctionId;
-typedef uint32_t PNConstantId;
+typedef uint16_t PNConstantId;
 typedef uint32_t PNGlobalVarId;
 typedef uint32_t PNInitializerId;
-typedef uint32_t PNInstructionId;
-typedef uint32_t PNBasicBlockId;
-typedef uint32_t PNBlockId;
+typedef uint16_t PNInstructionId;
+typedef uint16_t PNBasicBlockId;
+typedef uint16_t PNAlignment;
 
 typedef enum PNEntry {
   PN_ENTRY_END_BLOCK = 0,
@@ -68,7 +69,7 @@ typedef enum PNEncoding {
   PN_ENCODING_BLOB = 5,
 } PNEncoding;
 
-typedef enum PNBlockID {
+typedef enum PNBlockId {
   PN_BLOCKID_BLOCKINFO = 0,
   PN_BLOCKID_MODULE = 8,
   PN_BLOCKID_CONSTANTS = 11,
@@ -77,7 +78,7 @@ typedef enum PNBlockID {
   PN_BLOCKID_TYPE = 17,
   PN_BLOCKID_GLOBALVAR = 19,
   PN_MAX_BLOCK_IDS,
-} PNBlockID;
+} PNBlockId;
 
 typedef enum PNBlockInfoCode {
   PN_BLOCKINFO_CODE_SETBID = 1,
@@ -255,9 +256,9 @@ typedef struct PNRecordReader {
 } PNRecordReader;
 
 typedef struct PNSwitchCaseValue {
-  PNBool is_single;
   int32_t low;
   int32_t high;
+  PNBool is_single;
 } PNSwitchCaseValue;
 
 typedef struct PNSwitchCase {
@@ -288,8 +289,8 @@ typedef struct PNInstructionCast {
   PNFunctionCode code;
   PNValueId result_value_id;
   PNValueId value_id;
-  PNTypeId type_id;
   PNCast opcode;
+  PNTypeId type_id;
 } PNInstructionCast;
 
 typedef struct PNInstructionRet {
@@ -306,11 +307,11 @@ typedef struct PNInstructionBr {
 
 typedef struct PNInstructionSwitch {
   PNFunctionCode code;
-  PNTypeId type_id;
   PNValueId value_id;
   PNBasicBlockId default_bb_id;
   uint32_t num_cases;
   PNSwitchCase* cases;
+  PNTypeId type_id;
 } PNInstructionSwitch;
 
 typedef struct PNInstructionUnreachable {
@@ -320,31 +321,31 @@ typedef struct PNInstructionUnreachable {
 typedef struct PNInstructionPhi {
   PNFunctionCode code;
   PNValueId result_value_id;
-  PNTypeId type_id;
   uint32_t num_incoming;
   PNPhiIncoming* incoming;
+  PNTypeId type_id;
 } PNInstructionPhi;
 
 typedef struct PNInstructionAlloca {
   PNFunctionCode code;
   PNValueId result_value_id;
   PNValueId size_id;
-  uint32_t alignment;
+  PNAlignment alignment;
 } PNInstructionAlloca;
 
 typedef struct PNInstructionLoad {
   PNFunctionCode code;
   PNValueId result_value_id;
   PNValueId src_id;
+  PNAlignment alignment;
   PNTypeId type_id;
-  uint32_t alignment;
 } PNInstructionLoad;
 
 typedef struct PNInstructionStore {
   PNFunctionCode code;
   PNValueId dest_id;
   PNValueId value_id;
-  uint32_t alignment;
+  PNAlignment alignment;
 } PNInstructionStore;
 
 typedef struct PNInstructionCmp2 {
@@ -372,13 +373,13 @@ typedef struct PNInstructionForwardtyperef {
 typedef struct PNInstructionCall {
   PNFunctionCode code;
   PNValueId result_value_id;
-  PNBool is_indirect;
-  PNBool is_tail_call;
   uint32_t calling_convention;
   PNValueId callee_id;
-  PNTypeId return_type_id;
   uint32_t num_args;
   PNValueId* arg_ids;
+  PNTypeId return_type_id;
+  PNBool is_indirect;
+  PNBool is_tail_call;
 } PNInstructionCall;
 
 typedef struct PNPhiUse {
@@ -404,8 +405,8 @@ typedef struct PNBasicBlock {
   PNPhiUse* phi_uses;
   uint32_t num_phi_assigns;
   PNPhiAssign* phi_assigns;
-  PNValueId first_def_id; /* Or PN_INVALID_BLOCK_ID */
-  PNValueId last_def_id;  /* Or PN_INVALID_BLOCK_ID */
+  PNValueId first_def_id; /* Or PN_INVALID_VALUE_ID */
+  PNValueId last_def_id;  /* Or PN_INVALID_VALUE_ID */
   uint32_t num_livein;
   PNValueId* livein;
   uint32_t num_liveout;
@@ -491,10 +492,10 @@ typedef struct PNInitializer {
 } PNInitializer;
 
 typedef struct PNGlobalVar {
-  uint32_t alignment;
-  PNBool is_constant;
   uint32_t num_initializers;
   PNInitializer* initializers;
+  PNAlignment alignment;
+  PNBool is_constant;
 } PNGlobalVar;
 
 typedef struct PNModule {
@@ -1753,6 +1754,20 @@ static PNBool pn_record_try_read_uint32(PNRecordReader* reader,
   }
 }
 
+static PNBool pn_record_try_read_uint16(PNRecordReader* reader,
+                                        uint16_t* out_value) {
+  uint32_t value;
+  PNBool ret = pn_record_try_read_uint32(reader, &value);
+  if (value >= 1<<16) {
+    FATAL("value too large for u16; (%u)\n", value);
+  }
+
+  if (ret) {
+    *out_value = value;
+  }
+  return ret;
+}
+
 static PNBool pn_record_try_read_int32(PNRecordReader* reader,
                                        int32_t* out_value) {
   uint32_t value;
@@ -1906,7 +1921,7 @@ static void pn_blockinfo_block_read(PNBlockInfoContext* context,
   (void)pn_bitstream_read(bs, 32); /* num words */
 
   PNBlockAbbrevs abbrevs = {};
-  int32_t block_id = -1;
+  PNBlockId block_id = -1;
 
   while (!pn_bitstream_at_end(bs)) {
     uint32_t entry = pn_bitstream_read(bs, codelen);
@@ -2043,7 +2058,7 @@ static void pn_type_block_read(PNModule* module,
                   type->is_varargs, type->return_type);
 
             PNTypeId arg_type_id;
-            while (pn_record_try_read_uint32(&reader, &arg_type_id)) {
+            while (pn_record_try_read_uint16(&reader, &arg_type_id)) {
               assert(type->num_args < PN_ARRAY_SIZE(type->arg_types));
               type->arg_types[type->num_args] = arg_type_id;
               TRACE("%d ", arg_type_id);
@@ -2581,7 +2596,7 @@ static void pn_function_block_read(PNModule* module,
             inst->code = code;
             inst->value_id = PN_INVALID_VALUE_ID;
 
-            if (pn_record_try_read_uint32(&reader, &inst->value_id)) {
+            if (pn_record_try_read_uint16(&reader, &inst->value_id)) {
               pn_context_fix_value_ids(context, rel_id, 1, &inst->value_id);
             }
 
@@ -2600,7 +2615,7 @@ static void pn_function_block_read(PNModule* module,
             pn_basic_block_list_append(&module->arena, &cur_bb->succ_bb_ids,
                                        &cur_bb->num_succ_bbs, inst->true_bb_id);
 
-            if (pn_record_try_read_uint32(&reader, &inst->false_bb_id)) {
+            if (pn_record_try_read_uint16(&reader, &inst->false_bb_id)) {
               inst->value_id = pn_record_read_uint32(&reader, "value");
               pn_context_fix_value_ids(context, rel_id, 1, &inst->value_id);
 
@@ -2694,14 +2709,14 @@ static void pn_function_block_read(PNModule* module,
             while (1) {
               PNBasicBlockId bb;
               PNValueId value;
-              if (!pn_record_try_read_uint32(&reader, &value)) {
+              if (!pn_record_try_read_uint16(&reader, &value)) {
                 break;
               }
               if (context->use_relative_ids) {
                 value = value_id - (int32_t)pn_decode_sign_rotated_value(value);
               }
 
-              if (!pn_record_try_read_uint32(&reader, &bb)) {
+              if (!pn_record_try_read_uint16(&reader, &bb)) {
                 FATAL("unable to read phi bb index\n");
               }
 
@@ -3073,6 +3088,42 @@ static void pn_header_read(PNBitStream* bs) {
   }
 }
 
+uint32_t pn_max_num_constants(PNModule* module) {
+  uint32_t result = 0;
+  uint32_t n;
+  for (n = 0; n < module->num_functions; ++n) {
+    if (module->functions[n].num_constants > result) {
+      result = module->functions[n].num_constants;
+    }
+  }
+
+  return result;
+}
+
+uint32_t pn_max_num_values(PNModule* module) {
+  uint32_t result = 0;
+  uint32_t n;
+  for (n = 0; n < module->num_functions; ++n) {
+    if (module->functions[n].num_values > result) {
+      result = module->functions[n].num_values;
+    }
+  }
+
+  return result;
+}
+
+uint32_t pn_max_num_bbs(PNModule* module) {
+  uint32_t result = 0;
+  uint32_t n;
+  for (n = 0; n < module->num_functions; ++n) {
+    if (module->functions[n].num_bbs > result) {
+      result = module->functions[n].num_bbs;
+    }
+  }
+
+  return result;
+}
+
 int main(int argc, char** argv) {
   --argc, ++argv;
   const char* filename = "simple.pexe";
@@ -3120,11 +3171,17 @@ int main(int argc, char** argv) {
   pn_module_block_read(module, &context, &bs);
   TRACE("done\n");
 
+#if PRINT_STATS
+  printf("num_types: %u\n", module->num_types);
   printf("num_functions: %u\n", module->num_functions);
   printf("num_global_vars: %u\n", module->num_global_vars);
+  printf("max num_constants: %u\n", pn_max_num_constants(module));
+  printf("max num_values: %u\n", pn_max_num_values(module));
+  printf("max num_bbs: %u\n", pn_max_num_bbs(module));
   printf("arena: %u\n", module->arena.size);
   printf("value arena: %u\n", module->value_arena.size);
   printf("instruction arena: %u\n", module->instruction_arena.size);
+#endif
 
   return 0;
 }
