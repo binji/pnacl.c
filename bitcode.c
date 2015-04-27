@@ -1191,32 +1191,48 @@ static void pn_function_calculate_uses(PNModule* module,
   }
 }
 
-static void pn_basic_block_calculate_liveness_per_value(PNModule* module,
-                                                        PNFunction* function,
-                                                        PNLivenessState* state,
-                                                        PNBasicBlockId bb_id,
-                                                        PNValueId rel_id) {
+static void pn_basic_block_calculate_liveness_per_value(
+    PNModule* module,
+    PNFunction* function,
+    PNLivenessState* state,
+    PNBasicBlockId initial_bb_id,
+    PNValueId rel_id) {
   PNValueId value_id = module->num_values + rel_id;
-  PNBasicBlock* bb = &function->bbs[bb_id];
-  if (value_id >= bb->first_def_id && value_id <= bb->last_def_id) {
-    /* Value killed at definition. */
-    return;
+
+  /* Allocate enough space for any predecessor chain. num_bbs is always an
+   * upper bound */
+  PNArenaMark mark = pn_arena_mark(&module->temp_arena);
+  PNBasicBlockId* bb_id_stack = pn_arena_alloc(
+      &module->temp_arena, sizeof(PNBasicBlockId) * function->num_bbs);
+  bb_id_stack[0] = initial_bb_id;
+  uint32_t stack_top = 1;
+
+  while (stack_top > 0) {
+    PNBasicBlockId bb_id = bb_id_stack[--stack_top];
+    PNBasicBlock* bb = &function->bbs[bb_id];
+    if (value_id >= bb->first_def_id && value_id <= bb->last_def_id) {
+      /* Value killed at definition. */
+      continue;
+    }
+
+    if (pn_bitset_is_set(&state->livein[bb_id], rel_id)) {
+      /* Already processed. */
+      continue;
+    }
+
+    pn_bitset_set(&state->livein[bb_id], rel_id, PN_TRUE);
+
+    uint32_t n;
+    for (n = 0; n < bb->num_pred_bbs; ++n) {
+      PNBasicBlockId pred_bb_id = bb->pred_bb_ids[n];
+      pn_bitset_set(&state->liveout[pred_bb_id], rel_id, PN_TRUE);
+
+      assert(stack_top < function->num_bbs);
+      bb_id_stack[stack_top++] = pred_bb_id;
+    }
   }
 
-  if (pn_bitset_is_set(&state->livein[bb_id], rel_id)) {
-    /* Already processed. */
-    return;
-  }
-
-  pn_bitset_set(&state->livein[bb_id], rel_id, PN_TRUE);
-
-  uint32_t n;
-  for (n = 0; n < bb->num_pred_bbs; ++n) {
-    PNBasicBlockId pred_bb_id = bb->pred_bb_ids[n];
-    pn_bitset_set(&state->liveout[pred_bb_id], rel_id, PN_TRUE);
-    pn_basic_block_calculate_liveness_per_value(module, function, state,
-                                                pred_bb_id, rel_id);
-  }
+  pn_arena_reset_to_mark(&module->temp_arena, mark);
 }
 
 static void pn_basic_block_calculate_liveness(PNModule* module,
