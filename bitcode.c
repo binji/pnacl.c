@@ -830,17 +830,6 @@ static PNFunction* pn_module_get_function(PNModule* module,
   return &module->functions[function_id];
 }
 
-static PNFunction* pn_module_append_function(PNModule* module,
-                                             PNFunctionId* out_function_id) {
-  *out_function_id = module->num_functions;
-  uint32_t new_size = sizeof(PNFunction) * (module->num_functions + 1);
-  module->functions =
-      pn_arena_realloc(&module->arena, module->functions, new_size);
-
-  module->num_functions++;
-  return &module->functions[*out_function_id];
-}
-
 static PNConstant* pn_function_get_constant(PNFunction* function,
                                             PNConstantId constant_id) {
   if (constant_id < 0 || constant_id >= function->num_constants) {
@@ -3007,9 +2996,11 @@ static void pn_module_block_read(PNModule* module,
           }
 
           case PN_MODULE_CODE_FUNCTION: {
-            PNFunctionId function_id;
-            PNFunction* function =
-                pn_module_append_function(module, &function_id);
+            module->functions = pn_arena_realloc(
+                &module->arena, module->functions,
+                sizeof(PNFunction) * (module->num_functions + 1));
+            PNFunctionId function_id = module->num_functions++;
+            PNFunction* function = &module->functions[function_id];
 
             function->type_id = pn_record_read_int32(&reader, "type_id");
             function->calling_convention =
