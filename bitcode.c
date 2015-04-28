@@ -24,6 +24,7 @@
 
 #define PN_INVALID_VALUE_ID ((PNValueId)~0)
 #define PN_INVALID_BLOCK_ID ((PNBasicBlockId)~0)
+#define PN_INVALID_TYPE_ID ((PNTypeId)~0)
 
 #define TRACING 1
 #define PRINT_STATS 1
@@ -442,6 +443,7 @@ typedef struct PNValue {
    *   PN_VALUE_CODE_LOCAL_VAR -> PNFunction instruction index
    */
   uint32_t index;
+  PNTypeId type_id;
 } PNValue;
 
 typedef struct PNFunction {
@@ -811,6 +813,24 @@ static PNType* pn_module_get_type(PNModule* module, PNTypeId type_id) {
   return &module->types[type_id];
 }
 
+static PNTypeId pn_module_find_integer_type(PNModule* module, int width) {
+  uint32_t n;
+  for (n = 0; n < module->num_types; ++n) {
+    PNType* type = &module->types[n];
+    if (type->code == PN_TYPE_CODE_INTEGER) {
+      if (type->width == width) {
+        return n;
+      }
+    }
+  }
+
+  return PN_INVALID_TYPE_ID;
+}
+
+static PNTypeId pn_module_find_pointer_type(PNModule* module) {
+  return pn_module_find_integer_type(module, 32);
+}
+
 static PNType* pn_module_append_type(PNModule* module, PNTypeId* out_type_id) {
   *out_type_id = module->num_types;
   uint32_t new_size = sizeof(PNType) * (module->num_types + 1);
@@ -818,6 +838,80 @@ static PNType* pn_module_append_type(PNModule* module, PNTypeId* out_type_id) {
 
   module->num_types++;
   return &module->types[*out_type_id];
+}
+
+static void pn_string_concat(PNArena* arena,
+                             char** dest,
+                             uint32_t* dest_len,
+                             const char* src,
+                             uint32_t src_len) {
+  if (src_len == 0) {
+    src_len = strlen(src);
+  }
+
+  uint32_t old_dest_len = *dest_len;
+  *dest_len += src_len;
+  *dest = pn_arena_realloc(arena, *dest, *dest_len);
+  memcpy(*dest + old_dest_len - 1, src, src_len);
+  (*dest)[*dest_len - 1] = 0;
+}
+
+static const char* pn_type_describe(PNModule* module, PNTypeId type_id) {
+  if (type_id == PN_INVALID_TYPE_ID) {
+    return "<invalid>";
+  }
+
+  PNType* type = pn_module_get_type(module, type_id);
+  switch (type->code) {
+    case PN_TYPE_CODE_VOID:
+      return "void";
+
+    case PN_TYPE_CODE_INTEGER:
+      switch (type->width) {
+        case 1:
+          return "int1";
+        case 8:
+          return "int8";
+        case 16:
+          return "int16";
+        case 32:
+          return "int32";
+        case 64:
+          return "int64";
+        default:
+          FATAL("Integer with bad width: %d\n", type->width);
+          return "badInteger";
+      }
+    case PN_TYPE_CODE_FLOAT:
+      return "float";
+
+    case PN_TYPE_CODE_DOUBLE:
+      return "double";
+
+    case PN_TYPE_CODE_FUNCTION: {
+      char* buffer = pn_arena_alloc(&module->temp_arena, 1);
+      uint32_t buffer_len = 1;
+      buffer[0] = 0;
+
+      pn_string_concat(&module->temp_arena, &buffer, &buffer_len,
+                       pn_type_describe(module, type->return_type), 0);
+      pn_string_concat(&module->temp_arena, &buffer, &buffer_len, "(", 1);
+      uint32_t n;
+      for (n = 0; n < type->num_args; ++n) {
+        if (n != 0) {
+          pn_string_concat(&module->temp_arena, &buffer, &buffer_len, ",", 1);
+        }
+
+        pn_string_concat(&module->temp_arena, &buffer, &buffer_len,
+                         pn_type_describe(module, type->arg_types[n]), 0);
+      }
+      pn_string_concat(&module->temp_arena, &buffer, &buffer_len, ")", 1);
+      return buffer;
+    }
+
+    default:
+      return "<unknown>";
+  }
 }
 
 static PNFunction* pn_module_get_function(PNModule* module,
@@ -915,6 +1009,25 @@ static PNValue* pn_function_append_value(PNModule* module,
 
   function->num_values++;
   return &function->values[index];
+}
+
+static const char* pn_value_describe(PNModule* module,
+                                     PNFunction* function,
+                                     PNValueId value_id) {
+  PNValue* value;
+  if (value_id >= module->num_values) {
+    value = pn_function_get_value(module, function, value_id);
+  } else {
+    value = pn_module_get_value(module, value_id);
+  }
+
+  const char* type_str = pn_type_describe(module, value->type_id);
+  int buffer_len = snprintf(NULL, 0, "%%%d(%s)", value_id, type_str);
+  char* buffer = pn_arena_alloc(&module->temp_arena, buffer_len + 1);
+  snprintf(buffer, buffer_len + 1, "%%%d(%s)", value_id, type_str);
+  buffer[buffer_len] = 0;
+
+  return buffer;
 }
 
 static void* pn_function_append_instruction(
@@ -1036,6 +1149,400 @@ static PNInstruction* pn_instruction_next(PNInstruction* inst) {
   p = (uint8_t*)(((intptr_t)p + 7) & ~7);
 
   return (PNInstruction*)p;
+}
+
+static void pn_instruction_trace(PNModule* module,
+                                 PNFunction* function,
+                                 PNInstruction* inst) {
+  PNArenaMark mark = pn_arena_mark(&module->temp_arena);
+
+  switch (inst->code) {
+    case PN_FUNCTION_CODE_INST_BINOP: {
+      PNInstructionBinop* i = (PNInstructionBinop*)inst;
+      printf("  %s. binop op:%s(%d) %s %s (flags:%d)\n",
+             pn_value_describe(module, function, i->result_value_id),
+             pn_binop_get_name(i->opcode), i->opcode,
+             pn_value_describe(module, function, i->value0_id),
+             pn_value_describe(module, function, i->value1_id), i->flags);
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_CAST: {
+      PNInstructionCast* i = (PNInstructionCast*)inst;
+      printf("  %s. cast op:%s(%d) %s\n",
+             pn_value_describe(module, function, i->result_value_id),
+             pn_cast_get_name(i->opcode), i->opcode,
+             pn_value_describe(module, function, i->value_id));
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_RET: {
+      PNInstructionRet* i = (PNInstructionRet*)inst;
+      if (i->value_id != PN_INVALID_VALUE_ID) {
+        printf("  ret %s\n", pn_value_describe(module, function, i->value_id));
+      } else {
+        printf("  ret\n");
+      }
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_BR: {
+      PNInstructionBr* i = (PNInstructionBr*)inst;
+      if (i->false_bb_id != PN_INVALID_BLOCK_ID) {
+        printf("  br %s ? %d : %d\n",
+               pn_value_describe(module, function, i->value_id), i->true_bb_id,
+               i->false_bb_id);
+      } else {
+        printf("  br %d\n", i->true_bb_id);
+      }
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_SWITCH: {
+      PNInstructionSwitch* i = (PNInstructionSwitch*)inst;
+      printf("  switch value:%s [default:%d]",
+             pn_value_describe(module, function, i->value_id),
+             i->default_bb_id);
+
+      uint32_t c;
+      for (c = 0; c < i->num_cases; ++c) {
+        PNSwitchCase* switch_case = &i->cases[c];
+        printf(" [");
+
+        int32_t i;
+        for (i = 0; i < switch_case->num_values; ++i) {
+          PNSwitchCaseValue* value = &switch_case->values[i];
+          if (value->is_single) {
+            printf("[%d] ", value->low);
+          } else {
+            printf("[%d,%d] ", value->low, value->high);
+          }
+        }
+        printf("=> bb:%d]", switch_case->bb_id);
+      }
+      printf("\n");
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_UNREACHABLE:
+      printf("  unreachable\n");
+      break;
+
+    case PN_FUNCTION_CODE_INST_PHI: {
+      PNInstructionPhi* i = (PNInstructionPhi*)inst;
+      printf("  %s. phi",
+             pn_value_describe(module, function, i->result_value_id));
+      int32_t n;
+      for (n = 0; n < i->num_incoming; ++n) {
+        printf(" bb:%d=>%s", i->incoming[n].bb_id,
+               pn_value_describe(module, function, i->incoming[n].value_id));
+      }
+      printf("\n");
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_ALLOCA: {
+      PNInstructionAlloca* i = (PNInstructionAlloca*)inst;
+      printf("  %s. alloca %s align=%d\n",
+             pn_value_describe(module, function, i->result_value_id),
+             pn_value_describe(module, function, i->size_id), i->alignment);
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_LOAD: {
+      PNInstructionLoad* i = (PNInstructionLoad*)inst;
+      printf("  %s. load src:%s align=%d\n",
+             pn_value_describe(module, function, i->result_value_id),
+             pn_value_describe(module, function, i->src_id), i->alignment);
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_STORE: {
+      PNInstructionStore* i = (PNInstructionStore*)inst;
+      printf("  store dest:%s value:%s align=%d\n",
+             pn_value_describe(module, function, i->dest_id),
+             pn_value_describe(module, function, i->value_id), i->alignment);
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_CMP2: {
+      PNInstructionCmp2* i = (PNInstructionCmp2*)inst;
+      printf("  %s. cmp2 op:%s(%d) %s %s\n",
+             pn_value_describe(module, function, i->result_value_id),
+             pn_cmp2_get_name(i->opcode), i->opcode,
+             pn_value_describe(module, function, i->value0_id),
+             pn_value_describe(module, function, i->value1_id));
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_VSELECT: {
+      PNInstructionVselect* i = (PNInstructionVselect*)inst;
+      printf("  %s. vselect %s ? %s : %s\n",
+             pn_value_describe(module, function, i->result_value_id),
+             pn_value_describe(module, function, i->cond_id),
+             pn_value_describe(module, function, i->true_value_id),
+             pn_value_describe(module, function, i->false_value_id));
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_FORWARDTYPEREF: {
+      PNInstructionForwardtyperef* i = (PNInstructionForwardtyperef*)inst;
+      printf("  forwardtyperef %s %s\n",
+             pn_value_describe(module, function, i->value_id),
+             pn_type_describe(module, i->type_id));
+      break;
+    }
+
+    case PN_FUNCTION_CODE_INST_CALL:
+    case PN_FUNCTION_CODE_INST_CALL_INDIRECT: {
+      PNInstructionCall* i = (PNInstructionCall*)inst;
+      PNType* return_type = pn_module_get_type(module, i->return_type_id);
+      PNBool is_return_type_void = return_type->code == PN_TYPE_CODE_VOID;
+      printf("  ");
+      if (!is_return_type_void) {
+        printf("%s. ", pn_value_describe(module, function, i->result_value_id));
+      }
+      printf("call ");
+      const char* name = NULL;
+      if (i->is_indirect) {
+        printf("indirect ");
+      } else {
+        PNFunction* called_function =
+            pn_module_get_function(module, i->callee_id);
+        name = called_function->name;
+      }
+      if (name && name[0]) {
+        printf("%s(%s) ", pn_value_describe(module, function, i->callee_id),
+               name);
+      } else {
+        printf("%s ", pn_value_describe(module, function, i->callee_id));
+      }
+      printf("args:");
+
+      int32_t n;
+      for (n = 0; n < i->num_args; ++n) {
+        printf(" %s", pn_value_describe(module, function, i->arg_ids[n]));
+      }
+      printf("\n");
+      break;
+    }
+
+    default:
+      FATAL("Invalid instruction code: %d\n", inst->code);
+      break;
+  }
+
+  pn_arena_reset_to_mark(&module->temp_arena, mark);
+}
+
+static void pn_basic_block_trace(PNModule* module,
+                                 PNFunction* function,
+                                 PNBasicBlock* bb) {
+  PNInstruction* inst = (PNInstruction*)bb->instructions;
+  uint32_t i;
+  for (i = 0; i < bb->num_instructions; ++i) {
+    pn_instruction_trace(module, function, inst);
+    inst = pn_instruction_next(inst);
+  }
+}
+
+static void pn_function_trace(PNModule* module, PNFunction* function) {
+  uint32_t i;
+  for (i = 0; i < function->num_bbs; ++i) {
+    PNBasicBlock* bb = &function->bbs[i];
+    printf("bb:%d (preds:", i);
+    uint32_t n;
+    for (n = 0; n < bb->num_pred_bbs; ++n) {
+      printf(" %d", bb->pred_bb_ids[n]);
+    }
+    printf(" succs:");
+    for (n = 0; n < bb->num_succ_bbs; ++n) {
+      printf(" %d", bb->succ_bb_ids[n]);
+    }
+    printf(")\n");
+    if (bb->first_def_id != PN_INVALID_VALUE_ID) {
+      printf(" defs: [%%%d,%%%d]\n", bb->first_def_id, bb->last_def_id);
+    }
+    if (bb->num_uses) {
+      printf(" uses:");
+      for (n = 0; n < bb->num_uses; ++n) {
+        printf(" %%%d", bb->uses[n]);
+      }
+      printf("\n");
+    }
+    if (bb->num_phi_uses) {
+      printf(" phi uses:");
+      for (n = 0; n < bb->num_phi_uses; ++n) {
+        printf(" bb:%d=>%%%d", bb->phi_uses[n].incoming.bb_id,
+               bb->phi_uses[n].incoming.value_id);
+      }
+      printf("\n");
+    }
+    if (bb->num_phi_assigns) {
+      printf(" phi assigns:");
+      for (n = 0; n < bb->num_phi_assigns; ++n) {
+        printf(" %%%d<=%%%d", bb->phi_assigns[n].dest_value_id,
+               bb->phi_assigns[n].source_value_id);
+      }
+      printf("\n");
+    }
+    if (bb->num_livein) {
+      printf(" livein:");
+      for (n = 0; n < bb->num_livein; ++n) {
+        printf(" %%%d", bb->livein[n]);
+      }
+      printf("\n");
+    }
+    if (bb->num_liveout) {
+      printf(" liveout:");
+      for (n = 0; n < bb->num_liveout; ++n) {
+        printf(" %%%d", bb->liveout[n]);
+      }
+      printf("\n");
+    }
+    pn_basic_block_trace(module, function, &function->bbs[i]);
+  }
+}
+
+static PNTypeId pn_type_get_implicit_cast_type(PNModule* module,
+                                               PNTypeId type0_id,
+                                               PNTypeId type1_id) {
+  if (type0_id == type1_id) {
+    return type0_id;
+  }
+
+  PNType* type0 = pn_module_get_type(module, type0_id);
+  PNType* type1 = pn_module_get_type(module, type1_id);
+
+  if (type0->code != type1->code) {
+    if (type0->code == PN_TYPE_CODE_FLOAT &&
+        type1->code == PN_TYPE_CODE_DOUBLE) {
+      return type1_id;
+    } else if (type0->code == PN_TYPE_CODE_DOUBLE &&
+               type1->code == PN_TYPE_CODE_FLOAT) {
+      return type0_id;
+    } else if (type0->code == PN_TYPE_CODE_FUNCTION &&
+               type1->code == PN_TYPE_CODE_INTEGER && type1->width == 32) {
+      return type1_id;
+    } else if (type0->code == PN_TYPE_CODE_INTEGER && type0->width == 32 &&
+               type1->code == PN_TYPE_CODE_FUNCTION) {
+      return type1_id;
+    } else {
+      return PN_INVALID_TYPE_ID;
+    }
+  } else {
+    if (type0->code == PN_TYPE_CODE_INTEGER) {
+      if (type0->width > type1->width) {
+        return type0_id;
+      } else {
+        return type1_id;
+      }
+    } else {
+      return PN_INVALID_TYPE_ID;
+    }
+  }
+}
+
+static PNBool pn_function_assign_result_value_type(PNModule* module,
+                                                   PNFunction* function,
+                                                   PNInstruction* inst,
+                                                   PNValueId result_value_id,
+                                                   PNValueId value0_id,
+                                                   PNValueId value1_id) {
+  PNValue* result_value =
+      pn_function_get_value(module, function, result_value_id);
+  PNValue* value0 = pn_function_get_value(module, function, value0_id);
+  PNValue* value1 = pn_function_get_value(module, function, value1_id);
+  if (value0->type_id == PN_INVALID_TYPE_ID ||
+      value1->type_id == PN_INVALID_TYPE_ID) {
+    return PN_FALSE;
+  }
+
+  result_value->type_id =
+      pn_type_get_implicit_cast_type(module, value0->type_id, value1->type_id);
+
+  if (result_value->type_id == PN_INVALID_TYPE_ID) {
+    ERROR("Incompatible types:\n");
+    pn_instruction_trace(module, function, inst);
+    exit(1);
+  }
+
+  return PN_TRUE;
+}
+
+static PNBool pn_instruction_calculate_result_value_type(PNModule* module,
+                                                         PNFunction* function,
+                                                         PNInstruction* inst) {
+  switch (inst->code) {
+    case PN_FUNCTION_CODE_INST_BINOP: {
+      PNInstructionBinop* i = (PNInstructionBinop*)inst;
+      return pn_function_assign_result_value_type(module, function, inst,
+                                                  i->result_value_id,
+                                                  i->value0_id, i->value1_id);
+    }
+
+    case PN_FUNCTION_CODE_INST_VSELECT: {
+      PNInstructionVselect* i = (PNInstructionVselect*)inst;
+      return pn_function_assign_result_value_type(
+          module, function, inst, i->result_value_id, i->true_value_id,
+          i->false_value_id);
+    }
+
+    default:
+      return PN_TRUE;
+  }
+}
+
+static void pn_function_calculate_result_value_types(PNModule* module,
+                                                     PNFunction* function) {
+  PNArenaMark mark = pn_arena_mark(&module->temp_arena);
+  uint32_t num_invalid = 0;
+  PNInstruction** invalid = NULL;
+
+  uint32_t n;
+  for (n = 0; n < function->num_bbs; ++n) {
+    PNBasicBlock* bb = &function->bbs[n];
+    uint32_t m;
+    PNInstruction* inst = bb->instructions;
+    for (m = 0; m < bb->num_instructions; ++m) {
+      if (!pn_instruction_calculate_result_value_type(module, function, inst)) {
+        /* One of the types is invalid, try again later */
+        invalid = pn_arena_realloc(&module->temp_arena, invalid,
+                                   sizeof(PNInstruction*) * (num_invalid + 1));
+        invalid[num_invalid++] = inst;
+      }
+      inst = pn_instruction_next(inst);
+    }
+  }
+
+  if (num_invalid > 0) {
+    uint32_t last_invalid = 0;
+    while (last_invalid != num_invalid) {
+      last_invalid = num_invalid;
+
+      for (n = 0; n < num_invalid;) {
+        if (pn_instruction_calculate_result_value_type(module, function,
+                                                       invalid[n])) {
+          /* Resolved, remove from the list by swapping with the last element
+           * and not moving n */
+          invalid[n] = invalid[--num_invalid];
+        } else {
+          /* Not resolved, keep it in the list */
+          ++n;
+        }
+      }
+    }
+
+    if (num_invalid > 0 && last_invalid == num_invalid) {
+      printf("Unable to resolve types for %d values:\n", num_invalid);
+      for (n = 0; n < num_invalid; ++n) {
+        pn_instruction_trace(module, function, invalid[n]);
+      }
+      exit(1);
+    }
+  }
+
+  pn_arena_reset_to_mark(&module->temp_arena, mark);
 }
 
 static void pn_basic_block_set_value_use(PNModule* module,
@@ -1352,282 +1859,6 @@ static void pn_function_calculate_phi_assigns(PNModule* module,
       assign->dest_value_id = use->dest_value_id;
       assign->source_value_id = use->incoming.value_id;
     }
-  }
-}
-
-static void pn_instruction_trace(PNModule* module, PNInstruction* inst) {
-  switch (inst->code) {
-    case PN_FUNCTION_CODE_INST_BINOP: {
-      PNInstructionBinop* i = (PNInstructionBinop*)inst;
-      printf("  %%%d. binop op:%s(%d) %%%d %%%d (flags:%d)\n",
-             i->result_value_id, pn_binop_get_name(i->opcode), i->opcode,
-             i->value0_id, i->value1_id, i->flags);
-      break;
-    }
-
-    case PN_FUNCTION_CODE_INST_CAST: {
-      PNInstructionCast* i = (PNInstructionCast*)inst;
-      printf("  %%%d. cast op:%s(%d) %%%d type:%d\n", i->result_value_id,
-             pn_cast_get_name(i->opcode), i->opcode, i->value_id, i->type_id);
-      break;
-    }
-
-    case PN_FUNCTION_CODE_INST_RET: {
-      PNInstructionRet* i = (PNInstructionRet*)inst;
-      if (i->value_id != PN_INVALID_VALUE_ID) {
-        printf("  ret %%%d\n", i->value_id);
-      } else {
-        printf("  ret\n");
-      }
-      break;
-    }
-
-    case PN_FUNCTION_CODE_INST_BR: {
-      PNInstructionBr* i = (PNInstructionBr*)inst;
-      if (i->false_bb_id != PN_INVALID_BLOCK_ID) {
-        printf("  br %%%d ? %d : %d\n", i->value_id, i->true_bb_id,
-               i->false_bb_id);
-      } else {
-        printf("  br %d\n", i->true_bb_id);
-      }
-      break;
-    }
-
-    case PN_FUNCTION_CODE_INST_SWITCH: {
-      PNInstructionSwitch* i = (PNInstructionSwitch*)inst;
-      printf("  switch type:%d value:%%%d [default:%d]", i->type_id,
-             i->value_id, i->default_bb_id);
-
-      uint32_t c;
-      for (c = 0; c < i->num_cases; ++c) {
-        PNSwitchCase* switch_case = &i->cases[c];
-        printf(" [");
-
-        int32_t i;
-        for (i = 0; i < switch_case->num_values; ++i) {
-          PNSwitchCaseValue* value = &switch_case->values[i];
-          if (value->is_single) {
-            printf("[%d] ", value->low);
-          } else {
-            printf("[%d,%d] ", value->low, value->high);
-          }
-        }
-        printf("=> bb:%d]", switch_case->bb_id);
-      }
-      printf("\n");
-      break;
-    }
-
-    case PN_FUNCTION_CODE_INST_UNREACHABLE:
-      printf("  unreachable\n");
-      break;
-
-    case PN_FUNCTION_CODE_INST_PHI: {
-      PNInstructionPhi* i = (PNInstructionPhi*)inst;
-      printf("  %%%d. phi type:%d", i->result_value_id, i->type_id);
-      int32_t n;
-      for (n = 0; n < i->num_incoming; ++n) {
-        printf(" bb:%d=>%%%d", i->incoming[n].bb_id, i->incoming[n].value_id);
-      }
-      printf("\n");
-      break;
-    }
-
-    case PN_FUNCTION_CODE_INST_ALLOCA: {
-      PNInstructionAlloca* i = (PNInstructionAlloca*)inst;
-      printf("  %%%d. alloca %%%d align=%d\n", i->result_value_id, i->size_id,
-             i->alignment);
-      break;
-    }
-
-    case PN_FUNCTION_CODE_INST_LOAD: {
-      PNInstructionLoad* i = (PNInstructionLoad*)inst;
-      printf("  %%%d. load src:%%%d type:%d align=%d\n", i->result_value_id,
-             i->src_id, i->type_id, i->alignment);
-      break;
-    }
-
-    case PN_FUNCTION_CODE_INST_STORE: {
-      PNInstructionStore* i = (PNInstructionStore*)inst;
-      printf("  store dest:%%%d value:%%%d align=%d\n", i->dest_id, i->value_id,
-             i->alignment);
-      break;
-    }
-
-    case PN_FUNCTION_CODE_INST_CMP2: {
-      PNInstructionCmp2* i = (PNInstructionCmp2*)inst;
-      printf("  %%%d. cmp2 op:%s(%d) %%%d %%%d\n", i->result_value_id,
-             pn_cmp2_get_name(i->opcode), i->opcode, i->value0_id,
-             i->value1_id);
-      break;
-    }
-
-    case PN_FUNCTION_CODE_INST_VSELECT: {
-      PNInstructionVselect* i = (PNInstructionVselect*)inst;
-      printf("  %%%d. vselect %%%d ? %%%d : %%%d\n", i->result_value_id,
-             i->cond_id, i->true_value_id, i->false_value_id);
-      break;
-    }
-
-    case PN_FUNCTION_CODE_INST_FORWARDTYPEREF: {
-      PNInstructionForwardtyperef* i = (PNInstructionForwardtyperef*)inst;
-      printf("  forwardtyperef %d %d\n", i->value_id, i->type_id);
-      break;
-    }
-
-    case PN_FUNCTION_CODE_INST_CALL:
-    case PN_FUNCTION_CODE_INST_CALL_INDIRECT: {
-      PNInstructionCall* i = (PNInstructionCall*)inst;
-      PNType* return_type = pn_module_get_type(module, i->return_type_id);
-      PNBool is_return_type_void = return_type->code == PN_TYPE_CODE_VOID;
-      printf("  ");
-      if (!is_return_type_void) {
-        printf("%%%d. ", i->result_value_id);
-      }
-      printf("call ");
-      const char* name = NULL;
-      if (i->is_indirect) {
-        printf("indirect ");
-      } else {
-        PNFunction* called_function =
-            pn_module_get_function(module, i->callee_id);
-        name = called_function->name;
-      }
-      if (name && name[0]) {
-        printf("%%%d(%s) ", i->callee_id, name);
-      } else {
-        printf("%%%d ", i->callee_id);
-      }
-      printf("args:");
-
-      int32_t n;
-      for (n = 0; n < i->num_args; ++n) {
-        printf(" %%%d", i->arg_ids[n]);
-      }
-      printf("\n");
-      break;
-    }
-
-    default:
-      FATAL("Invalid instruction code: %d\n", inst->code);
-      break;
-  }
-}
-
-static void pn_basic_block_trace(PNModule* module, PNBasicBlock* bb) {
-  PNInstruction* inst = (PNInstruction*)bb->instructions;
-  uint32_t i;
-  for (i = 0; i < bb->num_instructions; ++i) {
-    pn_instruction_trace(module, inst);
-    inst = pn_instruction_next(inst);
-  }
-}
-
-static void pn_function_trace(PNModule* module, PNFunction* function) {
-  uint32_t i;
-  for (i = 0; i < function->num_bbs; ++i) {
-    PNBasicBlock* bb = &function->bbs[i];
-    printf("bb:%d (preds:", i);
-    uint32_t n;
-    for (n = 0; n < bb->num_pred_bbs; ++n) {
-      printf(" %d", bb->pred_bb_ids[n]);
-    }
-    printf(" succs:");
-    for (n = 0; n < bb->num_succ_bbs; ++n) {
-      printf(" %d", bb->succ_bb_ids[n]);
-    }
-    printf(")\n");
-    if (bb->first_def_id != PN_INVALID_VALUE_ID) {
-      printf(" defs: [%%%d,%%%d]\n", bb->first_def_id, bb->last_def_id);
-    }
-    if (bb->num_uses) {
-      printf(" uses:");
-      for (n = 0; n < bb->num_uses; ++n) {
-        printf(" %%%d", bb->uses[n]);
-      }
-      printf("\n");
-    }
-    if (bb->num_phi_uses) {
-      printf(" phi uses:");
-      for (n = 0; n < bb->num_phi_uses; ++n) {
-        printf(" bb:%d=>%%%d", bb->phi_uses[n].incoming.bb_id,
-               bb->phi_uses[n].incoming.value_id);
-      }
-      printf("\n");
-    }
-    if (bb->num_phi_assigns) {
-      printf(" phi assigns:");
-      for (n = 0; n < bb->num_phi_assigns; ++n) {
-        printf(" %%%d<=%%%d", bb->phi_assigns[n].dest_value_id,
-               bb->phi_assigns[n].source_value_id);
-      }
-      printf("\n");
-    }
-    if (bb->num_livein) {
-      printf(" livein:");
-      for (n = 0; n < bb->num_livein; ++n) {
-        printf(" %%%d", bb->livein[n]);
-      }
-      printf("\n");
-    }
-    if (bb->num_liveout) {
-      printf(" liveout:");
-      for (n = 0; n < bb->num_liveout; ++n) {
-        printf(" %%%d", bb->liveout[n]);
-      }
-      printf("\n");
-    }
-    pn_basic_block_trace(module, &function->bbs[i]);
-  }
-}
-
-static const char* pn_type_describe(PNModule* module, PNTypeId type_id) {
-  PNType* type = pn_module_get_type(module, type_id);
-  switch (type->code) {
-    case PN_TYPE_CODE_VOID:
-      return "void";
-
-    case PN_TYPE_CODE_INTEGER:
-      switch (type->width) {
-        case 1:
-          return "int1";
-        case 8:
-          return "int8";
-        case 16:
-          return "int16";
-        case 32:
-          return "int32";
-        case 64:
-          return "int64";
-        default: {
-          static char buffer[100];
-          snprintf(buffer, 100, "badInteger%d", type->width);
-          return &buffer[0];
-        }
-      }
-    case PN_TYPE_CODE_FLOAT:
-      return "float";
-
-    case PN_TYPE_CODE_DOUBLE:
-      return "double";
-
-    case PN_TYPE_CODE_FUNCTION: {
-      static char buffer[2048];
-      strcpy(buffer, pn_type_describe(module, type->return_type));
-      strcat(buffer, "(");
-      uint32_t i;
-      for (i = 0; i < type->num_args; ++i) {
-        if (i != 0) {
-          strcat(buffer, ",");
-        }
-        strcat(buffer, pn_type_describe(module, type->arg_types[i]));
-      }
-      strcat(buffer, ")");
-      return buffer;
-    }
-
-    default:
-      return "<unknown>";
   }
 }
 
@@ -2140,6 +2371,7 @@ static void pn_globalvar_block_read(PNModule* module,
             PNValueId value_id;
             PNValue* value = pn_module_append_value(module, &value_id);
             value->code = PN_VALUE_CODE_GLOBAL_VAR;
+            value->type_id = pn_module_find_pointer_type(module);
             value->index = global_var_id;
 
             TRACE("%%%d. var. alignment:%d is_constant:%d\n", value_id,
@@ -2379,6 +2611,7 @@ static void pn_constants_block_read(PNModule* module,
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_CONSTANT;
+            value->type_id = cur_type_id;
             value->index = constant_id;
 
             TRACE("  %%%d. undef\n", value_id);
@@ -2400,6 +2633,7 @@ static void pn_constants_block_read(PNModule* module,
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_CONSTANT;
+            value->type_id = cur_type_id;
             value->index = constant_id;
 
             TRACE("  %%%d. integer %d\n", value_id, data);
@@ -2420,6 +2654,7 @@ static void pn_constants_block_read(PNModule* module,
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_CONSTANT;
+            value->type_id = cur_type_id;
             value->index = constant_id;
 
             TRACE("  %%%d. float %g\n", value_id, data);
@@ -2456,11 +2691,16 @@ static void pn_function_block_read(PNModule* module,
     TRACE("function %%%d\n", function_id);
   }
 
+  PNType* type = pn_module_get_type(module, function->type_id);
+  assert(type->code == PN_TYPE_CODE_FUNCTION);
+  assert(type->num_args == function->num_args);
+
   uint32_t i;
   for (i = 0; i < function->num_args; ++i) {
     PNValueId value_id;
     PNValue* value = pn_function_append_value(module, function, &value_id);
     value->code = PN_VALUE_CODE_FUNCTION_ARG;
+    value->type_id = type->arg_types[i];
     value->index = i;
 
     TRACE("  %%%d. function arg %d\n", value_id, i);
@@ -2476,6 +2716,7 @@ static void pn_function_block_read(PNModule* module,
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
+        pn_function_calculate_result_value_types(module, function);
         pn_function_calculate_uses(module, function);
         pn_function_calculate_pred_bbs(module, function);
         pn_function_calculate_phi_assigns(module, function);
@@ -2556,6 +2797,8 @@ static void pn_function_block_read(PNModule* module,
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
+            /* Fix later, when all values are defined. */
+            value->type_id = PN_INVALID_TYPE_ID;
             value->index = inst_id;
 
             inst->code = code;
@@ -2589,6 +2832,8 @@ static void pn_function_block_read(PNModule* module,
             inst->value_id = pn_record_read_uint32(&reader, "value");
             inst->type_id = pn_record_read_uint32(&reader, "type_id");
             inst->opcode = pn_record_read_int32(&reader, "opcode");
+
+            value->type_id = inst->type_id;
 
             pn_context_fix_value_ids(context, rel_id, 1, &inst->value_id);
             break;
@@ -2711,6 +2956,8 @@ static void pn_function_block_read(PNModule* module,
             inst->type_id = pn_record_read_int32(&reader, "type_id");
             inst->num_incoming = 0;
 
+            value->type_id = inst->type_id;
+
             while (1) {
               PNBasicBlockId bb;
               PNValueId value;
@@ -2746,6 +2993,7 @@ static void pn_function_block_read(PNModule* module,
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
+            value->type_id = pn_module_find_pointer_type(module);
             value->index = inst_id;
 
             inst->code = code;
@@ -2776,6 +3024,8 @@ static void pn_function_block_read(PNModule* module,
                 (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
             inst->type_id = pn_record_read_int32(&reader, "type_id");
 
+            value->type_id = inst->type_id;
+
             pn_context_fix_value_ids(context, rel_id, 1, &inst->src_id);
             break;
           }
@@ -2805,6 +3055,7 @@ static void pn_function_block_read(PNModule* module,
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
+            value->type_id = pn_module_find_integer_type(module, 1);
             value->index = inst_id;
 
             inst->code = code;
@@ -2828,6 +3079,8 @@ static void pn_function_block_read(PNModule* module,
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
+            /* Fix later, when all values are defined. */
+            value->type_id = PN_INVALID_TYPE_ID;
             value->index = inst_id;
 
             inst->code = code;
@@ -2890,6 +3143,7 @@ static void pn_function_block_read(PNModule* module,
               PNValue* value =
                   pn_function_append_value(module, function, &value_id);
               value->code = PN_VALUE_CODE_LOCAL_VAR;
+              value->type_id = inst->return_type_id;
               value->index = inst_id;
 
               inst->result_value_id = value_id;
@@ -3039,6 +3293,7 @@ static void pn_module_block_read(PNModule* module,
             PNValueId value_id;
             PNValue* value = pn_module_append_value(module, &value_id);
             value->code = PN_VALUE_CODE_FUNCTION;
+            value->type_id = function->type_id;
             value->index = function_id;
 
             TRACE(
