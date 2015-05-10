@@ -2390,6 +2390,7 @@ static void pn_blockinfo_block_read(PNBlockInfoContext* context,
       }
     }
   }
+  PN_FATAL("Unexpected end of stream.\n");
 }
 
 static void pn_type_block_read(PNModule* module,
@@ -2499,6 +2500,7 @@ static void pn_type_block_read(PNModule* module,
       }
     }
   }
+  PN_FATAL("Unexpected end of stream.\n");
 }
 
 static void pn_globalvar_block_read(PNModule* module,
@@ -2662,6 +2664,7 @@ static void pn_globalvar_block_read(PNModule* module,
       }
     }
   }
+  PN_FATAL("Unexpected end of stream.\n");
 }
 
 static void pn_value_symtab_block_read(PNModule* module,
@@ -2752,6 +2755,7 @@ static void pn_value_symtab_block_read(PNModule* module,
       }
     }
   }
+  PN_FATAL("Unexpected end of stream.\n");
 }
 
 static void pn_constants_block_read(PNModule* module,
@@ -2867,6 +2871,7 @@ static void pn_constants_block_read(PNModule* module,
       }
     }
   }
+  PN_FATAL("Unexpected end of stream.\n");
 }
 
 static void pn_function_block_read(PNModule* module,
@@ -3388,6 +3393,7 @@ static void pn_function_block_read(PNModule* module,
       }
     }
   }
+  PN_FATAL("Unexpected end of stream.\n");
 }
 
 static void pn_module_block_read(PNModule* module,
@@ -3514,6 +3520,7 @@ static void pn_module_block_read(PNModule* module,
       }
     }
   }
+  PN_FATAL("Unexpected end of stream.\n");
 }
 
 static void pn_header_read(PNBitStream* bs) {
