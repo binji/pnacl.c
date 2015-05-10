@@ -11,9 +11,9 @@
 #include <string.h>
 #include <time.h>
 
-#define TIMERS 1
-#define TRACING 1
-#define PRINT_STATS 1
+#define PN_TIMERS 1
+#define PN_TRACING 1
+#define PN_PRINT_STATS 1
 
 #define PN_ARENA_SIZE (32 * 1024 * 1024)
 #define PN_VALUE_ARENA_SIZE (8 * 1024 * 1024)
@@ -31,21 +31,21 @@
 #define PN_INVALID_BLOCK_ID ((PNBasicBlockId)~0)
 #define PN_INVALID_TYPE_ID ((PNTypeId)~0)
 
-#if TRACING
-#define TRACE(...) printf(__VA_ARGS__)
+#if PN_TRACING
+#define PN_TRACE(...) printf(__VA_ARGS__)
 #else
-#define TRACE(...) (void)0
+#define PN_TRACE(...) (void)0
 #endif
-#define ERROR(...) fprintf(stderr, __VA_ARGS__)
-#define FATAL(...)      \
-  do {                  \
-    ERROR(__VA_ARGS__); \
-    exit(1);            \
+#define PN_ERROR(...) fprintf(stderr, __VA_ARGS__)
+#define PN_FATAL(...)      \
+  do {                     \
+    PN_ERROR(__VA_ARGS__); \
+    exit(1);               \
   } while (0)
 
 #define PN_ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
-#if TIMERS
+#if PN_TIMERS
 
 #define PN_NANOSECONDS_IN_A_SECOND 1000000000
 
@@ -132,7 +132,7 @@ static struct timespec g_pn_timer_times[PN_NUM_TIMERS] = {
 #define PN_BEGIN_TIME(name) (void)0
 #define PN_END_TIME(name) (void)0
 
-#endif /* TIMERS */
+#endif /* PN_TIMERS */
 
 typedef uint8_t PNBool;
 typedef uint16_t PNTypeId;
@@ -633,8 +633,8 @@ static void pn_arena_destroy(PNArena* arena) {
 static void* pn_arena_alloc(PNArena* arena, uint32_t size) {
   uint32_t avail = arena->capacity - arena->size;
   if (size > avail) {
-    FATAL("Arena exhausted. Requested: %u, avail: %u, capacity: %u\n", size,
-          avail, arena->capacity);
+    PN_FATAL("Arena exhausted. Requested: %u, avail: %u, capacity: %u\n", size,
+             avail, arena->capacity);
   }
 
   /* Align to 8 bytes */
@@ -655,7 +655,7 @@ static void* pn_arena_allocz(PNArena* arena, uint32_t size) {
 static void* pn_arena_realloc(PNArena* arena, void* p, uint32_t new_size) {
   if (p) {
     if (p != arena->last_alloc) {
-      FATAL(
+      PN_FATAL(
           "Attempting to realloc, but it was not the last allocation:\n"
           "p = %p, last_alloc = %p\n",
           p, arena->last_alloc);
@@ -725,7 +725,7 @@ static const char* pn_binop_get_name(uint32_t op) {
   };
 
   if (op >= PN_ARRAY_SIZE(names)) {
-    FATAL("Invalid op: %u\n", op);
+    PN_FATAL("Invalid op: %u\n", op);
   }
 
   return names[op];
@@ -738,7 +738,7 @@ static const char* pn_cast_get_name(uint32_t op) {
   };
 
   if (op >= PN_ARRAY_SIZE(names)) {
-    FATAL("Invalid op: %u\n", op);
+    PN_FATAL("Invalid op: %u\n", op);
   }
 
   return names[op];
@@ -756,7 +756,7 @@ static const char* pn_cmp2_get_name(uint32_t op) {
   };
 
   if (op >= PN_ARRAY_SIZE(names)) {
-    FATAL("Invalid op: %u\n", op);
+    PN_FATAL("Invalid op: %u\n", op);
   }
 
   return names[op];
@@ -766,7 +766,7 @@ static uint32_t pn_decode_char6(uint32_t value) {
   const char data[] =
       "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._";
   if (value >= PN_ARRAY_SIZE(data)) {
-    FATAL("Invalid char6 value: %u\n", value);
+    PN_FATAL("Invalid char6 value: %u\n", value);
   }
 
   return data[value];
@@ -898,7 +898,7 @@ static void pn_context_fix_value_ids(PNBlockInfoContext* context,
 
 static PNType* pn_module_get_type(PNModule* module, PNTypeId type_id) {
   if (type_id < 0 || type_id >= module->num_types) {
-    FATAL("accessing invalid type %d (max %d)", type_id, module->num_types);
+    PN_FATAL("accessing invalid type %d (max %d)", type_id, module->num_types);
   }
 
   return &module->types[type_id];
@@ -970,7 +970,7 @@ static const char* pn_type_describe(PNModule* module, PNTypeId type_id) {
         case 64:
           return "int64";
         default:
-          FATAL("Integer with bad width: %d\n", type->width);
+          PN_FATAL("Integer with bad width: %d\n", type->width);
           return "badInteger";
       }
     case PN_TYPE_CODE_FLOAT:
@@ -1008,8 +1008,8 @@ static const char* pn_type_describe(PNModule* module, PNTypeId type_id) {
 static PNFunction* pn_module_get_function(PNModule* module,
                                           PNFunctionId function_id) {
   if (function_id < 0 || function_id >= module->num_functions) {
-    FATAL("accessing invalid function %d (max %d)", function_id,
-          module->num_functions);
+    PN_FATAL("accessing invalid function %d (max %d)", function_id,
+             module->num_functions);
   }
 
   return &module->functions[function_id];
@@ -1018,8 +1018,8 @@ static PNFunction* pn_module_get_function(PNModule* module,
 static PNConstant* pn_function_get_constant(PNFunction* function,
                                             PNConstantId constant_id) {
   if (constant_id < 0 || constant_id >= function->num_constants) {
-    FATAL("accessing invalid constant %d (max %d)", constant_id,
-          function->num_constants);
+    PN_FATAL("accessing invalid constant %d (max %d)", constant_id,
+             function->num_constants);
   }
 
   return &function->constants[constant_id];
@@ -1040,8 +1040,8 @@ static PNConstant* pn_function_append_constant(PNModule* module,
 static PNGlobalVar* pn_module_get_global_var(PNModule* module,
                                              PNGlobalVarId global_var_id) {
   if (global_var_id < 0 || global_var_id >= module->num_global_vars) {
-    FATAL("accessing invalid global_var %d (max %d)", global_var_id,
-          module->num_global_vars);
+    PN_FATAL("accessing invalid global_var %d (max %d)", global_var_id,
+             module->num_global_vars);
   }
 
   return &module->global_vars[global_var_id];
@@ -1049,7 +1049,8 @@ static PNGlobalVar* pn_module_get_global_var(PNModule* module,
 
 static PNValue* pn_module_get_value(PNModule* module, PNValueId value_id) {
   if (value_id < 0 || value_id >= module->num_values) {
-    FATAL("accessing invalid value %d (max %d)", value_id, module->num_values);
+    PN_FATAL("accessing invalid value %d (max %d)", value_id,
+             module->num_values);
   }
 
   return &module->values[value_id];
@@ -1074,7 +1075,7 @@ static PNValue* pn_function_get_value(PNModule* module,
                                       PNFunction* function,
                                       PNValueId value_id) {
   if (value_id < 0) {
-    FATAL("accessing invalid value %d", value_id);
+    PN_FATAL("accessing invalid value %d", value_id);
   } else if (value_id < module->num_values) {
     return &module->values[value_id];
   }
@@ -1085,8 +1086,8 @@ static PNValue* pn_function_get_value(PNModule* module,
     return &function->values[value_id];
   }
 
-  FATAL("accessing invalid value %d (max %d)", value_id,
-        module->num_values + function->num_values);
+  PN_FATAL("accessing invalid value %d (max %d)", value_id,
+           module->num_values + function->num_values);
 }
 
 static PNValue* pn_function_append_value(PNModule* module,
@@ -1233,7 +1234,7 @@ static PNInstruction* pn_instruction_next(PNInstruction* inst) {
     }
 
     default:
-      FATAL("Invalid instruction code: %d\n", inst->code);
+      PN_FATAL("Invalid instruction code: %d\n", inst->code);
       break;
   }
 
@@ -1421,7 +1422,7 @@ static void pn_instruction_trace(PNModule* module,
     }
 
     default:
-      FATAL("Invalid instruction code: %d\n", inst->code);
+      PN_FATAL("Invalid instruction code: %d\n", inst->code);
       break;
   }
 
@@ -1557,7 +1558,7 @@ static PNBool pn_function_assign_result_value_type(PNModule* module,
       pn_type_get_implicit_cast_type(module, value0->type_id, value1->type_id);
 
   if (result_value->type_id == PN_INVALID_TYPE_ID) {
-    ERROR("Incompatible types:\n");
+    PN_ERROR("Incompatible types:\n");
     pn_instruction_trace(module, function, inst);
     exit(1);
   }
@@ -1769,7 +1770,7 @@ static void pn_basic_block_calculate_uses(PNModule* module,
         break;
 
       default:
-        FATAL("Invalid instruction code: %d\n", inst->code);
+        PN_FATAL("Invalid instruction code: %d\n", inst->code);
         break;
     }
     inst = pn_instruction_next(inst);
@@ -2030,7 +2031,7 @@ static PNBool pn_record_read_abbrev(PNRecordReader* reader,
           break;
 
         default:
-          FATAL("bad encoding for array element: %d\n", elt_op->encoding);
+          PN_FATAL("bad encoding for array element: %d\n", elt_op->encoding);
       }
 
       if (++reader->value_index == reader->num_values) {
@@ -2062,7 +2063,7 @@ static PNBool pn_record_read_abbrev(PNRecordReader* reader,
       return PN_TRUE;
 
     default:
-      FATAL("bad encoding: %d\n", op->encoding);
+      PN_FATAL("bad encoding: %d\n", op->encoding);
   }
 }
 
@@ -2098,7 +2099,7 @@ static PNBool pn_record_try_read_uint16(PNRecordReader* reader,
   PNBool ret = pn_record_try_read_uint32(reader, &value);
   if (ret) {
     if (value >= 1 << 16) {
-      FATAL("value too large for u16; (%u)\n", value);
+      PN_FATAL("value too large for u16; (%u)\n", value);
     }
 
     *out_value = value;
@@ -2119,7 +2120,7 @@ static PNBool pn_record_try_read_int32(PNRecordReader* reader,
 static int32_t pn_record_read_int32(PNRecordReader* reader, const char* name) {
   int32_t value;
   if (!pn_record_try_read_int32(reader, &value)) {
-    FATAL("unable to read %s.\n", name);
+    PN_FATAL("unable to read %s.\n", name);
   }
 
   return value;
@@ -2129,7 +2130,7 @@ static uint32_t pn_record_read_uint32(PNRecordReader* reader,
                                       const char* name) {
   uint32_t value;
   if (!pn_record_try_read_uint32(reader, &value)) {
-    FATAL("unable to read %s.\n", name);
+    PN_FATAL("unable to read %s.\n", name);
   }
 
   return value;
@@ -2138,7 +2139,7 @@ static uint32_t pn_record_read_uint32(PNRecordReader* reader,
 static float pn_record_read_float(PNRecordReader* reader, const char* name) {
   int32_t value;
   if (!pn_record_try_read_int32(reader, &value)) {
-    FATAL("unable to read %s.\n", name);
+    PN_FATAL("unable to read %s.\n", name);
   }
 
   assert(sizeof(float) == sizeof(int32_t));
@@ -2155,7 +2156,7 @@ static void pn_record_reader_finish(PNRecordReader* reader) {
     ++count;
   }
   if (count) {
-    TRACE("pn_record_reader_finish skipped %d values.\n", count);
+    PN_TRACE("pn_record_reader_finish skipped %d values.\n", count);
   }
 }
 
@@ -2232,7 +2233,8 @@ static PNBlockAbbrev* pn_block_abbrev_read(PNBitStream* bs,
                 break;
 
               default:
-                FATAL("bad encoding for array element: %d\n", elt_op->encoding);
+                PN_FATAL("bad encoding for array element: %d\n",
+                         elt_op->encoding);
             }
           }
           break;
@@ -2244,7 +2246,7 @@ static PNBlockAbbrev* pn_block_abbrev_read(PNBitStream* bs,
           break;
 
         default:
-          FATAL("bad encoding: %d\n", op->encoding);
+          PN_FATAL("bad encoding: %d\n", op->encoding);
       }
     }
   }
@@ -2266,13 +2268,13 @@ static void pn_blockinfo_block_read(PNBlockInfoContext* context,
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
-        TRACE("*** END BLOCK\n");
+        PN_TRACE("*** END BLOCK\n");
         pn_bitstream_align_32(bs);
         PN_END_TIME(BLOCKINFO_BLOCK_READ);
         return;
 
       case PN_ENTRY_SUBBLOCK:
-        FATAL("unexpected subblock in blockinfo_block\n");
+        PN_FATAL("unexpected subblock in blockinfo_block\n");
 
       case PN_ENTRY_DEFINE_ABBREV: {
         PNBlockAbbrev* abbrev = pn_block_abbrev_read(bs, &abbrevs);
@@ -2290,19 +2292,19 @@ static void pn_blockinfo_block_read(PNBlockInfoContext* context,
         switch (code) {
           case PN_BLOCKINFO_CODE_SETBID:
             block_id = pn_record_read_int32(&reader, "block id");
-            TRACE("block id: %d\n", block_id);
+            PN_TRACE("block id: %d\n", block_id);
             break;
 
           case PN_BLOCKINFO_CODE_BLOCKNAME:
-            TRACE("block name\n");
+            PN_TRACE("block name\n");
             break;
 
           case PN_BLOCKINFO_CODE_SETRECORDNAME:
-            TRACE("block record name\n");
+            PN_TRACE("block record name\n");
             break;
 
           default:
-            FATAL("bad record code: %d.\n", code);
+            PN_FATAL("bad record code: %d.\n", code);
         }
 
         pn_record_reader_finish(&reader);
@@ -2327,13 +2329,13 @@ static void pn_type_block_read(PNModule* module,
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
-        TRACE("*** END BLOCK\n");
+        PN_TRACE("*** END BLOCK\n");
         pn_bitstream_align_32(bs);
         PN_END_TIME(TYPE_BLOCK_READ);
         return;
 
       case PN_ENTRY_SUBBLOCK:
-        FATAL("unexpected subblock in type_block\n");
+        PN_FATAL("unexpected subblock in type_block\n");
 
       case PN_ENTRY_DEFINE_ABBREV: {
         pn_block_abbrev_read(bs, &abbrevs);
@@ -2352,7 +2354,7 @@ static void pn_type_block_read(PNModule* module,
             uint32_t num_entries =
                 pn_record_read_uint32(&reader, "num entries");
             (void)num_entries;
-            TRACE("type num entries: %d\n", num_entries);
+            PN_TRACE("type num entries: %d\n", num_entries);
             break;
           }
 
@@ -2360,7 +2362,7 @@ static void pn_type_block_read(PNModule* module,
             PNTypeId type_id;
             PNType* type = pn_module_append_type(module, &type_id);
             type->code = PN_TYPE_CODE_VOID;
-            TRACE("%d: type void\n", type_id);
+            PN_TRACE("%d: type void\n", type_id);
             break;
           }
 
@@ -2368,7 +2370,7 @@ static void pn_type_block_read(PNModule* module,
             PNTypeId type_id;
             PNType* type = pn_module_append_type(module, &type_id);
             type->code = PN_TYPE_CODE_FLOAT;
-            TRACE("%d: type float\n", type_id);
+            PN_TRACE("%d: type float\n", type_id);
             break;
           }
 
@@ -2376,7 +2378,7 @@ static void pn_type_block_read(PNModule* module,
             PNTypeId type_id;
             PNType* type = pn_module_append_type(module, &type_id);
             type->code = PN_TYPE_CODE_DOUBLE;
-            TRACE("%d: type double\n", type_id);
+            PN_TRACE("%d: type double\n", type_id);
             break;
           }
 
@@ -2385,7 +2387,7 @@ static void pn_type_block_read(PNModule* module,
             PNType* type = pn_module_append_type(module, &type_id);
             type->code = PN_TYPE_CODE_INTEGER;
             type->width = pn_record_read_int32(&reader, "width");
-            TRACE("%d: type integer %d\n", type_id, type->width);
+            PN_TRACE("%d: type integer %d\n", type_id, type->width);
             break;
           }
 
@@ -2396,22 +2398,22 @@ static void pn_type_block_read(PNModule* module,
             type->is_varargs = pn_record_read_int32(&reader, "is_varargs");
             type->return_type = pn_record_read_int32(&reader, "return_type");
             type->num_args = 0;
-            TRACE("%d: type function is_varargs:%d ret:%d ", type_id,
-                  type->is_varargs, type->return_type);
+            PN_TRACE("%d: type function is_varargs:%d ret:%d ", type_id,
+                     type->is_varargs, type->return_type);
 
             PNTypeId arg_type_id;
             while (pn_record_try_read_uint16(&reader, &arg_type_id)) {
               assert(type->num_args < PN_ARRAY_SIZE(type->arg_types));
               type->arg_types[type->num_args] = arg_type_id;
-              TRACE("%d ", arg_type_id);
+              PN_TRACE("%d ", arg_type_id);
               type->num_args++;
             }
-            TRACE("\n");
+            PN_TRACE("\n");
             break;
           }
 
           default:
-            FATAL("bad record code: %d.\n", code);
+            PN_FATAL("bad record code: %d.\n", code);
         }
 
         pn_record_reader_finish(&reader);
@@ -2441,13 +2443,13 @@ static void pn_globalvar_block_read(PNModule* module,
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
-        TRACE("*** END BLOCK\n");
+        PN_TRACE("*** END BLOCK\n");
         pn_bitstream_align_32(bs);
         PN_END_TIME(GLOBALVAR_BLOCK_READ);
         return;
 
       case PN_ENTRY_SUBBLOCK:
-        FATAL("unexpected subblock in globalvar_block\n");
+        PN_FATAL("unexpected subblock in globalvar_block\n");
 
       case PN_ENTRY_DEFINE_ABBREV: {
         pn_block_abbrev_read(bs, &abbrevs);
@@ -2482,8 +2484,8 @@ static void pn_globalvar_block_read(PNModule* module,
             value->type_id = pn_module_find_pointer_type(module);
             value->index = global_var_id;
 
-            TRACE("%%%d. var. alignment:%d is_constant:%d\n", value_id,
-                  global_var->alignment, global_var->is_constant);
+            PN_TRACE("%%%d. var. alignment:%d is_constant:%d\n", value_id,
+                     global_var->alignment, global_var->is_constant);
             break;
           }
 
@@ -2494,8 +2496,8 @@ static void pn_globalvar_block_read(PNModule* module,
                 &module->arena, global_var->initializers,
                 global_var->num_initializers * sizeof(PNInitializer));
 
-            TRACE("  compound. num initializers: %d\n",
-                  global_var->num_initializers);
+            PN_TRACE("  compound. num initializers: %d\n",
+                     global_var->num_initializers);
             break;
           }
 
@@ -2506,7 +2508,7 @@ static void pn_globalvar_block_read(PNModule* module,
             initializer->code = code;
             initializer->num_bytes = pn_record_read_int32(&reader, "num_bytes");
 
-            TRACE("  zerofill. num_bytes: %d\n", initializer->num_bytes);
+            PN_TRACE("  zerofill. num_bytes: %d\n", initializer->num_bytes);
             break;
           }
 
@@ -2524,7 +2526,7 @@ static void pn_globalvar_block_read(PNModule* module,
             uint32_t value;
             while (pn_record_try_read_uint32(&reader, &value)) {
               if (value >= 256) {
-                FATAL("globalvar data out of range: %d\n", value);
+                PN_FATAL("globalvar data out of range: %d\n", value);
               }
 
               if (num_bytes >= capacity) {
@@ -2541,7 +2543,7 @@ static void pn_globalvar_block_read(PNModule* module,
             initializer->num_bytes = num_bytes;
             initializer->data = buffer;
 
-            TRACE("  data. num_bytes: %d\n", num_bytes);
+            PN_TRACE("  data. num_bytes: %d\n", num_bytes);
             break;
           }
 
@@ -2555,8 +2557,8 @@ static void pn_globalvar_block_read(PNModule* module,
             /* Optional */
             pn_record_try_read_int32(&reader, &initializer->addend);
 
-            TRACE("  reloc. index: %d addend: %d\n", initializer->index,
-                  initializer->addend);
+            PN_TRACE("  reloc. index: %d addend: %d\n", initializer->index,
+                     initializer->addend);
             break;
           }
 
@@ -2566,12 +2568,12 @@ static void pn_globalvar_block_read(PNModule* module,
             module->global_vars = pn_arena_alloc(
                 &module->arena, num_global_vars * sizeof(PNGlobalVar));
 
-            TRACE("global var count: %d\n", num_global_vars);
+            PN_TRACE("global var count: %d\n", num_global_vars);
             break;
           }
 
           default:
-            FATAL("bad record code: %d.\n", code);
+            PN_FATAL("bad record code: %d.\n", code);
         }
 
         pn_record_reader_finish(&reader);
@@ -2596,13 +2598,13 @@ static void pn_value_symtab_block_read(PNModule* module,
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
-        TRACE("*** END BLOCK\n");
+        PN_TRACE("*** END BLOCK\n");
         pn_bitstream_align_32(bs);
         PN_END_TIME(VALUE_SYMTAB_BLOCK_READ);
         return;
 
       case PN_ENTRY_SUBBLOCK:
-        FATAL("unexpected subblock in valuesymtab_block\n");
+        PN_FATAL("unexpected subblock in valuesymtab_block\n");
 
       case PN_ENTRY_DEFINE_ABBREV: {
         pn_block_abbrev_read(bs, &abbrevs);
@@ -2637,7 +2639,7 @@ static void pn_value_symtab_block_read(PNModule* module,
               strncpy(function->name, buffer, PN_MAX_FUNCTION_NAME);
             }
 
-            TRACE("  entry: id:%d name:\"%s\"\n", value_id, buffer);
+            PN_TRACE("  entry: id:%d name:\"%s\"\n", value_id, buffer);
             break;
           }
 
@@ -2654,12 +2656,12 @@ static void pn_value_symtab_block_read(PNModule* module,
             *p = 0;
 
             (void)bb_id;
-            TRACE("  bbentry: id:%d name:\"%s\"\n", bb_id, buffer);
+            PN_TRACE("  bbentry: id:%d name:\"%s\"\n", bb_id, buffer);
             break;
           }
 
           default:
-            FATAL("bad record code: %d.\n", code);
+            PN_FATAL("bad record code: %d.\n", code);
         }
 
         pn_record_reader_finish(&reader);
@@ -2686,13 +2688,13 @@ static void pn_constants_block_read(PNModule* module,
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
-        TRACE("*** END BLOCK\n");
+        PN_TRACE("*** END BLOCK\n");
         pn_bitstream_align_32(bs);
         PN_END_TIME(CONSTANTS_BLOCK_READ);
         return;
 
       case PN_ENTRY_SUBBLOCK:
-        FATAL("unexpected subblock in constants_block\n");
+        PN_FATAL("unexpected subblock in constants_block\n");
 
       case PN_ENTRY_DEFINE_ABBREV: {
         pn_block_abbrev_read(bs, &abbrevs);
@@ -2709,7 +2711,7 @@ static void pn_constants_block_read(PNModule* module,
         switch (code) {
           case PN_CONSTANTS_CODE_SETTYPE:
             cur_type_id = pn_record_read_int32(&reader, "current type");
-            TRACE("  constants settype %d\n", cur_type_id);
+            PN_TRACE("  constants settype %d\n", cur_type_id);
             break;
 
           case PN_CONSTANTS_CODE_UNDEF: {
@@ -2726,7 +2728,7 @@ static void pn_constants_block_read(PNModule* module,
             value->type_id = cur_type_id;
             value->index = constant_id;
 
-            TRACE("  %%%d. undef\n", value_id);
+            PN_TRACE("  %%%d. undef\n", value_id);
             break;
           }
 
@@ -2748,7 +2750,7 @@ static void pn_constants_block_read(PNModule* module,
             value->type_id = cur_type_id;
             value->index = constant_id;
 
-            TRACE("  %%%d. integer %d\n", value_id, data);
+            PN_TRACE("  %%%d. integer %d\n", value_id, data);
             break;
           }
 
@@ -2769,12 +2771,12 @@ static void pn_constants_block_read(PNModule* module,
             value->type_id = cur_type_id;
             value->index = constant_id;
 
-            TRACE("  %%%d. float %g\n", value_id, data);
+            PN_TRACE("  %%%d. float %g\n", value_id, data);
             break;
           }
 
           default:
-            FATAL("bad record code: %d.\n", code);
+            PN_FATAL("bad record code: %d.\n", code);
         }
 
         pn_record_reader_finish(&reader);
@@ -2799,9 +2801,9 @@ static void pn_function_block_read(PNModule* module,
   PNFunction* function = pn_module_get_function(module, function_id);
 
   if (function->name) {
-    TRACE("function %%%d (%s)\n", function_id, function->name);
+    PN_TRACE("function %%%d (%s)\n", function_id, function->name);
   } else {
-    TRACE("function %%%d\n", function_id);
+    PN_TRACE("function %%%d\n", function_id);
   }
 
   PNType* type = pn_module_get_type(module, function->type_id);
@@ -2816,7 +2818,7 @@ static void pn_function_block_read(PNModule* module,
     value->type_id = type->arg_types[i];
     value->index = i;
 
-    TRACE("  %%%d. function arg %d\n", value_id, i);
+    PN_TRACE("  %%%d. function arg %d\n", value_id, i);
   }
 
   PNValueId first_bb_value_id = PN_INVALID_VALUE_ID;
@@ -2834,11 +2836,11 @@ static void pn_function_block_read(PNModule* module,
         pn_function_calculate_pred_bbs(module, function);
         pn_function_calculate_phi_assigns(module, function);
         pn_function_calculate_liveness(module, function);
-#if TRACING
+#if PN_TRACING
         pn_function_trace(module, function);
 #endif
 
-        TRACE("*** END BLOCK\n");
+        PN_TRACE("*** END BLOCK\n");
         pn_bitstream_align_32(bs);
         PN_END_TIME(FUNCTION_BLOCK_READ);
         return;
@@ -2847,17 +2849,17 @@ static void pn_function_block_read(PNModule* module,
         uint32_t id = pn_bitstream_read_vbr(bs, 8);
         switch (id) {
           case PN_BLOCKID_CONSTANTS:
-            TRACE("*** SUBBLOCK CONSTANTS (%d)\n", id);
+            PN_TRACE("*** SUBBLOCK CONSTANTS (%d)\n", id);
             pn_constants_block_read(module, function, context, bs);
             break;
 
           case PN_BLOCKID_VALUE_SYMTAB:
-            TRACE("*** SUBBLOCK VALUE_SYMTAB (%d)\n", id);
+            PN_TRACE("*** SUBBLOCK VALUE_SYMTAB (%d)\n", id);
             pn_value_symtab_block_read(module, context, bs);
             break;
 
           default:
-            FATAL("bad block id %d\n", id);
+            PN_FATAL("bad block id %d\n", id);
         }
         break;
       }
@@ -2882,7 +2884,7 @@ static void pn_function_block_read(PNModule* module,
               pn_record_read_uint32(&reader, "num basic blocks");
           function->bbs = pn_arena_allocz(
               &module->arena, sizeof(PNBasicBlock) * function->num_bbs);
-          TRACE("num bbs:%d\n", function->num_bbs);
+          PN_TRACE("num bbs:%d\n", function->num_bbs);
           break;
         }
 
@@ -3082,7 +3084,7 @@ static void pn_function_block_read(PNModule* module,
               }
 
               if (!pn_record_try_read_uint16(&reader, &bb)) {
-                FATAL("unable to read phi bb index\n");
+                PN_FATAL("unable to read phi bb index\n");
               }
 
               inst->incoming = pn_arena_realloc(
@@ -3283,7 +3285,7 @@ static void pn_function_block_read(PNModule* module,
           }
 
           default:
-            FATAL("bad record code: %d.\n", code);
+            PN_FATAL("bad record code: %d.\n", code);
         }
 
         if (is_terminator) {
@@ -3327,23 +3329,23 @@ static void pn_module_block_read(PNModule* module,
 
         switch (id) {
           case PN_BLOCKID_BLOCKINFO:
-            TRACE("*** SUBBLOCK BLOCKINFO (%d)\n", id);
+            PN_TRACE("*** SUBBLOCK BLOCKINFO (%d)\n", id);
             pn_blockinfo_block_read(context, bs);
             break;
           case PN_BLOCKID_TYPE:
-            TRACE("*** SUBBLOCK TYPE (%d)\n", id);
+            PN_TRACE("*** SUBBLOCK TYPE (%d)\n", id);
             pn_type_block_read(module, context, bs);
             break;
           case PN_BLOCKID_GLOBALVAR:
-            TRACE("*** SUBBLOCK GLOBALVAR (%d)\n", id);
+            PN_TRACE("*** SUBBLOCK GLOBALVAR (%d)\n", id);
             pn_globalvar_block_read(module, context, bs);
             break;
           case PN_BLOCKID_VALUE_SYMTAB:
-            TRACE("*** SUBBLOCK VALUE_SYMTAB (%d)\n", id);
+            PN_TRACE("*** SUBBLOCK VALUE_SYMTAB (%d)\n", id);
             pn_value_symtab_block_read(module, context, bs);
             break;
           case PN_BLOCKID_FUNCTION: {
-            TRACE("*** SUBBLOCK FUNCTION (%d)\n", id);
+            PN_TRACE("*** SUBBLOCK FUNCTION (%d)\n", id);
             while (pn_module_get_function(module, function_id)->is_proto) {
               function_id++;
             }
@@ -3353,8 +3355,8 @@ static void pn_module_block_read(PNModule* module,
             break;
           }
           default:
-            TRACE("*** SUBBLOCK (BAD) (%d)\n", id);
-            FATAL("bad block id %d\n", id);
+            PN_TRACE("*** SUBBLOCK (BAD) (%d)\n", id);
+            PN_FATAL("bad block id %d\n", id);
         }
 
         break;
@@ -3375,7 +3377,7 @@ static void pn_module_block_read(PNModule* module,
           case PN_MODULE_CODE_VERSION: {
             module->version = pn_record_read_int32(&reader, "module version");
             context->use_relative_ids = module->version == 1;
-            TRACE("module version: %d\n", module->version);
+            PN_TRACE("module version: %d\n", module->version);
             break;
           }
 
@@ -3410,7 +3412,7 @@ static void pn_module_block_read(PNModule* module,
             value->type_id = function->type_id;
             value->index = function_id;
 
-            TRACE(
+            PN_TRACE(
                 "%%%d. module function: "
                 "(type:%d,cc:%d,is_proto:%d,linkage:%d)\n",
                 value_id, function->type_id, function->calling_convention,
@@ -3419,7 +3421,7 @@ static void pn_module_block_read(PNModule* module,
           }
 
           default:
-            FATAL("bad record code: %d.\n", code);
+            PN_FATAL("bad record code: %d.\n", code);
         }
 
         pn_record_reader_finish(&reader);
@@ -3434,7 +3436,7 @@ static void pn_header_read(PNBitStream* bs) {
   int i;
   for (i = 0; i < 4; ++i) {
     if (pn_bitstream_read(bs, 8) != sig[i]) {
-      FATAL("Expected '%c'\n", sig[i]);
+      PN_FATAL("Expected '%c'\n", sig[i]);
     }
   }
 
@@ -3444,7 +3446,7 @@ static void pn_header_read(PNBitStream* bs) {
     uint32_t ftype = pn_bitstream_read(bs, 4);
     uint32_t id = pn_bitstream_read(bs, 4);
     if (id != 1) {
-      FATAL("bad header id: %d\n", id);
+      PN_FATAL("bad header id: %d\n", id);
     }
 
     /* Align to u16 */
@@ -3459,7 +3461,7 @@ static void pn_header_read(PNBitStream* bs) {
         pn_bitstream_read(bs, 32);
         break;
       default:
-        FATAL("bad ftype %d\n", ftype);
+        PN_FATAL("bad ftype %d\n", ftype);
     }
   }
 }
@@ -3511,7 +3513,7 @@ int main(int argc, char** argv) {
   PN_BEGIN_TIME(FILE_READ);
   FILE* f = fopen(filename, "r");
   if (!f) {
-    FATAL("unable to read %s\n", filename);
+    PN_FATAL("unable to read %s\n", filename);
   }
 
   fseek(f, 0, SEEK_END);
@@ -3522,7 +3524,7 @@ int main(int argc, char** argv) {
 
   size_t read_size = fread(data, 1, fsize, f);
   if (read_size != fsize) {
-    FATAL("unable to read data from file\n");
+    PN_FATAL("unable to read data from file\n");
   }
 
   fclose(f);
@@ -3540,20 +3542,20 @@ int main(int argc, char** argv) {
   pn_arena_init(&module->temp_arena, PN_TEMP_ARENA_SIZE);
 
   uint32_t entry = pn_bitstream_read(&bs, 2);
-  TRACE("entry: %d\n", entry);
+  PN_TRACE("entry: %d\n", entry);
   if (entry != PN_ENTRY_SUBBLOCK) {
-    FATAL("expected subblock at top-level\n");
+    PN_FATAL("expected subblock at top-level\n");
   }
 
   PNBlockId block_id = pn_bitstream_read_vbr(&bs, 8);
   assert(block_id == PN_BLOCKID_MODULE);
   pn_module_block_read(module, &context, &bs);
-  TRACE("done\n");
+  PN_TRACE("done\n");
   PN_END_TIME(TOTAL);
 
-#if PRINT_STATS
+#if PN_PRINT_STATS
   printf("-----------------\n");
-#if TIMERS
+#if PN_TIMERS
 #define PN_PRINT_TIMER(name)                                          \
   struct timespec* timer_##name = &g_pn_timer_times[PN_TIMER_##name]; \
   printf("timer %-30s: %f sec (%%%.0f)\n", #name,                     \
@@ -3562,7 +3564,7 @@ int main(int argc, char** argv) {
              PNTimespecToDouble(timer_TOTAL));
   PN_FOREACH_TIMER(PN_PRINT_TIMER);
   printf("-----------------\n");
-#endif /* TIMERS */
+#endif /* PN_TIMERS */
 
   printf("num_types: %u\n", module->num_types);
   printf("num_functions: %u\n", module->num_functions);
@@ -3573,7 +3575,7 @@ int main(int argc, char** argv) {
   printf("arena: %u\n", module->arena.size);
   printf("value arena: %u\n", module->value_arena.size);
   printf("instruction arena: %u\n", module->instruction_arena.size);
-#endif /* PRINT_STATS */
+#endif /* PN_PRINT_STATS */
 
   return 0;
 }
