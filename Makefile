@@ -1,31 +1,36 @@
 .PHONY: all
-all: pnacl pnacl-notrace pnacl-notimers pnacl-notrace-notimers pnacl-opt
+all: out/pnacl out/pnacl-notrace out/pnacl-notimers out/pnacl-notrace-notimers \
+  out/pnacl-opt
 
 CFLAGS = -Wall -Wno-unused-function -Werror -std=gnu89 -g
 
-pnacl: pnacl.c
+out/pnacl: pnacl.c
 	gcc $(CFLAGS) -o $@ $^
 
-pnacl-notrace: pnacl.c
+out/pnacl-notrace: pnacl.c
 	gcc -DPN_TRACING=0 $(CFLAGS) -o $@ $^
 
-pnacl-notimers: pnacl.c
+out/pnacl-notimers: pnacl.c
 	gcc -DPN_TIMERS=0 $(CFLAGS) -o $@ $^
 
-pnacl-notrace-notimers: pnacl.c
+out/pnacl-notrace-notimers: pnacl.c
 	gcc -DPN_TRACING=0 -DPN_TIMERS=0 $(CFLAGS) -o $@ $^
 
-pnacl-opt: pnacl.c
+out/pnacl-opt: pnacl.c
 	gcc -O3 $(CFLAGS) -o $@ $^
 
+.PHONY: clean
+clean:
+	rm -f out/*
+
 .PHONY: run
-run: pnacl
-	./pnacl -tp simple.pexe
+run: out/pnacl
+	$< -tp test/simple.pexe
 
 .PHONY: debug
-debug: pnacl
-	gdb ./pnacl
+debug: out/pnacl
+	gdb $<
 
 .PHONY: stress
-stress: pnacl
-	./pnacl -p nacl_io_test.pexe
+stress: out/pnacl
+	$< -p test/nacl_io_test.pexe

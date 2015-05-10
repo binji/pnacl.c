@@ -988,64 +988,6 @@ static void pn_string_concat(PNArena* arena,
   (*dest)[*dest_len - 1] = 0;
 }
 
-static const char* pn_type_describe(PNModule* module, PNTypeId type_id) {
-  if (type_id == PN_INVALID_TYPE_ID) {
-    return "<invalid>";
-  }
-
-  PNType* type = pn_module_get_type(module, type_id);
-  switch (type->code) {
-    case PN_TYPE_CODE_VOID:
-      return "void";
-
-    case PN_TYPE_CODE_INTEGER:
-      switch (type->width) {
-        case 1:
-          return "int1";
-        case 8:
-          return "int8";
-        case 16:
-          return "int16";
-        case 32:
-          return "int32";
-        case 64:
-          return "int64";
-        default:
-          PN_FATAL("Integer with bad width: %d\n", type->width);
-          return "badInteger";
-      }
-    case PN_TYPE_CODE_FLOAT:
-      return "float";
-
-    case PN_TYPE_CODE_DOUBLE:
-      return "double";
-
-    case PN_TYPE_CODE_FUNCTION: {
-      char* buffer = pn_arena_alloc(&module->temp_arena, 1);
-      uint32_t buffer_len = 1;
-      buffer[0] = 0;
-
-      pn_string_concat(&module->temp_arena, &buffer, &buffer_len,
-                       pn_type_describe(module, type->return_type), 0);
-      pn_string_concat(&module->temp_arena, &buffer, &buffer_len, "(", 1);
-      uint32_t n;
-      for (n = 0; n < type->num_args; ++n) {
-        if (n != 0) {
-          pn_string_concat(&module->temp_arena, &buffer, &buffer_len, ",", 1);
-        }
-
-        pn_string_concat(&module->temp_arena, &buffer, &buffer_len,
-                         pn_type_describe(module, type->arg_types[n]), 0);
-      }
-      pn_string_concat(&module->temp_arena, &buffer, &buffer_len, ")", 1);
-      return buffer;
-    }
-
-    default:
-      return "<unknown>";
-  }
-}
-
 static PNFunction* pn_module_get_function(PNModule* module,
                                           PNFunctionId function_id) {
   if (function_id < 0 || function_id >= module->num_functions) {
@@ -1142,25 +1084,6 @@ static PNValue* pn_function_append_value(PNModule* module,
 
   function->num_values++;
   return &function->values[index];
-}
-
-static const char* pn_value_describe(PNModule* module,
-                                     PNFunction* function,
-                                     PNValueId value_id) {
-  PNValue* value;
-  if (value_id >= module->num_values) {
-    value = pn_function_get_value(module, function, value_id);
-  } else {
-    value = pn_module_get_value(module, value_id);
-  }
-
-  const char* type_str = pn_type_describe(module, value->type_id);
-  int buffer_len = snprintf(NULL, 0, "%%%d(%s)", value_id, type_str);
-  char* buffer = pn_arena_alloc(&module->temp_arena, buffer_len + 1);
-  snprintf(buffer, buffer_len + 1, "%%%d(%s)", value_id, type_str);
-  buffer[buffer_len] = 0;
-
-  return buffer;
 }
 
 static void* pn_function_append_instruction(
@@ -1286,10 +1209,87 @@ static PNInstruction* pn_instruction_next(PNInstruction* inst) {
   return (PNInstruction*)p;
 }
 
+#if PN_TRACING
+static const char* pn_type_describe(PNModule* module, PNTypeId type_id) {
+  if (type_id == PN_INVALID_TYPE_ID) {
+    return "<invalid>";
+  }
+
+  PNType* type = pn_module_get_type(module, type_id);
+  switch (type->code) {
+    case PN_TYPE_CODE_VOID:
+      return "void";
+
+    case PN_TYPE_CODE_INTEGER:
+      switch (type->width) {
+        case 1:
+          return "int1";
+        case 8:
+          return "int8";
+        case 16:
+          return "int16";
+        case 32:
+          return "int32";
+        case 64:
+          return "int64";
+        default:
+          PN_FATAL("Integer with bad width: %d\n", type->width);
+          return "badInteger";
+      }
+    case PN_TYPE_CODE_FLOAT:
+      return "float";
+
+    case PN_TYPE_CODE_DOUBLE:
+      return "double";
+
+    case PN_TYPE_CODE_FUNCTION: {
+      char* buffer = pn_arena_alloc(&module->temp_arena, 1);
+      uint32_t buffer_len = 1;
+      buffer[0] = 0;
+
+      pn_string_concat(&module->temp_arena, &buffer, &buffer_len,
+                       pn_type_describe(module, type->return_type), 0);
+      pn_string_concat(&module->temp_arena, &buffer, &buffer_len, "(", 1);
+      uint32_t n;
+      for (n = 0; n < type->num_args; ++n) {
+        if (n != 0) {
+          pn_string_concat(&module->temp_arena, &buffer, &buffer_len, ",", 1);
+        }
+
+        pn_string_concat(&module->temp_arena, &buffer, &buffer_len,
+                         pn_type_describe(module, type->arg_types[n]), 0);
+      }
+      pn_string_concat(&module->temp_arena, &buffer, &buffer_len, ")", 1);
+      return buffer;
+    }
+
+    default:
+      return "<unknown>";
+  }
+}
+
+static const char* pn_value_describe(PNModule* module,
+                                     PNFunction* function,
+                                     PNValueId value_id) {
+  PNValue* value;
+  if (value_id >= module->num_values) {
+    value = pn_function_get_value(module, function, value_id);
+  } else {
+    value = pn_module_get_value(module, value_id);
+  }
+
+  const char* type_str = pn_type_describe(module, value->type_id);
+  int buffer_len = snprintf(NULL, 0, "%%%d(%s)", value_id, type_str);
+  char* buffer = pn_arena_alloc(&module->temp_arena, buffer_len + 1);
+  snprintf(buffer, buffer_len + 1, "%%%d(%s)", value_id, type_str);
+  buffer[buffer_len] = 0;
+
+  return buffer;
+}
+
 static void pn_instruction_trace(PNModule* module,
                                  PNFunction* function,
                                  PNInstruction* inst) {
-#if PN_TRACING
   if (!PN_IS_TRACE(INSTRUCTIONS)) {
     return;
   }
@@ -1473,14 +1473,12 @@ static void pn_instruction_trace(PNModule* module,
   }
 
   pn_arena_reset_to_mark(&module->temp_arena, mark);
-#endif /* PN_TRACING */
 }
 
 static void pn_basic_block_trace(PNModule* module,
                                  PNFunction* function,
                                  PNBasicBlock* bb,
                                  PNBasicBlockId bb_id) {
-#if PN_TRACING
   if (!PN_IS_TRACE(BASIC_BLOCKS)) {
     return;
   }
@@ -1542,25 +1540,21 @@ static void pn_basic_block_trace(PNModule* module,
     pn_instruction_trace(module, function, inst);
     inst = pn_instruction_next(inst);
   }
-#endif /* PN_TRACING */
 }
 
 static void pn_function_trace_header(PNFunction* function,
                                      PNFunctionId function_id) {
-#if PN_TRACING
   if (function->name) {
     printf("function %%%d (%s)\n", function_id, function->name);
   } else {
     printf("function %%%d\n", function_id);
   }
-#endif /* PN_TRACING */
 }
 
 static void pn_function_trace(PNModule* module,
                               PNFunction* function,
                               PNFunctionId function_id,
                               PNBool print_header) {
-#if PN_TRACING
   PN_BEGIN_TIME(FUNCTION_TRACE);
 
   if (!PN_IS_TRACE(FUNCTION_BLOCK)) {
@@ -1576,8 +1570,9 @@ static void pn_function_trace(PNModule* module,
     pn_basic_block_trace(module, function, &function->bbs[i], i);
   }
   PN_END_TIME(FUNCTION_TRACE);
-#endif /* PN_TRACING */
 }
+
+#endif /* PN_TRACING */
 
 static PNTypeId pn_type_get_implicit_cast_type(PNModule* module,
                                                PNTypeId type0_id,
@@ -1638,7 +1633,9 @@ static PNBool pn_function_assign_result_value_type(PNModule* module,
 
   if (result_value->type_id == PN_INVALID_TYPE_ID) {
     PN_ERROR("Incompatible types:\n");
+#if PN_TRACING
     pn_instruction_trace(module, function, inst);
+#endif /* PN_TRACING */
     exit(1);
   }
 
@@ -1710,10 +1707,12 @@ static void pn_function_calculate_result_value_types(PNModule* module,
     }
 
     if (num_invalid > 0 && last_invalid == num_invalid) {
-      printf("Unable to resolve types for %d values:\n", num_invalid);
+      PN_ERROR("Unable to resolve types for %d values:\n", num_invalid);
+#if PN_TRACING
       for (n = 0; n < num_invalid; ++n) {
         pn_instruction_trace(module, function, invalid[n]);
       }
+#endif /* PN_TRACING */
       exit(1);
     }
   }
@@ -2884,9 +2883,11 @@ static void pn_function_block_read(PNModule* module,
 
   PNFunction* function = pn_module_get_function(module, function_id);
 
+#if PN_TRACING
   if (PN_IS_TRACE(FUNCTION_BLOCK)) {
     pn_function_trace_header(function, function_id);
   }
+#endif
 
   PNType* type = pn_module_get_type(module, function->type_id);
   assert(type->code == PN_TYPE_CODE_FUNCTION);
@@ -3625,6 +3626,21 @@ static struct option long_options[] = {
 
 PN_STATIC_ASSERT(PN_NUM_FLAGS + 1 == PN_ARRAY_SIZE(long_options));
 
+void pn_usage(const char* prog) {
+  fprintf(stderr, "usage: %s [option] filename\n", prog);
+  fprintf(stderr, "options:\n");
+  int i = 0;
+  for (; long_options[i].name; ++i) {
+    if (long_options[i].val) {
+      fprintf(stderr, "  -%c, --%s\n", long_options[i].val,
+              long_options[i].name);
+    } else {
+      fprintf(stderr, "      --%s\n", long_options[i].name);
+    }
+  }
+  exit(0);
+}
+
 void pn_options_parse(int argc, char** argv) {
   int c;
   int option_index;
@@ -3707,20 +3723,8 @@ redo_switch:
         g_pn_print_stats = PN_TRUE;
         break;
 
-      case 'h': {
-        fprintf(stderr, "usage: %s [option] filename\n", argv[0]);
-        fprintf(stderr, "options:\n");
-        int i = 0;
-        for (; long_options[i].name; ++i) {
-          if (long_options[i].val) {
-            fprintf(stderr, "  -%c, --%s\n", long_options[i].val,
-                    long_options[i].name);
-          } else {
-            fprintf(stderr, "      --%s\n", long_options[i].name);
-          }
-        }
-        exit(0);
-      }
+      case 'h':
+        pn_usage(argv[0]);
 
       case '?':
         break;
@@ -3734,8 +3738,8 @@ redo_switch:
   if (optind < argc) {
     g_pn_filename = argv[optind];
   } else {
-    /* TODO(binji): remove default filename */
-    g_pn_filename = "simple.pexe";
+    PN_ERROR("No filename given.\n");
+    pn_usage(argv[0]);
   }
 
 #if PN_TRACING
