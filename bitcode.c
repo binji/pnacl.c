@@ -3,6 +3,7 @@
  * found in the LICENSE file. */
 
 #include <assert.h>
+#include <getopt.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -11,9 +12,13 @@
 #include <string.h>
 #include <time.h>
 
+#ifndef PN_TIMERS
 #define PN_TIMERS 1
+#endif
+
+#ifndef PN_TRACING
 #define PN_TRACING 1
-#define PN_PRINT_STATS 1
+#endif
 
 #define PN_ARENA_SIZE (32 * 1024 * 1024)
 #define PN_VALUE_ARENA_SIZE (8 * 1024 * 1024)
@@ -31,60 +36,28 @@
 #define PN_INVALID_BLOCK_ID ((PNBasicBlockId)~0)
 #define PN_INVALID_TYPE_ID ((PNTypeId)~0)
 
+#define PN_ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+
 #if PN_TRACING
-#define PN_TRACE(...) printf(__VA_ARGS__)
+#define PN_TRACE(flag, ...) if (g_pn_trace_##flag) printf(__VA_ARGS__)
+#define PN_IS_TRACE(flag) g_pn_trace_##flag
 #else
-#define PN_TRACE(...) (void)0
-#endif
+#define PN_TRACE(flag, ...) (void)0
+#define PN_IS_TRACE(flag) PN_FALSE
+#endif /* PN_TRACING */
+#define PN_WARN(...) if( g_pn_verbose > 0) fprintf(stderr, __VA_ARGS__)
 #define PN_ERROR(...) fprintf(stderr, __VA_ARGS__)
 #define PN_FATAL(...)      \
   do {                     \
     PN_ERROR(__VA_ARGS__); \
     exit(1);               \
   } while (0)
-
-#define PN_ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+#define PN_UNREACHABLE() PN_FATAL("unreachable")
+#define PN_STATIC_ASSERT(x) int __pn_static_assert_##__LINE__[x ? 1 : -1]
 
 #if PN_TIMERS
 
 #define PN_NANOSECONDS_IN_A_SECOND 1000000000
-
-void PNTimespecCheck(struct timespec* a) {
-  assert(a->tv_sec >= 0);
-  assert(a->tv_nsec >= 0 && a->tv_nsec < PN_NANOSECONDS_IN_A_SECOND);
-}
-
-void PNTimespecSubtract(struct timespec* result,
-                        struct timespec* a,
-                        struct timespec* b) {
-  PNTimespecCheck(a);
-  PNTimespecCheck(b);
-  result->tv_sec = a->tv_sec - b->tv_sec;
-  result->tv_nsec = a->tv_nsec - b->tv_nsec;
-  if (result->tv_nsec < 0) {
-    result->tv_sec--;
-    result->tv_nsec += PN_NANOSECONDS_IN_A_SECOND;
-  }
-  PNTimespecCheck(result);
-}
-
-void PNTimespecAdd(struct timespec* result,
-                   struct timespec* a,
-                   struct timespec* b) {
-  PNTimespecCheck(a);
-  PNTimespecCheck(b);
-  result->tv_sec = a->tv_sec + b->tv_sec;
-  result->tv_nsec = a->tv_nsec + b->tv_nsec;
-  if (result->tv_nsec >= PN_NANOSECONDS_IN_A_SECOND) {
-    result->tv_sec++;
-    result->tv_nsec -= PN_NANOSECONDS_IN_A_SECOND;
-  }
-  PNTimespecCheck(result);
-}
-
-double PNTimespecToDouble(struct timespec* t) {
-  return (double)t->tv_sec + (double)t->tv_nsec / PN_NANOSECONDS_IN_A_SECOND;
-}
 
 #define PN_BEGIN_TIME(name)          \
   struct timespec start_time_##name; \
@@ -120,12 +93,11 @@ double PNTimespecToDouble(struct timespec* t) {
   V(CALCULATE_LIVENESS)           \
   V(FUNCTION_TRACE)
 
-#define PN_ENUM_TIMERS(name) PN_TIMER_##name,
-enum { PN_FOREACH_TIMER(PN_ENUM_TIMERS) PN_NUM_TIMERS };
+#define PN_TIMERS_ENUM(name) PN_TIMER_##name,
+enum { PN_FOREACH_TIMER(PN_TIMERS_ENUM) PN_NUM_TIMERS };
+#undef PN_TIMERS_ENUM
 
-#define PN_DEFINE_TIMERS(name) {},
-static struct timespec g_pn_timer_times[PN_NUM_TIMERS] = {
-    PN_FOREACH_TIMER(PN_DEFINE_TIMERS)};
+static struct timespec g_pn_timer_times[PN_NUM_TIMERS];
 
 #else
 
@@ -144,6 +116,35 @@ typedef uint32_t PNInitializerId;
 typedef uint16_t PNInstructionId;
 typedef uint16_t PNBasicBlockId;
 typedef uint16_t PNAlignment;
+
+static int g_pn_verbose;
+static const char* g_pn_filename;
+static PNBool g_pn_print_stats;
+
+#if PN_TIMERS
+static PNBool g_pn_print_time;
+#endif /* PN_TIMERS */
+
+#if PN_TRACING
+#define PN_FOREACH_TRACE(V)                   \
+  V(BLOCKINFO_BLOCK, "blockinfo-block")       \
+  V(TYPE_BLOCK, "type-block")                 \
+  V(GLOBALVAR_BLOCK, "globalvar-block")       \
+  V(VALUE_SYMTAB_BLOCK, "value-symtab-block") \
+  V(CONSTANTS_BLOCK, "constants-block")       \
+  V(FUNCTION_BLOCK, "function-block")         \
+  V(MODULE_BLOCK, "module-block")             \
+  V(BASIC_BLOCKS, "basic-blocks")             \
+  V(INSTRUCTIONS, "instructions")
+
+#define PN_TRACE_ENUM(name, flag) PN_TRACE_##name,
+enum { PN_FOREACH_TRACE(PN_TRACE_ENUM) PN_NUM_TRACE };
+#undef PN_TRACE_ENUM
+
+#define PN_TRACE_DEFINE(name, flag) static PNBool g_pn_trace_##name;
+PN_FOREACH_TRACE(PN_TRACE_DEFINE)
+#undef PN_TRACE_DEFINE
+#endif /* PN_TRACING */
 
 typedef enum PNEntry {
   PN_ENTRY_END_BLOCK = 0,
@@ -618,6 +619,46 @@ typedef struct PNBlockInfoContext {
   PNBlockAbbrevs block_abbrev_map[PN_MAX_BLOCK_IDS];
   PNBool use_relative_ids;
 } PNBlockInfoContext;
+
+#if PN_TIMERS
+void PNTimespecCheck(struct timespec* a) {
+  assert(a->tv_sec >= 0);
+  assert(a->tv_nsec >= 0 && a->tv_nsec < PN_NANOSECONDS_IN_A_SECOND);
+}
+
+void PNTimespecSubtract(struct timespec* result,
+                        struct timespec* a,
+                        struct timespec* b) {
+  PNTimespecCheck(a);
+  PNTimespecCheck(b);
+  result->tv_sec = a->tv_sec - b->tv_sec;
+  result->tv_nsec = a->tv_nsec - b->tv_nsec;
+  if (result->tv_nsec < 0) {
+    result->tv_sec--;
+    result->tv_nsec += PN_NANOSECONDS_IN_A_SECOND;
+  }
+  PNTimespecCheck(result);
+}
+
+void PNTimespecAdd(struct timespec* result,
+                   struct timespec* a,
+                   struct timespec* b) {
+  PNTimespecCheck(a);
+  PNTimespecCheck(b);
+  result->tv_sec = a->tv_sec + b->tv_sec;
+  result->tv_nsec = a->tv_nsec + b->tv_nsec;
+  if (result->tv_nsec >= PN_NANOSECONDS_IN_A_SECOND) {
+    result->tv_sec++;
+    result->tv_nsec -= PN_NANOSECONDS_IN_A_SECOND;
+  }
+  PNTimespecCheck(result);
+}
+
+double PNTimespecToDouble(struct timespec* t) {
+  return (double)t->tv_sec + (double)t->tv_nsec / PN_NANOSECONDS_IN_A_SECOND;
+}
+
+#endif /* PN_TIMERS */
 
 static void pn_arena_init(PNArena* arena, uint32_t size) {
   arena->data = malloc(size);
@@ -1248,6 +1289,11 @@ static PNInstruction* pn_instruction_next(PNInstruction* inst) {
 static void pn_instruction_trace(PNModule* module,
                                  PNFunction* function,
                                  PNInstruction* inst) {
+#if PN_TRACING
+  if (!PN_IS_TRACE(INSTRUCTIONS)) {
+    return;
+  }
+
   PNArenaMark mark = pn_arena_mark(&module->temp_arena);
 
   switch (inst->code) {
@@ -1427,77 +1473,110 @@ static void pn_instruction_trace(PNModule* module,
   }
 
   pn_arena_reset_to_mark(&module->temp_arena, mark);
+#endif /* PN_TRACING */
 }
 
 static void pn_basic_block_trace(PNModule* module,
                                  PNFunction* function,
-                                 PNBasicBlock* bb) {
+                                 PNBasicBlock* bb,
+                                 PNBasicBlockId bb_id) {
+#if PN_TRACING
+  if (!PN_IS_TRACE(BASIC_BLOCKS)) {
+    return;
+  }
+
+  printf("bb:%d (preds:", bb_id);
+  uint32_t n;
+  for (n = 0; n < bb->num_pred_bbs; ++n) {
+    printf(" %d", bb->pred_bb_ids[n]);
+  }
+  printf(" succs:");
+  for (n = 0; n < bb->num_succ_bbs; ++n) {
+    printf(" %d", bb->succ_bb_ids[n]);
+  }
+  printf(")\n");
+  if (bb->first_def_id != PN_INVALID_VALUE_ID) {
+    printf(" defs: [%%%d,%%%d]\n", bb->first_def_id, bb->last_def_id);
+  }
+  if (bb->num_uses) {
+    printf(" uses:");
+    for (n = 0; n < bb->num_uses; ++n) {
+      printf(" %%%d", bb->uses[n]);
+    }
+    printf("\n");
+  }
+  if (bb->num_phi_uses) {
+    printf(" phi uses:");
+    for (n = 0; n < bb->num_phi_uses; ++n) {
+      printf(" bb:%d=>%%%d", bb->phi_uses[n].incoming.bb_id,
+             bb->phi_uses[n].incoming.value_id);
+    }
+    printf("\n");
+  }
+  if (bb->num_phi_assigns) {
+    printf(" phi assigns:");
+    for (n = 0; n < bb->num_phi_assigns; ++n) {
+      printf(" %%%d<=%%%d", bb->phi_assigns[n].dest_value_id,
+             bb->phi_assigns[n].source_value_id);
+    }
+    printf("\n");
+  }
+  if (bb->num_livein) {
+    printf(" livein:");
+    for (n = 0; n < bb->num_livein; ++n) {
+      printf(" %%%d", bb->livein[n]);
+    }
+    printf("\n");
+  }
+  if (bb->num_liveout) {
+    printf(" liveout:");
+    for (n = 0; n < bb->num_liveout; ++n) {
+      printf(" %%%d", bb->liveout[n]);
+    }
+    printf("\n");
+  }
+
   PNInstruction* inst = (PNInstruction*)bb->instructions;
   uint32_t i;
   for (i = 0; i < bb->num_instructions; ++i) {
     pn_instruction_trace(module, function, inst);
     inst = pn_instruction_next(inst);
   }
+#endif /* PN_TRACING */
 }
 
-static void pn_function_trace(PNModule* module, PNFunction* function) {
+static void pn_function_trace_header(PNFunction* function,
+                                     PNFunctionId function_id) {
+#if PN_TRACING
+  if (function->name) {
+    printf("function %%%d (%s)\n", function_id, function->name);
+  } else {
+    printf("function %%%d\n", function_id);
+  }
+#endif /* PN_TRACING */
+}
+
+static void pn_function_trace(PNModule* module,
+                              PNFunction* function,
+                              PNFunctionId function_id,
+                              PNBool print_header) {
+#if PN_TRACING
   PN_BEGIN_TIME(FUNCTION_TRACE);
+
+  if (!PN_IS_TRACE(FUNCTION_BLOCK)) {
+    return;
+  }
+
+  if (print_header) {
+    pn_function_trace_header(function, function_id);
+  }
+
   uint32_t i;
   for (i = 0; i < function->num_bbs; ++i) {
-    PNBasicBlock* bb = &function->bbs[i];
-    printf("bb:%d (preds:", i);
-    uint32_t n;
-    for (n = 0; n < bb->num_pred_bbs; ++n) {
-      printf(" %d", bb->pred_bb_ids[n]);
-    }
-    printf(" succs:");
-    for (n = 0; n < bb->num_succ_bbs; ++n) {
-      printf(" %d", bb->succ_bb_ids[n]);
-    }
-    printf(")\n");
-    if (bb->first_def_id != PN_INVALID_VALUE_ID) {
-      printf(" defs: [%%%d,%%%d]\n", bb->first_def_id, bb->last_def_id);
-    }
-    if (bb->num_uses) {
-      printf(" uses:");
-      for (n = 0; n < bb->num_uses; ++n) {
-        printf(" %%%d", bb->uses[n]);
-      }
-      printf("\n");
-    }
-    if (bb->num_phi_uses) {
-      printf(" phi uses:");
-      for (n = 0; n < bb->num_phi_uses; ++n) {
-        printf(" bb:%d=>%%%d", bb->phi_uses[n].incoming.bb_id,
-               bb->phi_uses[n].incoming.value_id);
-      }
-      printf("\n");
-    }
-    if (bb->num_phi_assigns) {
-      printf(" phi assigns:");
-      for (n = 0; n < bb->num_phi_assigns; ++n) {
-        printf(" %%%d<=%%%d", bb->phi_assigns[n].dest_value_id,
-               bb->phi_assigns[n].source_value_id);
-      }
-      printf("\n");
-    }
-    if (bb->num_livein) {
-      printf(" livein:");
-      for (n = 0; n < bb->num_livein; ++n) {
-        printf(" %%%d", bb->livein[n]);
-      }
-      printf("\n");
-    }
-    if (bb->num_liveout) {
-      printf(" liveout:");
-      for (n = 0; n < bb->num_liveout; ++n) {
-        printf(" %%%d", bb->liveout[n]);
-      }
-      printf("\n");
-    }
-    pn_basic_block_trace(module, function, &function->bbs[i]);
+    pn_basic_block_trace(module, function, &function->bbs[i], i);
   }
   PN_END_TIME(FUNCTION_TRACE);
+#endif /* PN_TRACING */
 }
 
 static PNTypeId pn_type_get_implicit_cast_type(PNModule* module,
@@ -2156,7 +2235,7 @@ static void pn_record_reader_finish(PNRecordReader* reader) {
     ++count;
   }
   if (count) {
-    PN_TRACE("pn_record_reader_finish skipped %d values.\n", count);
+    PN_WARN("pn_record_reader_finish skipped %d values.\n", count);
   }
 }
 
@@ -2268,7 +2347,7 @@ static void pn_blockinfo_block_read(PNBlockInfoContext* context,
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
-        PN_TRACE("*** END BLOCK\n");
+        PN_TRACE(BLOCKINFO_BLOCK, "*** END BLOCK\n");
         pn_bitstream_align_32(bs);
         PN_END_TIME(BLOCKINFO_BLOCK_READ);
         return;
@@ -2292,15 +2371,15 @@ static void pn_blockinfo_block_read(PNBlockInfoContext* context,
         switch (code) {
           case PN_BLOCKINFO_CODE_SETBID:
             block_id = pn_record_read_int32(&reader, "block id");
-            PN_TRACE("block id: %d\n", block_id);
+            PN_TRACE(BLOCKINFO_BLOCK, "block id: %d\n", block_id);
             break;
 
           case PN_BLOCKINFO_CODE_BLOCKNAME:
-            PN_TRACE("block name\n");
+            PN_TRACE(BLOCKINFO_BLOCK, "block name\n");
             break;
 
           case PN_BLOCKINFO_CODE_SETRECORDNAME:
-            PN_TRACE("block record name\n");
+            PN_TRACE(BLOCKINFO_BLOCK, "block record name\n");
             break;
 
           default:
@@ -2329,7 +2408,7 @@ static void pn_type_block_read(PNModule* module,
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
-        PN_TRACE("*** END BLOCK\n");
+        PN_TRACE(TYPE_BLOCK, "*** END BLOCK\n");
         pn_bitstream_align_32(bs);
         PN_END_TIME(TYPE_BLOCK_READ);
         return;
@@ -2354,7 +2433,7 @@ static void pn_type_block_read(PNModule* module,
             uint32_t num_entries =
                 pn_record_read_uint32(&reader, "num entries");
             (void)num_entries;
-            PN_TRACE("type num entries: %d\n", num_entries);
+            PN_TRACE(TYPE_BLOCK, "type num entries: %d\n", num_entries);
             break;
           }
 
@@ -2362,7 +2441,7 @@ static void pn_type_block_read(PNModule* module,
             PNTypeId type_id;
             PNType* type = pn_module_append_type(module, &type_id);
             type->code = PN_TYPE_CODE_VOID;
-            PN_TRACE("%d: type void\n", type_id);
+            PN_TRACE(TYPE_BLOCK, "%d: type void\n", type_id);
             break;
           }
 
@@ -2370,7 +2449,7 @@ static void pn_type_block_read(PNModule* module,
             PNTypeId type_id;
             PNType* type = pn_module_append_type(module, &type_id);
             type->code = PN_TYPE_CODE_FLOAT;
-            PN_TRACE("%d: type float\n", type_id);
+            PN_TRACE(TYPE_BLOCK, "%d: type float\n", type_id);
             break;
           }
 
@@ -2378,7 +2457,7 @@ static void pn_type_block_read(PNModule* module,
             PNTypeId type_id;
             PNType* type = pn_module_append_type(module, &type_id);
             type->code = PN_TYPE_CODE_DOUBLE;
-            PN_TRACE("%d: type double\n", type_id);
+            PN_TRACE(TYPE_BLOCK, "%d: type double\n", type_id);
             break;
           }
 
@@ -2387,7 +2466,7 @@ static void pn_type_block_read(PNModule* module,
             PNType* type = pn_module_append_type(module, &type_id);
             type->code = PN_TYPE_CODE_INTEGER;
             type->width = pn_record_read_int32(&reader, "width");
-            PN_TRACE("%d: type integer %d\n", type_id, type->width);
+            PN_TRACE(TYPE_BLOCK, "%d: type integer %d\n", type_id, type->width);
             break;
           }
 
@@ -2398,17 +2477,17 @@ static void pn_type_block_read(PNModule* module,
             type->is_varargs = pn_record_read_int32(&reader, "is_varargs");
             type->return_type = pn_record_read_int32(&reader, "return_type");
             type->num_args = 0;
-            PN_TRACE("%d: type function is_varargs:%d ret:%d ", type_id,
-                     type->is_varargs, type->return_type);
+            PN_TRACE(TYPE_BLOCK, "%d: type function is_varargs:%d ret:%d ",
+                     type_id, type->is_varargs, type->return_type);
 
             PNTypeId arg_type_id;
             while (pn_record_try_read_uint16(&reader, &arg_type_id)) {
               assert(type->num_args < PN_ARRAY_SIZE(type->arg_types));
               type->arg_types[type->num_args] = arg_type_id;
-              PN_TRACE("%d ", arg_type_id);
+              PN_TRACE(TYPE_BLOCK, "%d ", arg_type_id);
               type->num_args++;
             }
-            PN_TRACE("\n");
+            PN_TRACE(TYPE_BLOCK, "\n");
             break;
           }
 
@@ -2443,7 +2522,7 @@ static void pn_globalvar_block_read(PNModule* module,
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
-        PN_TRACE("*** END BLOCK\n");
+        PN_TRACE(GLOBALVAR_BLOCK, "*** END BLOCK\n");
         pn_bitstream_align_32(bs);
         PN_END_TIME(GLOBALVAR_BLOCK_READ);
         return;
@@ -2484,7 +2563,8 @@ static void pn_globalvar_block_read(PNModule* module,
             value->type_id = pn_module_find_pointer_type(module);
             value->index = global_var_id;
 
-            PN_TRACE("%%%d. var. alignment:%d is_constant:%d\n", value_id,
+            PN_TRACE(GLOBALVAR_BLOCK,
+                     "%%%d. var. alignment:%d is_constant:%d\n", value_id,
                      global_var->alignment, global_var->is_constant);
             break;
           }
@@ -2496,7 +2576,7 @@ static void pn_globalvar_block_read(PNModule* module,
                 &module->arena, global_var->initializers,
                 global_var->num_initializers * sizeof(PNInitializer));
 
-            PN_TRACE("  compound. num initializers: %d\n",
+            PN_TRACE(GLOBALVAR_BLOCK, "  compound. num initializers: %d\n",
                      global_var->num_initializers);
             break;
           }
@@ -2508,7 +2588,8 @@ static void pn_globalvar_block_read(PNModule* module,
             initializer->code = code;
             initializer->num_bytes = pn_record_read_int32(&reader, "num_bytes");
 
-            PN_TRACE("  zerofill. num_bytes: %d\n", initializer->num_bytes);
+            PN_TRACE(GLOBALVAR_BLOCK, "  zerofill. num_bytes: %d\n",
+                     initializer->num_bytes);
             break;
           }
 
@@ -2543,7 +2624,7 @@ static void pn_globalvar_block_read(PNModule* module,
             initializer->num_bytes = num_bytes;
             initializer->data = buffer;
 
-            PN_TRACE("  data. num_bytes: %d\n", num_bytes);
+            PN_TRACE(GLOBALVAR_BLOCK, "  data. num_bytes: %d\n", num_bytes);
             break;
           }
 
@@ -2557,8 +2638,8 @@ static void pn_globalvar_block_read(PNModule* module,
             /* Optional */
             pn_record_try_read_int32(&reader, &initializer->addend);
 
-            PN_TRACE("  reloc. index: %d addend: %d\n", initializer->index,
-                     initializer->addend);
+            PN_TRACE(GLOBALVAR_BLOCK, "  reloc. index: %d addend: %d\n",
+                     initializer->index, initializer->addend);
             break;
           }
 
@@ -2568,7 +2649,8 @@ static void pn_globalvar_block_read(PNModule* module,
             module->global_vars = pn_arena_alloc(
                 &module->arena, num_global_vars * sizeof(PNGlobalVar));
 
-            PN_TRACE("global var count: %d\n", num_global_vars);
+            PN_TRACE(GLOBALVAR_BLOCK, "global var count: %d\n",
+                     num_global_vars);
             break;
           }
 
@@ -2598,7 +2680,7 @@ static void pn_value_symtab_block_read(PNModule* module,
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
-        PN_TRACE("*** END BLOCK\n");
+        PN_TRACE(VALUE_SYMTAB_BLOCK, "*** END BLOCK\n");
         pn_bitstream_align_32(bs);
         PN_END_TIME(VALUE_SYMTAB_BLOCK_READ);
         return;
@@ -2639,7 +2721,8 @@ static void pn_value_symtab_block_read(PNModule* module,
               strncpy(function->name, buffer, PN_MAX_FUNCTION_NAME);
             }
 
-            PN_TRACE("  entry: id:%d name:\"%s\"\n", value_id, buffer);
+            PN_TRACE(VALUE_SYMTAB_BLOCK, "  entry: id:%d name:\"%s\"\n",
+                     value_id, buffer);
             break;
           }
 
@@ -2656,7 +2739,8 @@ static void pn_value_symtab_block_read(PNModule* module,
             *p = 0;
 
             (void)bb_id;
-            PN_TRACE("  bbentry: id:%d name:\"%s\"\n", bb_id, buffer);
+            PN_TRACE(VALUE_SYMTAB_BLOCK, "  bbentry: id:%d name:\"%s\"\n",
+                     bb_id, buffer);
             break;
           }
 
@@ -2688,7 +2772,7 @@ static void pn_constants_block_read(PNModule* module,
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
-        PN_TRACE("*** END BLOCK\n");
+        PN_TRACE(CONSTANTS_BLOCK, "*** END BLOCK\n");
         pn_bitstream_align_32(bs);
         PN_END_TIME(CONSTANTS_BLOCK_READ);
         return;
@@ -2711,7 +2795,7 @@ static void pn_constants_block_read(PNModule* module,
         switch (code) {
           case PN_CONSTANTS_CODE_SETTYPE:
             cur_type_id = pn_record_read_int32(&reader, "current type");
-            PN_TRACE("  constants settype %d\n", cur_type_id);
+            PN_TRACE(CONSTANTS_BLOCK, "  constants settype %d\n", cur_type_id);
             break;
 
           case PN_CONSTANTS_CODE_UNDEF: {
@@ -2728,7 +2812,7 @@ static void pn_constants_block_read(PNModule* module,
             value->type_id = cur_type_id;
             value->index = constant_id;
 
-            PN_TRACE("  %%%d. undef\n", value_id);
+            PN_TRACE(CONSTANTS_BLOCK, "  %%%d. undef\n", value_id);
             break;
           }
 
@@ -2750,7 +2834,7 @@ static void pn_constants_block_read(PNModule* module,
             value->type_id = cur_type_id;
             value->index = constant_id;
 
-            PN_TRACE("  %%%d. integer %d\n", value_id, data);
+            PN_TRACE(CONSTANTS_BLOCK, "  %%%d. integer %d\n", value_id, data);
             break;
           }
 
@@ -2771,7 +2855,7 @@ static void pn_constants_block_read(PNModule* module,
             value->type_id = cur_type_id;
             value->index = constant_id;
 
-            PN_TRACE("  %%%d. float %g\n", value_id, data);
+            PN_TRACE(CONSTANTS_BLOCK, "  %%%d. float %g\n", value_id, data);
             break;
           }
 
@@ -2800,10 +2884,8 @@ static void pn_function_block_read(PNModule* module,
 
   PNFunction* function = pn_module_get_function(module, function_id);
 
-  if (function->name) {
-    PN_TRACE("function %%%d (%s)\n", function_id, function->name);
-  } else {
-    PN_TRACE("function %%%d\n", function_id);
+  if (PN_IS_TRACE(FUNCTION_BLOCK)) {
+    pn_function_trace_header(function, function_id);
   }
 
   PNType* type = pn_module_get_type(module, function->type_id);
@@ -2818,7 +2900,7 @@ static void pn_function_block_read(PNModule* module,
     value->type_id = type->arg_types[i];
     value->index = i;
 
-    PN_TRACE("  %%%d. function arg %d\n", value_id, i);
+    PN_TRACE(FUNCTION_BLOCK, "  %%%d. function arg %d\n", value_id, i);
   }
 
   PNValueId first_bb_value_id = PN_INVALID_VALUE_ID;
@@ -2837,10 +2919,12 @@ static void pn_function_block_read(PNModule* module,
         pn_function_calculate_phi_assigns(module, function);
         pn_function_calculate_liveness(module, function);
 #if PN_TRACING
-        pn_function_trace(module, function);
-#endif
+        /* Print the header if it wasn't printed above */
+        PNBool print_header = !PN_IS_TRACE(FUNCTION_BLOCK);
+        pn_function_trace(module, function, function_id, print_header);
+#endif /* PN_TRACING */
 
-        PN_TRACE("*** END BLOCK\n");
+        PN_TRACE(FUNCTION_BLOCK, "*** END BLOCK\n");
         pn_bitstream_align_32(bs);
         PN_END_TIME(FUNCTION_BLOCK_READ);
         return;
@@ -2849,12 +2933,12 @@ static void pn_function_block_read(PNModule* module,
         uint32_t id = pn_bitstream_read_vbr(bs, 8);
         switch (id) {
           case PN_BLOCKID_CONSTANTS:
-            PN_TRACE("*** SUBBLOCK CONSTANTS (%d)\n", id);
+            PN_TRACE(FUNCTION_BLOCK, "*** SUBBLOCK CONSTANTS (%d)\n", id);
             pn_constants_block_read(module, function, context, bs);
             break;
 
           case PN_BLOCKID_VALUE_SYMTAB:
-            PN_TRACE("*** SUBBLOCK VALUE_SYMTAB (%d)\n", id);
+            PN_TRACE(FUNCTION_BLOCK, "*** SUBBLOCK VALUE_SYMTAB (%d)\n", id);
             pn_value_symtab_block_read(module, context, bs);
             break;
 
@@ -2884,7 +2968,7 @@ static void pn_function_block_read(PNModule* module,
               pn_record_read_uint32(&reader, "num basic blocks");
           function->bbs = pn_arena_allocz(
               &module->arena, sizeof(PNBasicBlock) * function->num_bbs);
-          PN_TRACE("num bbs:%d\n", function->num_bbs);
+          PN_TRACE(FUNCTION_BLOCK, "num bbs:%d\n", function->num_bbs);
           break;
         }
 
@@ -3329,23 +3413,23 @@ static void pn_module_block_read(PNModule* module,
 
         switch (id) {
           case PN_BLOCKID_BLOCKINFO:
-            PN_TRACE("*** SUBBLOCK BLOCKINFO (%d)\n", id);
+            PN_TRACE(MODULE_BLOCK, "*** SUBBLOCK BLOCKINFO (%d)\n", id);
             pn_blockinfo_block_read(context, bs);
             break;
           case PN_BLOCKID_TYPE:
-            PN_TRACE("*** SUBBLOCK TYPE (%d)\n", id);
+            PN_TRACE(MODULE_BLOCK, "*** SUBBLOCK TYPE (%d)\n", id);
             pn_type_block_read(module, context, bs);
             break;
           case PN_BLOCKID_GLOBALVAR:
-            PN_TRACE("*** SUBBLOCK GLOBALVAR (%d)\n", id);
+            PN_TRACE(MODULE_BLOCK, "*** SUBBLOCK GLOBALVAR (%d)\n", id);
             pn_globalvar_block_read(module, context, bs);
             break;
           case PN_BLOCKID_VALUE_SYMTAB:
-            PN_TRACE("*** SUBBLOCK VALUE_SYMTAB (%d)\n", id);
+            PN_TRACE(MODULE_BLOCK, "*** SUBBLOCK VALUE_SYMTAB (%d)\n", id);
             pn_value_symtab_block_read(module, context, bs);
             break;
           case PN_BLOCKID_FUNCTION: {
-            PN_TRACE("*** SUBBLOCK FUNCTION (%d)\n", id);
+            PN_TRACE(MODULE_BLOCK, "*** SUBBLOCK FUNCTION (%d)\n", id);
             while (pn_module_get_function(module, function_id)->is_proto) {
               function_id++;
             }
@@ -3355,7 +3439,7 @@ static void pn_module_block_read(PNModule* module,
             break;
           }
           default:
-            PN_TRACE("*** SUBBLOCK (BAD) (%d)\n", id);
+            PN_TRACE(MODULE_BLOCK, "*** SUBBLOCK (BAD) (%d)\n", id);
             PN_FATAL("bad block id %d\n", id);
         }
 
@@ -3377,7 +3461,7 @@ static void pn_module_block_read(PNModule* module,
           case PN_MODULE_CODE_VERSION: {
             module->version = pn_record_read_int32(&reader, "module version");
             context->use_relative_ids = module->version == 1;
-            PN_TRACE("module version: %d\n", module->version);
+            PN_TRACE(MODULE_BLOCK, "module version: %d\n", module->version);
             break;
           }
 
@@ -3412,11 +3496,11 @@ static void pn_module_block_read(PNModule* module,
             value->type_id = function->type_id;
             value->index = function_id;
 
-            PN_TRACE(
-                "%%%d. module function: "
-                "(type:%d,cc:%d,is_proto:%d,linkage:%d)\n",
-                value_id, function->type_id, function->calling_convention,
-                function->is_proto, function->linkage);
+            PN_TRACE(MODULE_BLOCK,
+                     "%%%d. module function: "
+                     "(type:%d,cc:%d,is_proto:%d,linkage:%d)\n",
+                     value_id, function->type_id, function->calling_convention,
+                     function->is_proto, function->linkage);
             break;
           }
 
@@ -3502,18 +3586,177 @@ uint32_t pn_max_num_bbs(PNModule* module) {
   return result;
 }
 
-int main(int argc, char** argv) {
-  PN_BEGIN_TIME(TOTAL);
-  --argc, ++argv;
-  const char* filename = "simple.pexe";
-  if (argc >= 1) {
-    filename = argv[0];
+enum {
+  PN_FLAG_VERBOSE,
+  PN_FLAG_HELP,
+#if PN_TRACING
+  PN_FLAG_TRACE_ALL,
+  PN_FLAG_TRACE_BLOCK,
+#define PN_TRACE_FLAGS(name, flag) PN_FLAG_TRACE_##name,
+  PN_FOREACH_TRACE(PN_TRACE_FLAGS)
+#undef PN_TRACE_FLAGS
+#endif /* PN_TRACING */
+  PN_FLAG_PRINT_ALL,
+#if PN_TIMERS
+      PN_FLAG_PRINT_TIME,
+#endif /* PN_TIMERS */
+  PN_FLAG_PRINT_STATS,
+  PN_NUM_FLAGS
+};
+
+static struct option long_options[] = {
+    {"verbose", no_argument, NULL, 'v'},
+    {"help", no_argument, NULL, 'h'},
+#if PN_TRACING
+    {"trace-all", no_argument, NULL, 't'},
+    {"trace-block", no_argument, NULL, 0},
+#define PN_TRACE_FLAGS(name, flag) \
+      {"trace-" flag, no_argument, NULL, 0},
+    PN_FOREACH_TRACE(PN_TRACE_FLAGS)
+#undef PN_TRACE_FLAGS
+#endif /* PN_TRACING */
+    {"print-all", no_argument, NULL, 'p'},
+#if PN_TIMERS
+        {"print-time", no_argument, NULL, 0},
+#endif /* PN_TIMERS */
+    {"print-stats", no_argument, NULL, 0},
+    {NULL, 0, NULL, 0},
+};
+
+PN_STATIC_ASSERT(PN_NUM_FLAGS + 1 == PN_ARRAY_SIZE(long_options));
+
+void pn_options_parse(int argc, char** argv) {
+  int c;
+  int option_index;
+  while (1) {
+    c = getopt_long(argc, argv, "vhtp", long_options, &option_index);
+    if (c == -1) {
+      break;
+    }
+
+redo_switch:
+    switch (c) {
+      case 0:
+        c = long_options[option_index].val;
+        if (c) {
+          goto redo_switch;
+        }
+
+        switch (option_index) {
+          case PN_FLAG_VERBOSE: 
+          case PN_FLAG_HELP:
+#if PN_TRACING
+          case PN_FLAG_TRACE_ALL:
+#endif /* PN_TRACING */
+          case PN_FLAG_PRINT_ALL:
+            /* Handled above by goto */
+            PN_UNREACHABLE();
+
+#if PN_TRACING
+          case PN_FLAG_TRACE_BLOCK:
+            g_pn_trace_BLOCKINFO_BLOCK = PN_TRUE;
+            g_pn_trace_TYPE_BLOCK = PN_TRUE;
+            g_pn_trace_GLOBALVAR_BLOCK = PN_TRUE;
+            g_pn_trace_VALUE_SYMTAB_BLOCK = PN_TRUE;
+            g_pn_trace_CONSTANTS_BLOCK = PN_TRUE;
+            g_pn_trace_FUNCTION_BLOCK = PN_TRUE;
+            g_pn_trace_MODULE_BLOCK = PN_TRUE;
+            break;
+
+#define PN_TRACE_OPTIONS(name, flag)          \
+  case PN_FLAG_TRACE_##name: \
+    g_pn_trace_##name = PN_TRUE;              \
+    break;
+            PN_FOREACH_TRACE(PN_TRACE_OPTIONS);
+#undef PN_TRACE_OPTIONS
+
+#endif /* PN_TRACING */
+
+#if PN_TIMERS
+          case PN_FLAG_PRINT_TIME:
+            g_pn_print_time = PN_TRUE;
+            break;
+#endif /* PN_TIMERS */
+
+          case PN_FLAG_PRINT_STATS:
+            g_pn_print_stats = PN_TRUE;
+            break;
+
+            break;
+        }
+        break;
+
+      case 'v':
+        g_pn_verbose++;
+        break;
+
+      case 't':
+#if PN_TRACING
+#define PN_TRACE_OPTIONS(name, flag) g_pn_trace_##name = PN_TRUE;
+        PN_FOREACH_TRACE(PN_TRACE_OPTIONS);
+#undef PN_TRACE_OPTIONS
+#else
+        PN_ERROR("PN_TRACING not enabled.\n");
+#endif
+        break;
+
+      case 'p':
+#if PN_TIMERS
+        g_pn_print_time = PN_TRUE;
+#endif /* PN_TIMERS */
+        g_pn_print_stats = PN_TRUE;
+        break;
+
+      case 'h': {
+        fprintf(stderr, "usage: %s [option] filename\n", argv[0]);
+        fprintf(stderr, "options:\n");
+        int i = 0;
+        for (; long_options[i].name; ++i) {
+          if (long_options[i].val) {
+            fprintf(stderr, "  -%c, --%s\n", long_options[i].val,
+                    long_options[i].name);
+          } else {
+            fprintf(stderr, "      --%s\n", long_options[i].name);
+          }
+        }
+        exit(0);
+      }
+
+      case '?':
+        break;
+
+      default:
+        PN_ERROR("getopt_long returned '%c' (%d)\n", c, c);
+        break;
+    }
   }
 
+  if (optind < argc) {
+    g_pn_filename = argv[optind];
+  } else {
+    /* TODO(binji): remove default filename */
+    g_pn_filename = "simple.pexe";
+  }
+
+#if PN_TRACING
+  /* Handle flag dependencies */
+  if (g_pn_trace_INSTRUCTIONS) {
+    g_pn_trace_BASIC_BLOCKS = PN_TRUE;
+  }
+
+  if (g_pn_trace_BASIC_BLOCKS) {
+    g_pn_trace_FUNCTION_BLOCK = PN_TRUE;
+  }
+#endif /* PN_TRACING */
+}
+
+int main(int argc, char** argv) {
+  PN_BEGIN_TIME(TOTAL);
+  pn_options_parse(argc, argv);
   PN_BEGIN_TIME(FILE_READ);
-  FILE* f = fopen(filename, "r");
+  FILE* f = fopen(g_pn_filename, "r");
   if (!f) {
-    PN_FATAL("unable to read %s\n", filename);
+    PN_FATAL("unable to read %s\n", g_pn_filename);
   }
 
   fseek(f, 0, SEEK_END);
@@ -3542,7 +3785,7 @@ int main(int argc, char** argv) {
   pn_arena_init(&module->temp_arena, PN_TEMP_ARENA_SIZE);
 
   uint32_t entry = pn_bitstream_read(&bs, 2);
-  PN_TRACE("entry: %d\n", entry);
+  PN_TRACE(MODULE_BLOCK, "entry: %d\n", entry);
   if (entry != PN_ENTRY_SUBBLOCK) {
     PN_FATAL("expected subblock at top-level\n");
   }
@@ -3550,32 +3793,34 @@ int main(int argc, char** argv) {
   PNBlockId block_id = pn_bitstream_read_vbr(&bs, 8);
   assert(block_id == PN_BLOCKID_MODULE);
   pn_module_block_read(module, &context, &bs);
-  PN_TRACE("done\n");
+  PN_TRACE(MODULE_BLOCK, "done\n");
   PN_END_TIME(TOTAL);
 
-#if PN_PRINT_STATS
-  printf("-----------------\n");
 #if PN_TIMERS
+  if (g_pn_print_time) {
+    printf("-----------------\n");
 #define PN_PRINT_TIMER(name)                                          \
   struct timespec* timer_##name = &g_pn_timer_times[PN_TIMER_##name]; \
   printf("timer %-30s: %f sec (%%%.0f)\n", #name,                     \
          PNTimespecToDouble(timer_##name),                            \
          100 * PNTimespecToDouble(timer_##name) /                     \
              PNTimespecToDouble(timer_TOTAL));
-  PN_FOREACH_TIMER(PN_PRINT_TIMER);
-  printf("-----------------\n");
+    PN_FOREACH_TIMER(PN_PRINT_TIMER);
+  }
 #endif /* PN_TIMERS */
 
-  printf("num_types: %u\n", module->num_types);
-  printf("num_functions: %u\n", module->num_functions);
-  printf("num_global_vars: %u\n", module->num_global_vars);
-  printf("max num_constants: %u\n", pn_max_num_constants(module));
-  printf("max num_values: %u\n", pn_max_num_values(module));
-  printf("max num_bbs: %u\n", pn_max_num_bbs(module));
-  printf("arena: %u\n", module->arena.size);
-  printf("value arena: %u\n", module->value_arena.size);
-  printf("instruction arena: %u\n", module->instruction_arena.size);
-#endif /* PN_PRINT_STATS */
+  if (g_pn_print_stats) {
+    printf("-----------------\n");
+    printf("num_types: %u\n", module->num_types);
+    printf("num_functions: %u\n", module->num_functions);
+    printf("num_global_vars: %u\n", module->num_global_vars);
+    printf("max num_constants: %u\n", pn_max_num_constants(module));
+    printf("max num_values: %u\n", pn_max_num_values(module));
+    printf("max num_bbs: %u\n", pn_max_num_bbs(module));
+    printf("arena: %u\n", module->arena.size);
+    printf("value arena: %u\n", module->value_arena.size);
+    printf("instruction arena: %u\n", module->instruction_arena.size);
+  }
 
   return 0;
 }
