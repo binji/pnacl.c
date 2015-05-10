@@ -1,31 +1,31 @@
 .PHONY: all
-all: bitcode bitcode-notrace bitcode-notimers bitcode-notrace-notimers bitcode-opt
+all: pnacl pnacl-notrace pnacl-notimers pnacl-notrace-notimers pnacl-opt
 
 CFLAGS = -Wall -Wno-unused-function -Werror -std=gnu89 -g
 
-bitcode: bitcode.c
+pnacl: pnacl.c
 	gcc $(CFLAGS) -o $@ $^
 
-bitcode-notrace: bitcode.c
+pnacl-notrace: pnacl.c
 	gcc -DPN_TRACING=0 $(CFLAGS) -o $@ $^
 
-bitcode-notimers: bitcode.c
+pnacl-notimers: pnacl.c
 	gcc -DPN_TIMERS=0 $(CFLAGS) -o $@ $^
 
-bitcode-notrace-notimers: bitcode.c
+pnacl-notrace-notimers: pnacl.c
 	gcc -DPN_TRACING=0 -DPN_TIMERS=0 $(CFLAGS) -o $@ $^
 
-bitcode-opt: bitcode.c
+pnacl-opt: pnacl.c
 	gcc -O3 $(CFLAGS) -o $@ $^
 
 .PHONY: run
-run: bitcode
-	./bitcode -tp simple.pexe
+run: pnacl
+	./pnacl -tp simple.pexe
 
 .PHONY: debug
-debug: bitcode
-	gdb ./bitcode
+debug: pnacl
+	gdb ./pnacl
 
 .PHONY: stress
-stress: bitcode
-	./bitcode -p nacl_io_test.pexe
+stress: pnacl
+	./pnacl -p nacl_io_test.pexe
