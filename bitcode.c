@@ -9,6 +9,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+#define TIMERS 1
+#define TRACING 1
+#define PRINT_STATS 1
 
 #define PN_ARENA_SIZE (32 * 1024 * 1024)
 #define PN_VALUE_ARENA_SIZE (8 * 1024 * 1024)
@@ -26,9 +31,6 @@
 #define PN_INVALID_BLOCK_ID ((PNBasicBlockId)~0)
 #define PN_INVALID_TYPE_ID ((PNTypeId)~0)
 
-#define TRACING 1
-#define PRINT_STATS 1
-
 #if TRACING
 #define TRACE(...) printf(__VA_ARGS__)
 #else
@@ -42,6 +44,95 @@
   } while (0)
 
 #define PN_ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+
+#if TIMERS
+
+#define PN_NANOSECONDS_IN_A_SECOND 1000000000
+
+void PNTimespecCheck(struct timespec* a) {
+  assert(a->tv_sec >= 0);
+  assert(a->tv_nsec >= 0 && a->tv_nsec < PN_NANOSECONDS_IN_A_SECOND);
+}
+
+void PNTimespecSubtract(struct timespec* result,
+                        struct timespec* a,
+                        struct timespec* b) {
+  PNTimespecCheck(a);
+  PNTimespecCheck(b);
+  result->tv_sec = a->tv_sec - b->tv_sec;
+  result->tv_nsec = a->tv_nsec - b->tv_nsec;
+  if (result->tv_nsec < 0) {
+    result->tv_sec--;
+    result->tv_nsec += PN_NANOSECONDS_IN_A_SECOND;
+  }
+  PNTimespecCheck(result);
+}
+
+void PNTimespecAdd(struct timespec* result,
+                   struct timespec* a,
+                   struct timespec* b) {
+  PNTimespecCheck(a);
+  PNTimespecCheck(b);
+  result->tv_sec = a->tv_sec + b->tv_sec;
+  result->tv_nsec = a->tv_nsec + b->tv_nsec;
+  if (result->tv_nsec >= PN_NANOSECONDS_IN_A_SECOND) {
+    result->tv_sec++;
+    result->tv_nsec -= PN_NANOSECONDS_IN_A_SECOND;
+  }
+  PNTimespecCheck(result);
+}
+
+double PNTimespecToDouble(struct timespec* t) {
+  return (double)t->tv_sec + (double)t->tv_nsec / PN_NANOSECONDS_IN_A_SECOND;
+}
+
+#define PN_BEGIN_TIME(name)          \
+  struct timespec start_time_##name; \
+  clock_gettime(CLOCK_MONOTONIC, &start_time_##name) /* no semicolon */
+
+#define PN_END_TIME(name)                                               \
+  do {                                                                  \
+    struct timespec end_time_##name;                                    \
+    clock_gettime(CLOCK_MONOTONIC, &end_time_##name);                   \
+    struct timespec time_delta_##name;                                  \
+    PNTimespecSubtract(&time_delta_##name, &end_time_##name,            \
+                       &start_time_##name);                             \
+    struct timespec* timer_##name = &g_pn_timer_times[PN_TIMER_##name]; \
+    struct timespec new_timer_##name;                                   \
+    PNTimespecAdd(&new_timer_##name, timer_##name, &time_delta_##name); \
+    *timer_##name = new_timer_##name;                                   \
+  } while (0) /* no semicolon */
+
+#define PN_FOREACH_TIMER(V)       \
+  V(TOTAL)                        \
+  V(FILE_READ)                    \
+  V(BLOCKINFO_BLOCK_READ)         \
+  V(MODULE_BLOCK_READ)            \
+  V(CONSTANTS_BLOCK_READ)         \
+  V(FUNCTION_BLOCK_READ)          \
+  V(VALUE_SYMTAB_BLOCK_READ)      \
+  V(TYPE_BLOCK_READ)              \
+  V(GLOBALVAR_BLOCK_READ)         \
+  V(CALCULATE_RESULT_VALUE_TYPES) \
+  V(CALCULATE_USES)               \
+  V(CALCULATE_PRED_BBS)           \
+  V(CALCULATE_PHI_ASSIGNS)        \
+  V(CALCULATE_LIVENESS)           \
+  V(FUNCTION_TRACE)
+
+#define PN_ENUM_TIMERS(name) PN_TIMER_##name,
+enum { PN_FOREACH_TIMER(PN_ENUM_TIMERS) PN_NUM_TIMERS };
+
+#define PN_DEFINE_TIMERS(name) {},
+static struct timespec g_pn_timer_times[PN_NUM_TIMERS] = {
+    PN_FOREACH_TIMER(PN_DEFINE_TIMERS)};
+
+#else
+
+#define PN_BEGIN_TIME(name) (void)0
+#define PN_END_TIME(name) (void)0
+
+#endif /* TIMERS */
 
 typedef uint8_t PNBool;
 typedef uint16_t PNTypeId;
@@ -1059,6 +1150,7 @@ static void pn_basic_block_list_append(PNArena* arena,
 
 static void pn_function_calculate_pred_bbs(PNModule* module,
                                            PNFunction* function) {
+  PN_BEGIN_TIME(CALCULATE_PRED_BBS);
   uint32_t n;
   for (n = 0; n < function->num_bbs; ++n) {
     PNBasicBlock* bb = &function->bbs[n];
@@ -1087,6 +1179,7 @@ static void pn_function_calculate_pred_bbs(PNModule* module,
       succ_bb->pred_bb_ids[succ_bb->num_pred_bbs++] = n;
     }
   }
+  PN_END_TIME(CALCULATE_PRED_BBS);
 }
 
 static PNInstruction* pn_instruction_next(PNInstruction* inst) {
@@ -1347,6 +1440,7 @@ static void pn_basic_block_trace(PNModule* module,
 }
 
 static void pn_function_trace(PNModule* module, PNFunction* function) {
+  PN_BEGIN_TIME(FUNCTION_TRACE);
   uint32_t i;
   for (i = 0; i < function->num_bbs; ++i) {
     PNBasicBlock* bb = &function->bbs[i];
@@ -1402,6 +1496,7 @@ static void pn_function_trace(PNModule* module, PNFunction* function) {
     }
     pn_basic_block_trace(module, function, &function->bbs[i]);
   }
+  PN_END_TIME(FUNCTION_TRACE);
 }
 
 static PNTypeId pn_type_get_implicit_cast_type(PNModule* module,
@@ -1495,6 +1590,7 @@ static PNBool pn_instruction_calculate_result_value_type(PNModule* module,
 
 static void pn_function_calculate_result_value_types(PNModule* module,
                                                      PNFunction* function) {
+  PN_BEGIN_TIME(CALCULATE_RESULT_VALUE_TYPES);
   PNArenaMark mark = pn_arena_mark(&module->temp_arena);
   uint32_t num_invalid = 0;
   PNInstruction** invalid = NULL;
@@ -1543,6 +1639,7 @@ static void pn_function_calculate_result_value_types(PNModule* module,
   }
 
   pn_arena_reset_to_mark(&module->temp_arena, mark);
+  PN_END_TIME(CALCULATE_RESULT_VALUE_TYPES);
 }
 
 static void pn_basic_block_set_value_use(PNModule* module,
@@ -1690,12 +1787,13 @@ static void pn_basic_block_calculate_uses(PNModule* module,
   pn_arena_reset_to_mark(&module->temp_arena, mark);
 }
 
-static void pn_function_calculate_uses(PNModule* module,
-                                       PNFunction* function) {
+static void pn_function_calculate_uses(PNModule* module, PNFunction* function) {
+  PN_BEGIN_TIME(CALCULATE_USES);
   uint32_t n;
   for (n = 0; n < function->num_bbs; ++n) {
     pn_basic_block_calculate_uses(module, function, &function->bbs[n]);
   }
+  PN_END_TIME(CALCULATE_USES);
 }
 
 static void pn_basic_block_calculate_liveness_per_value(
@@ -1772,6 +1870,7 @@ static void pn_basic_block_calculate_liveness(PNModule* module,
 
 static void pn_function_calculate_liveness(PNModule* module,
                                            PNFunction* function) {
+  PN_BEGIN_TIME(CALCULATE_LIVENESS);
   PNArenaMark mark = pn_arena_mark(&module->temp_arena);
 
   PNLivenessState state;
@@ -1822,10 +1921,12 @@ static void pn_function_calculate_liveness(PNModule* module,
   }
 
   pn_arena_reset_to_mark(&module->temp_arena, mark);
+  PN_END_TIME(CALCULATE_LIVENESS);
 }
 
 static void pn_function_calculate_phi_assigns(PNModule* module,
                                               PNFunction* function) {
+  PN_BEGIN_TIME(CALCULATE_PHI_ASSIGNS);
   uint32_t n;
   for (n = 0; n < function->num_bbs; ++n) {
     PNBasicBlock* bb = &function->bbs[n];
@@ -1860,6 +1961,7 @@ static void pn_function_calculate_phi_assigns(PNModule* module,
       assign->source_value_id = use->incoming.value_id;
     }
   }
+  PN_END_TIME(CALCULATE_PHI_ASSIGNS);
 }
 
 static void pn_record_reader_init(PNRecordReader* reader,
@@ -1994,11 +2096,11 @@ static PNBool pn_record_try_read_uint16(PNRecordReader* reader,
                                         uint16_t* out_value) {
   uint32_t value;
   PNBool ret = pn_record_try_read_uint32(reader, &value);
-  if (value >= 1<<16) {
-    FATAL("value too large for u16; (%u)\n", value);
-  }
-
   if (ret) {
+    if (value >= 1 << 16) {
+      FATAL("value too large for u16; (%u)\n", value);
+    }
+
     *out_value = value;
   }
   return ret;
@@ -2152,6 +2254,7 @@ static PNBlockAbbrev* pn_block_abbrev_read(PNBitStream* bs,
 
 static void pn_blockinfo_block_read(PNBlockInfoContext* context,
                                     PNBitStream* bs) {
+  PN_BEGIN_TIME(BLOCKINFO_BLOCK_READ);
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
   pn_bitstream_align_32(bs);
   (void)pn_bitstream_read(bs, 32); /* num words */
@@ -2165,6 +2268,7 @@ static void pn_blockinfo_block_read(PNBlockInfoContext* context,
       case PN_ENTRY_END_BLOCK:
         TRACE("*** END BLOCK\n");
         pn_bitstream_align_32(bs);
+        PN_END_TIME(BLOCKINFO_BLOCK_READ);
         return;
 
       case PN_ENTRY_SUBBLOCK:
@@ -2211,6 +2315,7 @@ static void pn_blockinfo_block_read(PNBlockInfoContext* context,
 static void pn_type_block_read(PNModule* module,
                                PNBlockInfoContext* context,
                                PNBitStream* bs) {
+  PN_BEGIN_TIME(TYPE_BLOCK_READ);
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
   pn_bitstream_align_32(bs);
   pn_bitstream_read(bs, 32); /* num_words */
@@ -2224,6 +2329,7 @@ static void pn_type_block_read(PNModule* module,
       case PN_ENTRY_END_BLOCK:
         TRACE("*** END BLOCK\n");
         pn_bitstream_align_32(bs);
+        PN_END_TIME(TYPE_BLOCK_READ);
         return;
 
       case PN_ENTRY_SUBBLOCK:
@@ -2318,6 +2424,7 @@ static void pn_type_block_read(PNModule* module,
 static void pn_globalvar_block_read(PNModule* module,
                                     PNBlockInfoContext* context,
                                     PNBitStream* bs) {
+  PN_BEGIN_TIME(GLOBALVAR_BLOCK_READ);
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
   pn_bitstream_align_32(bs);
   pn_bitstream_read(bs, 32); /* num words */
@@ -2336,6 +2443,7 @@ static void pn_globalvar_block_read(PNModule* module,
       case PN_ENTRY_END_BLOCK:
         TRACE("*** END BLOCK\n");
         pn_bitstream_align_32(bs);
+        PN_END_TIME(GLOBALVAR_BLOCK_READ);
         return;
 
       case PN_ENTRY_SUBBLOCK:
@@ -2476,6 +2584,7 @@ static void pn_globalvar_block_read(PNModule* module,
 static void pn_value_symtab_block_read(PNModule* module,
                                        PNBlockInfoContext* context,
                                        PNBitStream* bs) {
+  PN_BEGIN_TIME(VALUE_SYMTAB_BLOCK_READ);
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
   pn_bitstream_align_32(bs);
   pn_bitstream_read(bs, 32); /* num words */
@@ -2489,6 +2598,7 @@ static void pn_value_symtab_block_read(PNModule* module,
       case PN_ENTRY_END_BLOCK:
         TRACE("*** END BLOCK\n");
         pn_bitstream_align_32(bs);
+        PN_END_TIME(VALUE_SYMTAB_BLOCK_READ);
         return;
 
       case PN_ENTRY_SUBBLOCK:
@@ -2563,6 +2673,7 @@ static void pn_constants_block_read(PNModule* module,
                                     PNFunction* function,
                                     PNBlockInfoContext* context,
                                     PNBitStream* bs) {
+  PN_BEGIN_TIME(CONSTANTS_BLOCK_READ);
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
   pn_bitstream_align_32(bs);
   pn_bitstream_read(bs, 32); /* num words */
@@ -2577,6 +2688,7 @@ static void pn_constants_block_read(PNModule* module,
       case PN_ENTRY_END_BLOCK:
         TRACE("*** END BLOCK\n");
         pn_bitstream_align_32(bs);
+        PN_END_TIME(CONSTANTS_BLOCK_READ);
         return;
 
       case PN_ENTRY_SUBBLOCK:
@@ -2676,6 +2788,7 @@ static void pn_function_block_read(PNModule* module,
                                    PNBlockInfoContext* context,
                                    PNBitStream* bs,
                                    PNFunctionId function_id) {
+  PN_BEGIN_TIME(FUNCTION_BLOCK_READ);
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
   pn_bitstream_align_32(bs);
   pn_bitstream_read(bs, 32); /* num words */
@@ -2727,6 +2840,7 @@ static void pn_function_block_read(PNModule* module,
 
         TRACE("*** END BLOCK\n");
         pn_bitstream_align_32(bs);
+        PN_END_TIME(FUNCTION_BLOCK_READ);
         return;
 
       case PN_ENTRY_SUBBLOCK: {
@@ -2933,8 +3047,7 @@ static void pn_function_block_read(PNModule* module,
           case PN_FUNCTION_CODE_INST_UNREACHABLE: {
             PNInstructionId inst_id;
             PNInstructionUnreachable* inst = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionUnreachable, module, function, cur_bb,
-                &inst_id);
+                PNInstructionUnreachable, module, function, cur_bb, &inst_id);
             inst->code = code;
             is_terminator = PN_TRUE;
             break;
@@ -3072,8 +3185,7 @@ static void pn_function_block_read(PNModule* module,
           case PN_FUNCTION_CODE_INST_VSELECT: {
             PNInstructionId inst_id;
             PNInstructionVselect* inst = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionVselect, module, function, cur_bb,
-                &inst_id);
+                PNInstructionVselect, module, function, cur_bb, &inst_id);
 
             PNValueId value_id;
             PNValue* value =
@@ -3194,6 +3306,7 @@ static void pn_function_block_read(PNModule* module,
 static void pn_module_block_read(PNModule* module,
                                  PNBlockInfoContext* context,
                                  PNBitStream* bs) {
+  PN_BEGIN_TIME(MODULE_BLOCK_READ);
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
   pn_bitstream_align_32(bs);
   pn_bitstream_read(bs, 32); /* num words */
@@ -3206,6 +3319,7 @@ static void pn_module_block_read(PNModule* module,
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
         pn_bitstream_align_32(bs);
+        PN_END_TIME(MODULE_BLOCK_READ);
         return;
 
       case PN_ENTRY_SUBBLOCK: {
@@ -3387,12 +3501,14 @@ uint32_t pn_max_num_bbs(PNModule* module) {
 }
 
 int main(int argc, char** argv) {
+  PN_BEGIN_TIME(TOTAL);
   --argc, ++argv;
   const char* filename = "simple.pexe";
   if (argc >= 1) {
     filename = argv[0];
   }
 
+  PN_BEGIN_TIME(FILE_READ);
   FILE* f = fopen(filename, "r");
   if (!f) {
     FATAL("unable to read %s\n", filename);
@@ -3410,6 +3526,7 @@ int main(int argc, char** argv) {
   }
 
   fclose(f);
+  PN_END_TIME(FILE_READ);
 
   PNBitStream bs;
   pn_bitstream_init(&bs, data, fsize);
@@ -3432,8 +3549,21 @@ int main(int argc, char** argv) {
   assert(block_id == PN_BLOCKID_MODULE);
   pn_module_block_read(module, &context, &bs);
   TRACE("done\n");
+  PN_END_TIME(TOTAL);
 
 #if PRINT_STATS
+  printf("-----------------\n");
+#if TIMERS
+#define PN_PRINT_TIMER(name)                                          \
+  struct timespec* timer_##name = &g_pn_timer_times[PN_TIMER_##name]; \
+  printf("timer %-30s: %f sec (%%%.0f)\n", #name,                     \
+         PNTimespecToDouble(timer_##name),                            \
+         100 * PNTimespecToDouble(timer_##name) /                     \
+             PNTimespecToDouble(timer_TOTAL));
+  PN_FOREACH_TIMER(PN_PRINT_TIMER);
+  printf("-----------------\n");
+#endif /* TIMERS */
+
   printf("num_types: %u\n", module->num_types);
   printf("num_functions: %u\n", module->num_functions);
   printf("num_global_vars: %u\n", module->num_global_vars);
@@ -3443,7 +3573,7 @@ int main(int argc, char** argv) {
   printf("arena: %u\n", module->arena.size);
   printf("value arena: %u\n", module->value_arena.size);
   printf("instruction arena: %u\n", module->instruction_arena.size);
-#endif
+#endif /* PRINT_STATS */
 
   return 0;
 }
