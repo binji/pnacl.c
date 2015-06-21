@@ -3,6 +3,7 @@
  * found in the LICENSE file. */
 
 #include <assert.h>
+#include <errno.h>
 #include <getopt.h>
 #include <limits.h>
 #include <stdarg.h>
@@ -28,6 +29,8 @@
 #define PN_MAX_BLOCK_ABBREV 100
 #define PN_MAX_FUNCTION_ARGS 15
 #define PN_MAX_FUNCTION_NAME 256
+#define PN_DEFAULT_MEMORY_SIZE (1024 * 1024)
+#define PN_MEMORY_GUARD_SIZE 1024
 
 #define PN_FALSE 0
 #define PN_TRUE 1
@@ -112,13 +115,13 @@ typedef uint16_t PNValueId;
 typedef uint32_t PNFunctionId;
 typedef uint16_t PNConstantId;
 typedef uint32_t PNGlobalVarId;
-typedef uint32_t PNInitializerId;
 typedef uint16_t PNInstructionId;
 typedef uint16_t PNBasicBlockId;
 typedef uint16_t PNAlignment;
 
 static int g_pn_verbose;
 static const char* g_pn_filename;
+static uint32_t g_pn_memory_size = PN_DEFAULT_MEMORY_SIZE;
 static PNBool g_pn_print_stats;
 
 #if PN_TIMERS
@@ -127,6 +130,7 @@ static PNBool g_pn_print_time;
 
 #if PN_TRACING
 #define PN_FOREACH_TRACE(V)                   \
+  V(FLAGS, "flags")                           \
   V(BLOCKINFO_BLOCK, "blockinfo-block")       \
   V(TYPE_BLOCK, "type-block")                 \
   V(GLOBALVAR_BLOCK, "globalvar-block")       \
@@ -568,27 +572,10 @@ typedef struct PNType {
   };
 } PNType;
 
-typedef struct PNInitializer {
-  PNGlobalVarCode code;
-  union {
-    /* PN_GLOBALVAR_CODE_ZEROFILL */
-    /* PN_GLOBALVAR_CODE_DATA */
-    struct {
-      uint32_t num_bytes;
-      uint8_t* data; /* NULL when ZEROFILL. Allocated, should be free'd. */
-    };
-    /* PN_GLOBALVAR_CODE_RELOC */
-    struct {
-      uint32_t index;
-      int32_t addend;
-    };
-  };
-} PNInitializer;
-
 typedef struct PNGlobalVar {
   uint32_t num_initializers;
-  PNInitializer* initializers;
   PNAlignment alignment;
+  uint32_t offset;
   PNBool is_constant;
 } PNGlobalVar;
 
@@ -607,6 +594,13 @@ typedef struct PNModule {
   PNArena value_arena;
   PNArena instruction_arena;
   PNArena temp_arena;
+
+  /* Stored here so global variable data can be written directly. */
+  void* memory;
+  uint32_t memory_size;
+
+  void* memory_globalvar_start;
+  void* memory_globalvar_end;
 } PNModule;
 
 typedef struct PNLivenessState {
@@ -660,6 +654,30 @@ double PNTimespecToDouble(struct timespec* t) {
 
 #endif /* PN_TIMERS */
 
+static PNBool pn_is_power_of_two(uint32_t value) {
+  return (value > 0) && ((value) & (value - 1)) == 0;
+}
+
+static inline uint32_t pn_align_down(uint32_t size, uint32_t align) {
+  assert(pn_is_power_of_two(align));
+  return size & ~(align - 1);
+}
+
+static inline uint32_t pn_align_up(uint32_t size, uint32_t align) {
+  assert(pn_is_power_of_two(align));
+  return (size + align - 1) & ~(align - 1);
+}
+
+static inline void* pn_align_up_pointer(void* p, uint32_t align) {
+  assert(pn_is_power_of_two(align));
+  return (void*)(((intptr_t)p + align - 1) & ~((intptr_t)align - 1));
+}
+
+static inline PNBool pn_is_aligned_pointer(void* p, uint32_t align) {
+  assert(pn_is_power_of_two(align));
+  return ((intptr_t)p & (align - 1)) == 0;
+}
+
 static void pn_arena_init(PNArena* arena, uint32_t size) {
   arena->data = malloc(size);
   arena->size = 0;
@@ -679,7 +697,7 @@ static void* pn_arena_alloc(PNArena* arena, uint32_t size) {
   }
 
   /* Align to 8 bytes */
-  size = (size + 7) & ~7;
+  size = pn_align_up(size, 8);
 
   void* ret = (uint8_t*)arena->data + arena->size;
   arena->size += size;
@@ -896,8 +914,7 @@ static uint32_t pn_bitstream_read_vbr(PNBitStream* bs, int num_bits) {
 }
 
 static void pn_bitstream_seek_bit(PNBitStream* bs, uint32_t bit_offset) {
-  /* Align to 32 bits */
-  bs->bit_offset = bit_offset & ~31;
+  bs->bit_offset = pn_align_down(bit_offset, 32);
   pn_bitstream_fill_curword(bs);
 
   bit_offset &= 31;
@@ -912,7 +929,7 @@ static void pn_bitstream_skip_bytes(PNBitStream* bs, int num_bytes) {
 }
 
 static void pn_bitstream_align_32(PNBitStream* bs) {
-  pn_bitstream_seek_bit(bs, (bs->bit_offset + 31) & ~31);
+  pn_bitstream_seek_bit(bs, pn_align_up(bs->bit_offset, 32));
 }
 
 static PNBool pn_bitstream_at_end(PNBitStream* bs) {
@@ -1204,7 +1221,7 @@ static PNInstruction* pn_instruction_next(PNInstruction* inst) {
 
   /* TODO(binji): this requires knowledge that the arena aligns to 8 bytes. Do
    * something less fragile. */
-  p = (uint8_t*)(((intptr_t)p + 7) & ~7);
+  p = (uint8_t*)pn_align_up_pointer(p, 8);
 
   return (PNInstruction*)p;
 }
@@ -1934,7 +1951,7 @@ static void pn_basic_block_calculate_liveness(PNModule* module,
 
     PNValueId rel_id = incoming->value_id - module->num_values;
     PNBasicBlockId pred_bb_id = incoming->bb_id;
-    pn_bitset_set(&state->liveout[pred_bb_id], rel_id, PN_TRUE);
+//    pn_bitset_set(&state->liveout[pred_bb_id], rel_id, PN_TRUE);
     pn_basic_block_calculate_liveness_per_value(module, function, state,
                                                 pred_bb_id, rel_id);
   }
@@ -2503,6 +2520,51 @@ static void pn_type_block_read(PNModule* module,
   PN_FATAL("Unexpected end of stream.\n");
 }
 
+static void pn_globalvar_write_reloc(PNModule* module,
+                                     PNValueId value_id,
+                                     uint32_t offset,
+                                     uint32_t addend) {
+  assert(value_id < module->num_values);
+  if (offset + 4 > module->memory_size) {
+    PN_FATAL("Out of memory.\n");
+  }
+
+  PNValue* value = pn_module_get_value(module, value_id);
+  uint32_t reloc_value;
+  switch (value->code) {
+    case PN_VALUE_CODE_GLOBAL_VAR: {
+      PNGlobalVar* var = pn_module_get_global_var(module, value->index);
+      reloc_value = var->offset + addend;
+      break;
+    }
+
+    case PN_VALUE_CODE_FUNCTION:
+      assert(addend == 0);
+      /* Use the function index as the function "address". */
+      reloc_value = value->index;
+      break;
+
+    default:
+      PN_FATAL("Unexpected globalvar reloc. code: %d\n", value->code);
+      break;
+  }
+
+  PN_TRACE(GLOBALVAR_BLOCK,
+           "  writing reloc value. offset:%u value:%d (0x%x)\n", offset,
+           reloc_value, reloc_value);
+  uint32_t* memory32 = (uint32_t*)((uint8_t*)module->memory + offset);
+  if (pn_is_aligned_pointer(memory32, 4)) {
+    *memory32 = reloc_value;
+  } else {
+    uint8_t* memory = (uint8_t*)memory32;
+    /* PNaCl is always little endian */
+    memory[0] = reloc_value & 0xff;
+    memory[1] = (reloc_value >> 8) & 0xff;
+    memory[2] = (reloc_value >> 16) & 0xff;
+    memory[3] = (reloc_value >> 24) & 0xff;
+  }
+}
+
 static void pn_globalvar_block_read(PNModule* module,
                                     PNBlockInfoContext* context,
                                     PNBitStream* bs) {
@@ -2517,16 +2579,43 @@ static void pn_globalvar_block_read(PNModule* module,
   PNGlobalVar* global_var = NULL;
 
   uint32_t num_global_vars = 0;
-  PNInitializerId initializer_id = 0;
+  uint32_t initializer_id = 0;
+
+  uint8_t* memory = (uint8_t*)module->memory;
+  uint32_t memory_offset = PN_MEMORY_GUARD_SIZE;
+
+  module->memory_globalvar_start = memory + memory_offset;
+
+  PNArenaMark mark = pn_arena_mark(&module->temp_arena);
+
+  typedef struct PNRelocInfo {
+    uint32_t offset;
+    uint32_t index;
+    uint32_t addend;
+  } PNRelocInfo;
+  PNRelocInfo* reloc_infos = NULL;
+  uint32_t num_reloc_infos = 0;
 
   while (!pn_bitstream_at_end(bs)) {
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
-      case PN_ENTRY_END_BLOCK:
-        PN_TRACE(GLOBALVAR_BLOCK, "*** END BLOCK\n");
+      case PN_ENTRY_END_BLOCK: {
         pn_bitstream_align_32(bs);
+
+        uint32_t i;
+        for (i = 0; i < num_reloc_infos; ++i) {
+          pn_globalvar_write_reloc(module, reloc_infos[i].index,
+                                   reloc_infos[i].offset,
+                                   reloc_infos[i].addend);
+        }
+
+        module->memory_globalvar_end = memory + memory_offset;
+
+        pn_arena_reset_to_mark(&module->temp_arena, mark);
         PN_END_TIME(GLOBALVAR_BLOCK_READ);
+        PN_TRACE(GLOBALVAR_BLOCK, "*** END BLOCK\n");
         return;
+      }
 
       case PN_ENTRY_SUBBLOCK:
         PN_FATAL("unexpected subblock in globalvar_block\n");
@@ -2554,8 +2643,9 @@ static void pn_globalvar_block_read(PNModule* module,
             global_var->is_constant =
                 pn_record_read_int32(&reader, "is_constant") != 0;
             global_var->num_initializers = 1;
-            global_var->initializers =
-                pn_arena_alloc(&module->arena, sizeof(PNInitializer));
+
+            memory_offset = pn_align_up(memory_offset, global_var->alignment);
+            global_var->offset = memory_offset;
             initializer_id = 0;
 
             PNValueId value_id;
@@ -2565,18 +2655,15 @@ static void pn_globalvar_block_read(PNModule* module,
             value->index = global_var_id;
 
             PN_TRACE(GLOBALVAR_BLOCK,
-                     "%%%d. var. alignment:%d is_constant:%d\n", value_id,
-                     global_var->alignment, global_var->is_constant);
+                     "%%%d. var. alignment:%d is_constant:%d offset:%u\n",
+                     value_id, global_var->alignment, global_var->is_constant,
+                     memory_offset);
             break;
           }
 
           case PN_GLOBALVAR_CODE_COMPOUND: {
             global_var->num_initializers =
                 pn_record_read_int32(&reader, "num_initializers");
-            global_var->initializers = pn_arena_realloc(
-                &module->arena, global_var->initializers,
-                global_var->num_initializers * sizeof(PNInitializer));
-
             PN_TRACE(GLOBALVAR_BLOCK, "  compound. num initializers: %d\n",
                      global_var->num_initializers);
             break;
@@ -2584,26 +2671,24 @@ static void pn_globalvar_block_read(PNModule* module,
 
           case PN_GLOBALVAR_CODE_ZEROFILL: {
             assert(initializer_id < global_var->num_initializers);
-            PNInitializer* initializer =
-                &global_var->initializers[initializer_id++];
-            initializer->code = code;
-            initializer->num_bytes = pn_record_read_int32(&reader, "num_bytes");
+            initializer_id++;
+            uint32_t num_bytes = pn_record_read_uint32(&reader, "num_bytes");
 
-            PN_TRACE(GLOBALVAR_BLOCK, "  zerofill. num_bytes: %d\n",
-                     initializer->num_bytes);
+            if (memory_offset + num_bytes >= module->memory_size) {
+              PN_FATAL("Out of memory.\n");
+            }
+            memset(memory + memory_offset, 0, num_bytes);
+            memory_offset += num_bytes;
+
+            PN_TRACE(GLOBALVAR_BLOCK,
+                     "  zerofill. num_bytes: %d, memory_offset:%u\n", num_bytes,
+                     memory_offset - num_bytes);
             break;
           }
 
           case PN_GLOBALVAR_CODE_DATA: {
             assert(initializer_id < global_var->num_initializers);
-            PNInitializer* initializer =
-                &global_var->initializers[initializer_id++];
-            initializer->code = code;
-
-            /* TODO(binji): optimize */
-            uint32_t capacity = 16;
-            uint8_t* buffer = malloc(capacity);
-
+            initializer_id++;
             uint32_t num_bytes = 0;
             uint32_t value;
             while (pn_record_try_read_uint32(&reader, &value)) {
@@ -2611,36 +2696,47 @@ static void pn_globalvar_block_read(PNModule* module,
                 PN_FATAL("globalvar data out of range: %d\n", value);
               }
 
-              if (num_bytes >= capacity) {
-                capacity *= 2;
-                buffer = realloc(buffer, capacity);
+              if (memory_offset >= module->memory_size) {
+                PN_FATAL("Out of memory.\n");
               }
-
-              buffer[num_bytes++] = value;
+              memory[memory_offset++] = value;
+              num_bytes++;
             }
 
-            /* TODO(binji): don't realloc down? */
-            buffer = realloc(buffer, num_bytes);
+            num_bytes = num_bytes;
 
-            initializer->num_bytes = num_bytes;
-            initializer->data = buffer;
-
-            PN_TRACE(GLOBALVAR_BLOCK, "  data. num_bytes: %d\n", num_bytes);
+            PN_TRACE(GLOBALVAR_BLOCK, "  data. num_bytes: %d offset:%u\n",
+                     num_bytes, memory_offset - num_bytes);
             break;
           }
 
           case PN_GLOBALVAR_CODE_RELOC: {
             assert(initializer_id < global_var->num_initializers);
-            PNInitializer* initializer =
-                &global_var->initializers[initializer_id++];
-            initializer->code = code;
-            initializer->index = pn_record_read_int32(&reader, "reloc index");
-            initializer->addend = 0;
+            initializer_id++;
+            uint32_t index = pn_record_read_uint32(&reader, "reloc index");
+            uint32_t addend = 0;
             /* Optional */
-            pn_record_try_read_int32(&reader, &initializer->addend);
+            pn_record_try_read_uint32(&reader, &addend);
 
-            PN_TRACE(GLOBALVAR_BLOCK, "  reloc. index: %d addend: %d\n",
-                     initializer->index, initializer->addend);
+            if (index < module->num_values) {
+              pn_globalvar_write_reloc(module, index, memory_offset, addend);
+            } else {
+              /* Unknown value, this will need to be fixed up later */
+              reloc_infos =
+                  pn_arena_realloc(&module->temp_arena, reloc_infos,
+                                   sizeof(PNRelocInfo) * (num_reloc_infos + 1));
+              PNRelocInfo* reloc_info = &reloc_infos[num_reloc_infos++];
+              reloc_info->offset = memory_offset;
+              reloc_info->index = index;
+              reloc_info->addend = addend;
+            }
+
+            memory_offset += 4;
+
+            PN_TRACE(GLOBALVAR_BLOCK,
+                     "  reloc. index: %d addend: %d memory_offset:%u\n",
+                     index, addend,
+                     memory_offset - 4);
             break;
           }
 
@@ -3597,6 +3693,7 @@ uint32_t pn_max_num_bbs(PNModule* module) {
 enum {
   PN_FLAG_VERBOSE,
   PN_FLAG_HELP,
+  PN_FLAG_MEMORY_SIZE,
 #if PN_TRACING
   PN_FLAG_TRACE_ALL,
   PN_FLAG_TRACE_BLOCK,
@@ -3615,6 +3712,7 @@ enum {
 static struct option long_options[] = {
     {"verbose", no_argument, NULL, 'v'},
     {"help", no_argument, NULL, 'h'},
+    {"memory-size", required_argument, NULL, 'm'},
 #if PN_TRACING
     {"trace-all", no_argument, NULL, 't'},
     {"trace-block", no_argument, NULL, 0},
@@ -3652,7 +3750,7 @@ void pn_options_parse(int argc, char** argv) {
   int c;
   int option_index;
   while (1) {
-    c = getopt_long(argc, argv, "vhtp", long_options, &option_index);
+    c = getopt_long(argc, argv, "vm:htp", long_options, &option_index);
     if (c == -1) {
       break;
     }
@@ -3668,6 +3766,7 @@ redo_switch:
         switch (option_index) {
           case PN_FLAG_VERBOSE: 
           case PN_FLAG_HELP:
+          case PN_FLAG_MEMORY_SIZE:
 #if PN_TRACING
           case PN_FLAG_TRACE_ALL:
 #endif /* PN_TRACING */
@@ -3712,6 +3811,25 @@ redo_switch:
       case 'v':
         g_pn_verbose++;
         break;
+
+      case 'm': {
+        char* endptr;
+        errno = 0;
+        long int size = strtol(optarg, &endptr, 10);
+        if (errno != 0 || optarg + strlen(optarg) != endptr) {
+          PN_FATAL("Unable to parse memory-size flag \"%s\".\n", optarg);
+        }
+
+        if (size < PN_MEMORY_GUARD_SIZE) {
+          PN_FATAL(
+              "Cannot set memory-size (%ld) smaller than guard size (%d).\n",
+              size, PN_MEMORY_GUARD_SIZE);
+        }
+
+        PN_TRACE(FLAGS, "Setting memory-size to %ld\n", size);
+        g_pn_memory_size = size;
+        break;
+      }
 
       case 't':
 #if PN_TRACING
@@ -3795,6 +3913,9 @@ int main(int argc, char** argv) {
   pn_arena_init(&module->instruction_arena, PN_INSTRUCTION_ARENA_SIZE);
   pn_arena_init(&module->temp_arena, PN_TEMP_ARENA_SIZE);
 
+  module->memory_size = g_pn_memory_size;
+  module->memory = malloc(module->memory_size);
+
   uint32_t entry = pn_bitstream_read(&bs, 2);
   PN_TRACE(MODULE_BLOCK, "entry: %d\n", entry);
   if (entry != PN_ENTRY_SUBBLOCK) {
@@ -3825,6 +3946,8 @@ int main(int argc, char** argv) {
     printf("num_types: %u\n", module->num_types);
     printf("num_functions: %u\n", module->num_functions);
     printf("num_global_vars: %u\n", module->num_global_vars);
+    printf("global_var size : %ld\n",
+           module->memory_globalvar_end - module->memory_globalvar_start);
     printf("max num_constants: %u\n", pn_max_num_constants(module));
     printf("max num_values: %u\n", pn_max_num_values(module));
     printf("max num_bbs: %u\n", pn_max_num_bbs(module));
