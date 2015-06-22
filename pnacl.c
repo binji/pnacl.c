@@ -375,9 +375,7 @@ typedef struct PNPhiIncoming {
   PNValueId value_id;
 } PNPhiIncoming;
 
-typedef struct PNInstruction {
-  PNFunctionCode code;
-} PNInstruction;
+typedef struct PNInstruction { PNFunctionCode code; } PNInstruction;
 
 typedef struct PNInstructionBinop {
   PNFunctionCode code;
@@ -1987,7 +1985,7 @@ static void pn_basic_block_calculate_liveness(PNModule* module,
 
     PNValueId rel_id = incoming->value_id - module->num_values;
     PNBasicBlockId pred_bb_id = incoming->bb_id;
-//    pn_bitset_set(&state->liveout[pred_bb_id], rel_id, PN_TRUE);
+    //    pn_bitset_set(&state->liveout[pred_bb_id], rel_id, PN_TRUE);
     pn_basic_block_calculate_liveness_per_value(module, function, state,
                                                 pred_bb_id, rel_id);
   }
@@ -2756,9 +2754,8 @@ static void pn_globalvar_block_read(PNModule* module,
             memory_offset += 4;
 
             PN_TRACE(GLOBALVAR_BLOCK,
-                     "  reloc. index: %d addend: %d memory_offset:%u\n",
-                     index, addend,
-                     memory_offset - 4);
+                     "  reloc. index: %d addend: %d memory_offset:%u\n", index,
+                     addend, memory_offset - 4);
             break;
           }
 
@@ -3797,9 +3794,9 @@ void pn_memory_init_startinfo(PNModule* module, char** argv, char** envp) {
    */
 
   uint32_t* memory_auxv = memory_startinfo32 + 3 + argc + envc;
-  memory_auxv[0] = 32;  /* AT_SYSINFO */
+  memory_auxv[0] = 32; /* AT_SYSINFO */
   memory_auxv[1] = PN_FUNCTION_ID_NACL_IRT_QUERY;
-  memory_auxv[2] = 0;  /* AT_NULL */
+  memory_auxv[2] = 0; /* AT_NULL */
 }
 
 enum {
@@ -3832,8 +3829,8 @@ static struct option long_options[] = {
 #if PN_TRACING
     {"trace-all", no_argument, NULL, 't'},
     {"trace-block", no_argument, NULL, 0},
-#define PN_TRACE_FLAGS(name, flag) \
-    {"trace-" flag, no_argument, NULL, 0},
+#define PN_TRACE_FLAGS(name, flag)        \
+    { "trace-" flag, no_argument, NULL, 0 },
     PN_FOREACH_TRACE(PN_TRACE_FLAGS)
 #undef PN_TRACE_FLAGS
 #endif /* PN_TRACING */
@@ -3945,7 +3942,7 @@ static void pn_options_parse(int argc, char** argv, char** env) {
       break;
     }
 
-redo_switch:
+  redo_switch:
     switch (c) {
       case 0:
         c = long_options[option_index].val;
@@ -3954,7 +3951,7 @@ redo_switch:
         }
 
         switch (option_index) {
-          case PN_FLAG_VERBOSE: 
+          case PN_FLAG_VERBOSE:
           case PN_FLAG_HELP:
           case PN_FLAG_MEMORY_SIZE:
           case PN_FLAG_ENV:
@@ -3977,9 +3974,9 @@ redo_switch:
             g_pn_trace_MODULE_BLOCK = PN_TRUE;
             break;
 
-#define PN_TRACE_OPTIONS(name, flag)          \
-  case PN_FLAG_TRACE_##name: \
-    g_pn_trace_##name = PN_TRUE;              \
+#define PN_TRACE_OPTIONS(name, flag) \
+  case PN_FLAG_TRACE_##name:         \
+    g_pn_trace_##name = PN_TRUE;     \
     break;
             PN_FOREACH_TRACE(PN_TRACE_OPTIONS);
 #undef PN_TRACE_OPTIONS
