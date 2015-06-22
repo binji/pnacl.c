@@ -583,6 +583,19 @@ typedef struct PNGlobalVar {
   PNBool is_constant;
 } PNGlobalVar;
 
+typedef struct PNMemory {
+  void* data;
+  uint32_t size;
+  void* globalvar_start;
+  void* globalvar_end;
+  void* startinfo_start;
+  void* startinfo_end;
+  void* heap_start;
+  void* heap_end;    /* Grows up */
+  void* stack_start; /* Grows down */
+  void* stack_end;
+} PNMemory;
+
 typedef struct PNModule {
   uint32_t version;
   uint32_t num_functions;
@@ -600,12 +613,7 @@ typedef struct PNModule {
   PNArena temp_arena;
 
   /* Stored here so global variable data can be written directly. */
-  void* memory;
-  uint32_t memory_size;
-
-  void* memory_globalvar_start;
-  void* memory_globalvar_end;
-  void* memory_startinfo;
+  PNMemory* memory;
 } PNModule;
 
 typedef struct PNLivenessState {
@@ -1070,26 +1078,22 @@ static PNValue* pn_module_append_value(PNModule* module,
   return &module->values[*out_value_id];
 }
 
-static void pn_module_memory_check(PNModule* module,
-                                   uint32_t offset,
-                                   uint32_t size) {
-  if (offset + size > module->memory_size) {
-    PN_FATAL("memory-size is too small (%u < %u).\n", module->memory_size,
+static void pn_memory_check(PNMemory* memory, uint32_t offset, uint32_t size) {
+  if (offset + size > memory->size) {
+    PN_FATAL("memory-size is too small (%u < %u).\n", memory->size,
              offset + size);
   }
 }
 
-static void pn_module_memory_check_pointer(PNModule* module,
-                                           void* p,
-                                           uint32_t size) {
-  pn_module_memory_check(module, p - module->memory, size);
+static void pn_memory_check_pointer(PNMemory* memory, void* p, uint32_t size) {
+  pn_memory_check(memory, p - memory->data, size);
 }
 
-static void pn_module_memory_write_uint32(PNModule* module,
-                                          uint32_t offset,
-                                          uint32_t value) {
-  pn_module_memory_check(module, offset, sizeof(value));
-  uint32_t* memory32 = (uint32_t*)(module->memory + offset);
+static void pn_memory_write_uint32(PNMemory* memory,
+                                   uint32_t offset,
+                                   uint32_t value) {
+  pn_memory_check(memory, offset, sizeof(value));
+  uint32_t* memory32 = (uint32_t*)(memory->data + offset);
 #if PN_WRITE_UNALIGNED
   *memory32 = value;
 #else
@@ -1097,11 +1101,11 @@ static void pn_module_memory_write_uint32(PNModule* module,
 #endif
 }
 
-static void pn_module_memory_zerofill(PNModule* module,
-                                      uint32_t offset,
-                                      uint32_t num_bytes) {
-  pn_module_memory_check(module, offset, num_bytes);
-  memset(module->memory + offset, 0, num_bytes);
+static void pn_memory_zerofill(PNMemory* memory,
+                               uint32_t offset,
+                               uint32_t num_bytes) {
+  pn_memory_check(memory, offset, num_bytes);
+  memset(memory->data + offset, 0, num_bytes);
 }
 
 static uint32_t pn_function_num_values(PNModule* module, PNFunction* function) {
@@ -2585,7 +2589,7 @@ static void pn_globalvar_write_reloc(PNModule* module,
   PN_TRACE(GLOBALVAR_BLOCK,
            "  writing reloc value. offset:%u value:%d (0x%x)\n", offset,
            reloc_value, reloc_value);
-  pn_module_memory_write_uint32(module, offset, reloc_value);
+  pn_memory_write_uint32(module->memory, offset, reloc_value);
 }
 
 static void pn_globalvar_block_read(PNModule* module,
@@ -2604,10 +2608,11 @@ static void pn_globalvar_block_read(PNModule* module,
   uint32_t num_global_vars = 0;
   uint32_t initializer_id = 0;
 
-  uint8_t* memory = (uint8_t*)module->memory;
-  uint32_t memory_offset = PN_MEMORY_GUARD_SIZE;
+  PNMemory* memory = module->memory;
+  uint8_t* data8 = (uint8_t*)memory->data;
+  uint32_t data_offset = PN_MEMORY_GUARD_SIZE;
 
-  module->memory_globalvar_start = memory + memory_offset;
+  memory->globalvar_start = data8 + data_offset;
 
   PNArenaMark mark = pn_arena_mark(&module->temp_arena);
 
@@ -2632,7 +2637,7 @@ static void pn_globalvar_block_read(PNModule* module,
                                    reloc_infos[i].addend);
         }
 
-        module->memory_globalvar_end = memory + memory_offset;
+        memory->globalvar_end = data8 + data_offset;
 
         pn_arena_reset_to_mark(&module->temp_arena, mark);
         PN_END_TIME(GLOBALVAR_BLOCK_READ);
@@ -2667,8 +2672,8 @@ static void pn_globalvar_block_read(PNModule* module,
                 pn_record_read_int32(&reader, "is_constant") != 0;
             global_var->num_initializers = 1;
 
-            memory_offset = pn_align_up(memory_offset, global_var->alignment);
-            global_var->offset = memory_offset;
+            data_offset = pn_align_up(data_offset, global_var->alignment);
+            global_var->offset = data_offset;
             initializer_id = 0;
 
             PNValueId value_id;
@@ -2680,7 +2685,7 @@ static void pn_globalvar_block_read(PNModule* module,
             PN_TRACE(GLOBALVAR_BLOCK,
                      "%%%d. var. alignment:%d is_constant:%d offset:%u\n",
                      value_id, global_var->alignment, global_var->is_constant,
-                     memory_offset);
+                     data_offset);
             break;
           }
 
@@ -2697,12 +2702,12 @@ static void pn_globalvar_block_read(PNModule* module,
             initializer_id++;
             uint32_t num_bytes = pn_record_read_uint32(&reader, "num_bytes");
 
-            pn_module_memory_zerofill(module, memory_offset, num_bytes);
-            memory_offset += num_bytes;
+            pn_memory_zerofill(memory, data_offset, num_bytes);
+            data_offset += num_bytes;
 
             PN_TRACE(GLOBALVAR_BLOCK,
-                     "  zerofill. num_bytes: %d, memory_offset:%u\n", num_bytes,
-                     memory_offset - num_bytes);
+                     "  zerofill. num_bytes: %d, data_offset:%u\n", num_bytes,
+                     data_offset - num_bytes);
             break;
           }
 
@@ -2718,16 +2723,16 @@ static void pn_globalvar_block_read(PNModule* module,
                 PN_FATAL("globalvar data out of range: %d\n", value);
               }
 
-              if (memory_offset + 1 > module->memory_size) {
-                PN_FATAL("memory-size is too small (%u < %u).\n",
-                         module->memory_size, memory_offset + 1);
+              if (data_offset + 1 > memory->size) {
+                PN_FATAL("memory-size is too small (%u < %u).\n", memory->size,
+                         data_offset + 1);
               }
-              memory[memory_offset++] = value;
+              data8[data_offset++] = value;
               num_bytes++;
             }
 
             PN_TRACE(GLOBALVAR_BLOCK, "  data. num_bytes: %d offset:%u\n",
-                     num_bytes, memory_offset - num_bytes);
+                     num_bytes, data_offset - num_bytes);
             break;
           }
 
@@ -2740,23 +2745,23 @@ static void pn_globalvar_block_read(PNModule* module,
             pn_record_try_read_uint32(&reader, &addend);
 
             if (index < module->num_values) {
-              pn_globalvar_write_reloc(module, index, memory_offset, addend);
+              pn_globalvar_write_reloc(module, index, data_offset, addend);
             } else {
               /* Unknown value, this will need to be fixed up later */
               reloc_infos =
                   pn_arena_realloc(&module->temp_arena, reloc_infos,
                                    sizeof(PNRelocInfo) * (num_reloc_infos + 1));
               PNRelocInfo* reloc_info = &reloc_infos[num_reloc_infos++];
-              reloc_info->offset = memory_offset;
+              reloc_info->offset = data_offset;
               reloc_info->index = index;
               reloc_info->addend = addend;
             }
 
-            memory_offset += 4;
+            data_offset += 4;
 
             PN_TRACE(GLOBALVAR_BLOCK,
-                     "  reloc. index: %d addend: %d memory_offset:%u\n", index,
-                     addend, memory_offset - 4);
+                     "  reloc. index: %d addend: %d data_offset:%u\n", index,
+                     addend, data_offset - 4);
             break;
           }
 
@@ -3720,9 +3725,9 @@ static int pn_string_list_count(char** p) {
   return result;
 }
 
-void pn_memory_init_startinfo(PNModule* module, char** argv, char** envp) {
-  module->memory_startinfo =
-      pn_align_up_pointer(module->memory_globalvar_end, 4);
+void pn_memory_init_startinfo(PNMemory* memory, char** argv, char** envp) {
+  void* memory_startinfo = memory->startinfo_start =
+      pn_align_up_pointer(memory->globalvar_end, 4);
   /*
    * From nacl_start.h in the native_client repo:
    *
@@ -3737,7 +3742,7 @@ void pn_memory_init_startinfo(PNModule* module, char** argv, char** envp) {
    *   [3+argc+envc]   auxv[] pairs
    */
 
-  uint32_t* memory_startinfo32 = (uint32_t*)module->memory_startinfo;
+  uint32_t* memory_startinfo32 = (uint32_t*)memory_startinfo;
 
   int argc = pn_string_list_count(argv);
   int envc = pn_string_list_count(envp);
@@ -3746,8 +3751,8 @@ void pn_memory_init_startinfo(PNModule* module, char** argv, char** envp) {
   void* data_offset =
       memory_startinfo32 + 3 + (argc + 1) + (envc + 1) + auxv_length;
 
-  pn_module_memory_check_pointer(module, module->memory_startinfo,
-                                 data_offset - module->memory_startinfo);
+  pn_memory_check_pointer(memory, memory_startinfo,
+                          data_offset - memory_startinfo);
 
   memory_startinfo32[0] = 0;
   memory_startinfo32[1] = envc;
@@ -3759,9 +3764,9 @@ void pn_memory_init_startinfo(PNModule* module, char** argv, char** envp) {
   for (i = 0; i < argc; ++i) {
     char* arg = argv[i];
     size_t len = strlen(arg) + 1;
-    pn_module_memory_check_pointer(module, data_offset, len);
+    pn_memory_check_pointer(memory, data_offset, len);
     memcpy(data_offset, arg, len);
-    memory_argv[i] = data_offset - module->memory;
+    memory_argv[i] = data_offset - memory->data;
     data_offset += len;
   }
   memory_startinfo32[3 + argc] = 0;
@@ -3771,9 +3776,9 @@ void pn_memory_init_startinfo(PNModule* module, char** argv, char** envp) {
   for (i = 0; i < envc; ++i) {
     char* env = envp[i];
     size_t len = strlen(env) + 1;
-    pn_module_memory_check_pointer(module, data_offset, len);
+    pn_memory_check_pointer(memory, data_offset, len);
     memcpy(data_offset, env, len);
-    memory_envp[i] = data_offset - module->memory;
+    memory_envp[i] = data_offset - memory->data;
     data_offset += len;
   }
   memory_startinfo32[3 + envc] = 0;
@@ -3798,6 +3803,13 @@ void pn_memory_init_startinfo(PNModule* module, char** argv, char** envp) {
   memory_auxv[0] = 32; /* AT_SYSINFO */
   memory_auxv[1] = PN_FUNCTION_ID_NACL_IRT_QUERY;
   memory_auxv[2] = 0; /* AT_NULL */
+
+  memory->startinfo_end = data_offset;
+  memory->heap_start = pn_align_up_pointer(memory->startinfo_end, 16);
+  memory->stack_end = memory->data + memory->size;
+
+  memory->heap_end = memory->heap_start;
+  memory->stack_start = memory->stack_end;
 }
 
 enum {
@@ -4129,8 +4141,12 @@ int main(int argc, char** argv, char** envp) {
   pn_arena_init(&module->instruction_arena, PN_INSTRUCTION_ARENA_SIZE);
   pn_arena_init(&module->temp_arena, PN_TEMP_ARENA_SIZE);
 
-  module->memory_size = g_pn_memory_size;
-  module->memory = malloc(module->memory_size);
+  PNMemory memory;
+  memset(&memory, 0, sizeof(PNMemory));
+  memory.size = g_pn_memory_size;
+  memory.data = malloc(memory.size);
+
+  module->memory = &memory;
 
   uint32_t entry = pn_bitstream_read(&bs, 2);
   PN_TRACE(MODULE_BLOCK, "entry: %d\n", entry);
@@ -4143,7 +4159,7 @@ int main(int argc, char** argv, char** envp) {
   pn_module_block_read(module, &context, &bs);
   PN_TRACE(MODULE_BLOCK, "done\n");
 
-  pn_memory_init_startinfo(module, g_pn_argv, g_pn_environ);
+  pn_memory_init_startinfo(&memory, g_pn_argv, g_pn_environ);
 
   PN_END_TIME(TOTAL);
 
@@ -4166,7 +4182,9 @@ int main(int argc, char** argv, char** envp) {
     printf("num_functions: %u\n", module->num_functions);
     printf("num_global_vars: %u\n", module->num_global_vars);
     printf("global_var size : %ld\n",
-           module->memory_globalvar_end - module->memory_globalvar_start);
+           memory.globalvar_end - memory.globalvar_start);
+    printf("startinfo size : %ld\n",
+           memory.startinfo_end - memory.startinfo_start);
     printf("max num_constants: %u\n", pn_max_num_constants(module));
     printf("max num_values: %u\n", pn_max_num_values(module));
     printf("max num_bbs: %u\n", pn_max_num_bbs(module));
