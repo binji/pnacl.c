@@ -3654,7 +3654,7 @@ static void pn_header_read(PNBitStream* bs) {
   }
 }
 
-uint32_t pn_max_num_constants(PNModule* module) {
+static uint32_t pn_max_num_constants(PNModule* module) {
   uint32_t result = 0;
   uint32_t n;
   for (n = 0; n < module->num_functions; ++n) {
@@ -3666,7 +3666,7 @@ uint32_t pn_max_num_constants(PNModule* module) {
   return result;
 }
 
-uint32_t pn_max_num_values(PNModule* module) {
+static uint32_t pn_max_num_values(PNModule* module) {
   uint32_t result = 0;
   uint32_t n;
   for (n = 0; n < module->num_functions; ++n) {
@@ -3678,7 +3678,7 @@ uint32_t pn_max_num_values(PNModule* module) {
   return result;
 }
 
-uint32_t pn_max_num_bbs(PNModule* module) {
+static uint32_t pn_max_num_bbs(PNModule* module) {
   uint32_t result = 0;
   uint32_t n;
   for (n = 0; n < module->num_functions; ++n) {
@@ -3694,6 +3694,8 @@ enum {
   PN_FLAG_VERBOSE,
   PN_FLAG_HELP,
   PN_FLAG_MEMORY_SIZE,
+  PN_FLAG_ENV,
+  PN_FLAG_USE_HOST_ENV,
 #if PN_TRACING
   PN_FLAG_TRACE_ALL,
   PN_FLAG_TRACE_BLOCK,
@@ -3703,7 +3705,7 @@ enum {
 #endif /* PN_TRACING */
   PN_FLAG_PRINT_ALL,
 #if PN_TIMERS
-      PN_FLAG_PRINT_TIME,
+  PN_FLAG_PRINT_TIME,
 #endif /* PN_TIMERS */
   PN_FLAG_PRINT_STATS,
   PN_NUM_FLAGS
@@ -3713,17 +3715,19 @@ static struct option long_options[] = {
     {"verbose", no_argument, NULL, 'v'},
     {"help", no_argument, NULL, 'h'},
     {"memory-size", required_argument, NULL, 'm'},
+    {"env", required_argument, NULL, 'e'},
+    {"use-host-env", no_argument, NULL, 'E'},
 #if PN_TRACING
     {"trace-all", no_argument, NULL, 't'},
     {"trace-block", no_argument, NULL, 0},
 #define PN_TRACE_FLAGS(name, flag) \
-      {"trace-" flag, no_argument, NULL, 0},
+    {"trace-" flag, no_argument, NULL, 0},
     PN_FOREACH_TRACE(PN_TRACE_FLAGS)
 #undef PN_TRACE_FLAGS
 #endif /* PN_TRACING */
     {"print-all", no_argument, NULL, 'p'},
 #if PN_TIMERS
-        {"print-time", no_argument, NULL, 0},
+    {"print-time", no_argument, NULL, 0},
 #endif /* PN_TIMERS */
     {"print-stats", no_argument, NULL, 0},
     {NULL, 0, NULL, 0},
@@ -3731,7 +3735,7 @@ static struct option long_options[] = {
 
 PN_STATIC_ASSERT(PN_NUM_FLAGS + 1 == PN_ARRAY_SIZE(long_options));
 
-void pn_usage(const char* prog) {
+static void pn_usage(const char* prog) {
   fprintf(stderr, "usage: %s [option] filename\n", prog);
   fprintf(stderr, "options:\n");
   int i = 0;
@@ -3746,11 +3750,86 @@ void pn_usage(const char* prog) {
   exit(0);
 }
 
-void pn_options_parse(int argc, char** argv) {
+static char** pn_environ_copy(char** environ) {
+  char** env;
+  int num_keys = 0;
+  for (env = environ; *env; ++env) {
+    num_keys++;
+  }
+
+  char** result = calloc(num_keys + 1, sizeof(char*));
+  int i = 0;
+  for (env = environ; *env; ++env, ++i) {
+    result[i] = strdup(*env);
+  }
+
+  return result;
+}
+
+static void pn_environ_free(char** environ) {
+  char** env;
+  for (env = environ; *env; ++env) {
+    free(*env);
+  }
+  free(environ);
+}
+
+static void pn_environ_put(char*** environ, char* value) {
+  char* equals = strchr(value, '=');
+  int count = equals ? equals - value : strlen(value);
+  PNBool remove = equals == NULL;
+
+  int num_keys = 0;
+  if (*environ) {
+    char** env;
+    for (env = *environ; *env; ++env, ++num_keys) {
+      if (strncasecmp(value, *env, count) != 0) {
+        continue;
+      }
+
+      free(*env);
+      if (remove) {
+        for (; *env; ++env) {
+          *env = *(env + 1);
+        }
+      } else {
+        *env = strdup(value);
+      }
+      return;
+    }
+  }
+
+  if (!remove) {
+    *environ = realloc(*environ, (num_keys + 2) * sizeof(char*));
+    (*environ)[num_keys] = strdup(value);
+    (*environ)[num_keys + 1] = 0;
+  }
+}
+
+static void pn_environ_put_all(char*** environ, char** environ_to_put) {
+  char** env;
+  for (env = environ_to_put; *env; ++env) {
+    pn_environ_put(environ, *env);
+  }
+}
+
+static void pn_environ_print(char** environ) {
+  if (environ) {
+    char** env;
+    for (env = environ; *env; ++env) {
+      printf("  %s\n", *env);
+    }
+  }
+}
+
+static void pn_options_parse(int argc, char** argv, char** env) {
   int c;
   int option_index;
+  char** environ_copy = pn_environ_copy(env);
+  char** environ = NULL;
+
   while (1) {
-    c = getopt_long(argc, argv, "vm:htp", long_options, &option_index);
+    c = getopt_long(argc, argv, "vm:e:Ehtp", long_options, &option_index);
     if (c == -1) {
       break;
     }
@@ -3767,6 +3846,8 @@ redo_switch:
           case PN_FLAG_VERBOSE: 
           case PN_FLAG_HELP:
           case PN_FLAG_MEMORY_SIZE:
+          case PN_FLAG_ENV:
+          case PN_FLAG_USE_HOST_ENV:
 #if PN_TRACING
           case PN_FLAG_TRACE_ALL:
 #endif /* PN_TRACING */
@@ -3831,6 +3912,14 @@ redo_switch:
         break;
       }
 
+      case 'e':
+        pn_environ_put(&environ, optarg);
+        break;
+
+      case 'E':
+        pn_environ_put_all(&environ, environ_copy);
+        break;
+
       case 't':
 #if PN_TRACING
 #define PN_TRACE_OPTIONS(name, flag) g_pn_trace_##name = PN_TRUE;
@@ -3877,11 +3966,19 @@ redo_switch:
     g_pn_trace_FUNCTION_BLOCK = PN_TRUE;
   }
 #endif /* PN_TRACING */
+
+  pn_environ_free(environ_copy);
+#if PN_TRACING
+  if (g_pn_trace_FLAGS) {
+    printf("env:\n");
+    pn_environ_print(environ);
+  }
+#endif /* PN_TRACING */
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv, char** env) {
   PN_BEGIN_TIME(TOTAL);
-  pn_options_parse(argc, argv);
+  pn_options_parse(argc, argv, env);
   PN_BEGIN_TIME(FILE_READ);
   FILE* f = fopen(g_pn_filename, "r");
   if (!f) {
