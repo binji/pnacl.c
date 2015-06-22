@@ -869,11 +869,14 @@ static uint32_t pn_bitstream_read_frac_bits(PNBitStream* bs, int num_bits) {
 
 static void pn_bitstream_fill_curword(PNBitStream* bs) {
   uint32_t byte_offset = bs->bit_offset >> 3;
-  bs->curword = *(uint32_t*)(bs->data + byte_offset);
   if (byte_offset + 4 < bs->data_len) {
     bs->curword_bits = 32;
+    bs->curword = *(uint32_t*)(bs->data + byte_offset);
   } else {
     bs->curword_bits = (bs->data_len - byte_offset) * 8;
+    if (bs->curword_bits) {
+      bs->curword = *(uint32_t*)(bs->data + byte_offset);
+    }
   }
   assert(bs->curword_bits <= 32);
 }
