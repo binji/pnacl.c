@@ -21,6 +21,8 @@
 #define PN_TRACING 1
 #endif
 
+#define PN_WRITE_UNALIGNED 1
+
 #define PN_ARENA_SIZE (32 * 1024 * 1024)
 #define PN_VALUE_ARENA_SIZE (8 * 1024 * 1024)
 #define PN_INSTRUCTION_ARENA_SIZE (32 * 1024 * 1024)
@@ -121,6 +123,8 @@ typedef uint16_t PNAlignment;
 
 static int g_pn_verbose;
 static const char* g_pn_filename;
+static char** g_pn_argv;
+static char** g_pn_environ;
 static uint32_t g_pn_memory_size = PN_DEFAULT_MEMORY_SIZE;
 static PNBool g_pn_print_stats;
 
@@ -149,6 +153,8 @@ enum { PN_FOREACH_TRACE(PN_TRACE_ENUM) PN_NUM_TRACE };
 PN_FOREACH_TRACE(PN_TRACE_DEFINE)
 #undef PN_TRACE_DEFINE
 #endif /* PN_TRACING */
+
+static const uint32_t PN_FUNCTION_ID_NACL_IRT_QUERY = 0x80000000;
 
 typedef enum PNEntry {
   PN_ENTRY_END_BLOCK = 0,
@@ -601,6 +607,7 @@ typedef struct PNModule {
 
   void* memory_globalvar_start;
   void* memory_globalvar_end;
+  void* memory_startinfo;
 } PNModule;
 
 typedef struct PNLivenessState {
@@ -671,11 +678,6 @@ static inline uint32_t pn_align_up(uint32_t size, uint32_t align) {
 static inline void* pn_align_up_pointer(void* p, uint32_t align) {
   assert(pn_is_power_of_two(align));
   return (void*)(((intptr_t)p + align - 1) & ~((intptr_t)align - 1));
-}
-
-static inline PNBool pn_is_aligned_pointer(void* p, uint32_t align) {
-  assert(pn_is_power_of_two(align));
-  return ((intptr_t)p & (align - 1)) == 0;
 }
 
 static void pn_arena_init(PNArena* arena, uint32_t size) {
@@ -1065,6 +1067,40 @@ static PNValue* pn_module_append_value(PNModule* module,
 
   module->num_values++;
   return &module->values[*out_value_id];
+}
+
+static void pn_module_memory_check(PNModule* module,
+                                   uint32_t offset,
+                                   uint32_t size) {
+  if (offset + size > module->memory_size) {
+    PN_FATAL("memory-size is too small (%u < %u).\n", module->memory_size,
+             offset + size);
+  }
+}
+
+static void pn_module_memory_check_pointer(PNModule* module,
+                                           void* p,
+                                           uint32_t size) {
+  pn_module_memory_check(module, p - module->memory, size);
+}
+
+static void pn_module_memory_write_uint32(PNModule* module,
+                                          uint32_t offset,
+                                          uint32_t value) {
+  pn_module_memory_check(module, offset, sizeof(value));
+  uint32_t* memory32 = (uint32_t*)(module->memory + offset);
+#if PN_WRITE_UNALIGNED
+  *memory32 = value;
+#else
+  memcpy(memory32, &value, sizeof(value));
+#endif
+}
+
+static void pn_module_memory_zerofill(PNModule* module,
+                                      uint32_t offset,
+                                      uint32_t num_bytes) {
+  pn_module_memory_check(module, offset, num_bytes);
+  memset(module->memory + offset, 0, num_bytes);
 }
 
 static uint32_t pn_function_num_values(PNModule* module, PNFunction* function) {
@@ -2525,10 +2561,6 @@ static void pn_globalvar_write_reloc(PNModule* module,
                                      uint32_t offset,
                                      uint32_t addend) {
   assert(value_id < module->num_values);
-  if (offset + 4 > module->memory_size) {
-    PN_FATAL("Out of memory.\n");
-  }
-
   PNValue* value = pn_module_get_value(module, value_id);
   uint32_t reloc_value;
   switch (value->code) {
@@ -2552,17 +2584,7 @@ static void pn_globalvar_write_reloc(PNModule* module,
   PN_TRACE(GLOBALVAR_BLOCK,
            "  writing reloc value. offset:%u value:%d (0x%x)\n", offset,
            reloc_value, reloc_value);
-  uint32_t* memory32 = (uint32_t*)((uint8_t*)module->memory + offset);
-  if (pn_is_aligned_pointer(memory32, 4)) {
-    *memory32 = reloc_value;
-  } else {
-    uint8_t* memory = (uint8_t*)memory32;
-    /* PNaCl is always little endian */
-    memory[0] = reloc_value & 0xff;
-    memory[1] = (reloc_value >> 8) & 0xff;
-    memory[2] = (reloc_value >> 16) & 0xff;
-    memory[3] = (reloc_value >> 24) & 0xff;
-  }
+  pn_module_memory_write_uint32(module, offset, reloc_value);
 }
 
 static void pn_globalvar_block_read(PNModule* module,
@@ -2674,10 +2696,7 @@ static void pn_globalvar_block_read(PNModule* module,
             initializer_id++;
             uint32_t num_bytes = pn_record_read_uint32(&reader, "num_bytes");
 
-            if (memory_offset + num_bytes >= module->memory_size) {
-              PN_FATAL("Out of memory.\n");
-            }
-            memset(memory + memory_offset, 0, num_bytes);
+            pn_module_memory_zerofill(module, memory_offset, num_bytes);
             memory_offset += num_bytes;
 
             PN_TRACE(GLOBALVAR_BLOCK,
@@ -2691,13 +2710,16 @@ static void pn_globalvar_block_read(PNModule* module,
             initializer_id++;
             uint32_t num_bytes = 0;
             uint32_t value;
+            /* TODO(binji): optimize. Check if this data is aligned with type
+             * abbreviation type PN_ENCODING_BLOB. If so, we can just memcpy. */
             while (pn_record_try_read_uint32(&reader, &value)) {
               if (value >= 256) {
                 PN_FATAL("globalvar data out of range: %d\n", value);
               }
 
-              if (memory_offset >= module->memory_size) {
-                PN_FATAL("Out of memory.\n");
+              if (memory_offset + 1 > module->memory_size) {
+                PN_FATAL("memory-size is too small (%u < %u).\n",
+                         module->memory_size, memory_offset + 1);
               }
               memory[memory_offset++] = value;
               num_bytes++;
@@ -3690,6 +3712,96 @@ static uint32_t pn_max_num_bbs(PNModule* module) {
   return result;
 }
 
+static int pn_string_list_count(char** p) {
+  int result = 0;
+  if (p) {
+    for (; *p; ++p) {
+      result++;
+    }
+  }
+  return result;
+}
+
+void pn_memory_init_startinfo(PNModule* module, char** argv, char** envp) {
+  module->memory_startinfo =
+      pn_align_up_pointer(module->memory_globalvar_end, 4);
+  /*
+   * From nacl_start.h in the native_client repo:
+   *
+   * The true entry point for untrusted code is called with the normal C ABI,
+   * taking one argument.  This is a pointer to stack space containing these
+   * words:
+   *   [0]             cleanup function pointer (always NULL in actual start)
+   *   [1]             envc, count of envp[] pointers
+   *   [2]             argc, count of argv[] pointers
+   *   [3]             argv[0..argc] pointers, argv[argc] being NULL
+   *   [3+argc]        envp[0..envc] pointers, envp[envc] being NULL
+   *   [3+argc+envc]   auxv[] pairs
+   */
+
+  uint32_t* memory_startinfo32 = (uint32_t*)module->memory_startinfo;
+
+  int argc = pn_string_list_count(argv);
+  int envc = pn_string_list_count(envp);
+
+  uint32_t auxv_length = 3;
+  void* data_offset =
+      memory_startinfo32 + 3 + (argc + 1) + (envc + 1) + auxv_length;
+
+  pn_module_memory_check_pointer(module, module->memory_startinfo,
+                                 data_offset - module->memory_startinfo);
+
+  memory_startinfo32[0] = 0;
+  memory_startinfo32[1] = envc;
+  memory_startinfo32[2] = argc;
+
+  /* argv */
+  int i = 0;
+  uint32_t* memory_argv = memory_startinfo32 + 3;
+  for (i = 0; i < argc; ++i) {
+    char* arg = argv[i];
+    size_t len = strlen(arg) + 1;
+    pn_module_memory_check_pointer(module, data_offset, len);
+    memcpy(data_offset, arg, len);
+    memory_argv[i] = data_offset - module->memory;
+    data_offset += len;
+  }
+  memory_startinfo32[3 + argc] = 0;
+
+  /* envp */
+  uint32_t* memory_envp = memory_startinfo32 + 3 + argc;
+  for (i = 0; i < envc; ++i) {
+    char* env = envp[i];
+    size_t len = strlen(env) + 1;
+    pn_module_memory_check_pointer(module, data_offset, len);
+    memcpy(data_offset, env, len);
+    memory_envp[i] = data_offset - module->memory;
+    data_offset += len;
+  }
+  memory_startinfo32[3 + envc] = 0;
+
+  /*
+   * The expected auxv structure is key/value pairs.
+   * From elf_auxv.h in the native_client repo:
+   *
+   *   name       value  description
+   *   AT_NULL    0      Terminating item in an auxv array
+   *   AT_ENTRY   9      Entry point of the executable
+   *   AT_SYSINFO 32     System entry call point
+   *
+   * In reality, the AT_SYSINFO value is the only one we care about, and it
+   * is the address of the __nacl_irt_query function:
+   *
+   * typedef size_t (*TYPE_nacl_irt_query)(const char *interface_ident,
+   *                                       void *table, size_t tablesize);
+   */
+
+  uint32_t* memory_auxv = memory_startinfo32 + 3 + argc + envc;
+  memory_auxv[0] = 32;  /* AT_SYSINFO */
+  memory_auxv[1] = PN_FUNCTION_ID_NACL_IRT_QUERY;
+  memory_auxv[2] = 0;  /* AT_NULL */
+}
+
 enum {
   PN_FLAG_VERBOSE,
   PN_FLAG_HELP,
@@ -3826,7 +3938,6 @@ static void pn_options_parse(int argc, char** argv, char** env) {
   int c;
   int option_index;
   char** environ_copy = pn_environ_copy(env);
-  char** environ = NULL;
 
   while (1) {
     c = getopt_long(argc, argv, "vm:e:Ehtp", long_options, &option_index);
@@ -3913,11 +4024,11 @@ redo_switch:
       }
 
       case 'e':
-        pn_environ_put(&environ, optarg);
+        pn_environ_put(&g_pn_environ, optarg);
         break;
 
       case 'E':
-        pn_environ_put_all(&environ, environ_copy);
+        pn_environ_put_all(&g_pn_environ, environ_copy);
         break;
 
       case 't':
@@ -3956,6 +4067,8 @@ redo_switch:
     pn_usage(argv[0]);
   }
 
+  g_pn_argv = argv + optind;
+
 #if PN_TRACING
   /* Handle flag dependencies */
   if (g_pn_trace_INSTRUCTIONS) {
@@ -3970,15 +4083,23 @@ redo_switch:
   pn_environ_free(environ_copy);
 #if PN_TRACING
   if (g_pn_trace_FLAGS) {
-    printf("env:\n");
-    pn_environ_print(environ);
+    printf("*** ARGS:\n");
+    if (g_pn_argv) {
+      char** p;
+      int i = 0;
+      for (p = g_pn_argv; *p; ++p, ++i) {
+        printf("  [%d] %s\n", i, *p);
+      }
+    }
+    printf("*** ENVIRONMENT:\n");
+    pn_environ_print(g_pn_environ);
   }
 #endif /* PN_TRACING */
 }
 
-int main(int argc, char** argv, char** env) {
+int main(int argc, char** argv, char** envp) {
   PN_BEGIN_TIME(TOTAL);
-  pn_options_parse(argc, argv, env);
+  pn_options_parse(argc, argv, envp);
   PN_BEGIN_TIME(FILE_READ);
   FILE* f = fopen(g_pn_filename, "r");
   if (!f) {
@@ -4023,6 +4144,9 @@ int main(int argc, char** argv, char** env) {
   assert(block_id == PN_BLOCKID_MODULE);
   pn_module_block_read(module, &context, &bs);
   PN_TRACE(MODULE_BLOCK, "done\n");
+
+  pn_memory_init_startinfo(module, g_pn_argv, g_pn_environ);
+
   PN_END_TIME(TOTAL);
 
 #if PN_TIMERS
