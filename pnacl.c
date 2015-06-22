@@ -1010,7 +1010,7 @@ static void pn_string_concat(PNArena* arena,
 
 static PNFunction* pn_module_get_function(PNModule* module,
                                           PNFunctionId function_id) {
-  if (function_id < 0 || function_id >= module->num_functions) {
+  if (function_id >= module->num_functions) {
     PN_FATAL("accessing invalid function %d (max %d)", function_id,
              module->num_functions);
   }
@@ -1020,7 +1020,7 @@ static PNFunction* pn_module_get_function(PNModule* module,
 
 static PNConstant* pn_function_get_constant(PNFunction* function,
                                             PNConstantId constant_id) {
-  if (constant_id < 0 || constant_id >= function->num_constants) {
+  if (constant_id >= function->num_constants) {
     PN_FATAL("accessing invalid constant %d (max %d)", constant_id,
              function->num_constants);
   }
@@ -1042,7 +1042,7 @@ static PNConstant* pn_function_append_constant(PNModule* module,
 
 static PNGlobalVar* pn_module_get_global_var(PNModule* module,
                                              PNGlobalVarId global_var_id) {
-  if (global_var_id < 0 || global_var_id >= module->num_global_vars) {
+  if (global_var_id >= module->num_global_vars) {
     PN_FATAL("accessing invalid global_var %d (max %d)", global_var_id,
              module->num_global_vars);
   }
@@ -2725,8 +2725,6 @@ static void pn_globalvar_block_read(PNModule* module,
               memory[memory_offset++] = value;
               num_bytes++;
             }
-
-            num_bytes = num_bytes;
 
             PN_TRACE(GLOBALVAR_BLOCK, "  data. num_bytes: %d offset:%u\n",
                      num_bytes, memory_offset - num_bytes);
