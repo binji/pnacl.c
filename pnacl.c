@@ -323,7 +323,7 @@ typedef struct PNBitSet {
 } PNBitSet;
 
 typedef struct PNBitStream {
-  uint8_t* data;
+  void* data;
   uint32_t data_len;
   uint32_t curword;
   int curword_bits;
@@ -763,8 +763,8 @@ static void pn_arena_reset_to_mark(PNArena* arena, PNArenaMark mark) {
 static void pn_bitset_init(PNArena* arena, PNBitSet* bitset, int32_t size) {
   bitset->num_bits_set = 0;
   bitset->num_words = (size + 31) >> 5;
-  bitset->words = (uint32_t*)pn_arena_allocz(
-      arena, sizeof(uint32_t) * bitset->num_words, sizeof(uint32_t));
+  bitset->words = pn_arena_allocz(arena, sizeof(uint32_t) * bitset->num_words,
+                                  sizeof(uint32_t));
 }
 
 static void pn_bitset_set(PNBitSet* bitset, uint32_t bit, PNBool set) {
@@ -863,7 +863,7 @@ static int32_t pn_decode_sign_rotated_value(uint32_t value) {
 }
 
 static void pn_bitstream_init(PNBitStream* bs,
-                              uint8_t* data,
+                              void* data,
                               uint32_t data_len) {
   bs->data = data;
   bs->data_len = data_len;
@@ -1954,12 +1954,12 @@ static void pn_function_calculate_liveness(PNModule* module,
   PNArenaMark mark = pn_arena_mark(&module->temp_arena);
 
   PNLivenessState state;
-  state.livein = (PNBitSet*)pn_arena_alloc(&module->temp_arena,
-                                           sizeof(PNBitSet) * function->num_bbs,
-                                           PN_DEFAULT_ALIGN);
-  state.liveout = (PNBitSet*)pn_arena_alloc(
-      &module->temp_arena, sizeof(PNBitSet) * function->num_bbs,
-      PN_DEFAULT_ALIGN);
+  state.livein =
+      pn_arena_alloc(&module->temp_arena, sizeof(PNBitSet) * function->num_bbs,
+                     PN_DEFAULT_ALIGN);
+  state.liveout =
+      pn_arena_alloc(&module->temp_arena, sizeof(PNBitSet) * function->num_bbs,
+                     PN_DEFAULT_ALIGN);
 
   uint32_t n;
   for (n = 0; n < function->num_bbs; ++n) {
@@ -2566,10 +2566,10 @@ static void pn_globalvar_block_read(PNModule* module,
   uint32_t initializer_id = 0;
 
   PNMemory* memory = module->memory;
-  uint8_t* data8 = (uint8_t*)memory->data;
+  uint8_t* data8 = memory->data;
   uint32_t data_offset = PN_MEMORY_GUARD_SIZE;
 
-  memory->globalvar_start = data8 + data_offset;
+  memory->globalvar_start = memory->data + data_offset;
 
   PNArenaMark mark = pn_arena_mark(&module->temp_arena);
 
@@ -2594,7 +2594,7 @@ static void pn_globalvar_block_read(PNModule* module,
                                    reloc_infos[i].addend);
         }
 
-        memory->globalvar_end = data8 + data_offset;
+        memory->globalvar_end = memory->data + data_offset;
 
         pn_arena_reset_to_mark(&module->temp_arena, mark);
         PN_END_TIME(GLOBALVAR_BLOCK_READ);
@@ -4083,7 +4083,7 @@ int main(int argc, char** argv, char** envp) {
   size_t fsize = ftell(f);
   fseek(f, 0, SEEK_SET);
 
-  uint8_t* data = malloc(fsize);
+  void* data = malloc(fsize);
 
   size_t read_size = fread(data, 1, fsize, f);
   if (read_size != fsize) {
