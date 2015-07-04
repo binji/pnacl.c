@@ -3563,6 +3563,7 @@ static void pn_module_block_read(PNModule* module,
             PNFunctionId function_id = module->num_functions++;
             PNFunction* function = &module->functions[function_id];
 
+            function->name[0] = 0;
             function->type_id = pn_record_read_int32(&reader, "type_id");
             function->calling_convention =
                 pn_record_read_int32(&reader, "calling_convention");
