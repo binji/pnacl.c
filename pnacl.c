@@ -1593,32 +1593,14 @@ static PNTypeId pn_type_get_implicit_cast_type(PNModule* module,
   PNType* type0 = pn_module_get_type(module, type0_id);
   PNType* type1 = pn_module_get_type(module, type1_id);
 
-  if (type0->code != type1->code) {
-    if (type0->code == PN_TYPE_CODE_FLOAT &&
-        type1->code == PN_TYPE_CODE_DOUBLE) {
-      return type1_id;
-    } else if (type0->code == PN_TYPE_CODE_DOUBLE &&
-               type1->code == PN_TYPE_CODE_FLOAT) {
-      return type0_id;
-    } else if (type0->code == PN_TYPE_CODE_FUNCTION &&
-               type1->code == PN_TYPE_CODE_INTEGER && type1->width == 32) {
-      return type1_id;
-    } else if (type0->code == PN_TYPE_CODE_INTEGER && type0->width == 32 &&
-               type1->code == PN_TYPE_CODE_FUNCTION) {
-      return type1_id;
-    } else {
-      return PN_INVALID_TYPE_ID;
-    }
+  if (type0->code == PN_TYPE_CODE_FUNCTION &&
+      type1->code == PN_TYPE_CODE_INTEGER && type1->width == 32) {
+    return type1_id;
+  } else if (type0->code == PN_TYPE_CODE_INTEGER && type0->width == 32 &&
+             type1->code == PN_TYPE_CODE_FUNCTION) {
+    return type1_id;
   } else {
-    if (type0->code == PN_TYPE_CODE_INTEGER) {
-      if (type0->width > type1->width) {
-        return type0_id;
-      } else {
-        return type1_id;
-      }
-    } else {
-      return PN_INVALID_TYPE_ID;
-    }
+    return PN_INVALID_TYPE_ID;
   }
 }
 
