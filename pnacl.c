@@ -302,6 +302,7 @@ typedef enum PNCast {
 } PNCast;
 
 typedef struct PNArena {
+  const char* name;
   void* data;
   uint32_t size;
   uint32_t capacity;
@@ -686,11 +687,12 @@ static inline void* pn_align_up_pointer(void* p, uint32_t align) {
   return (void*)(((intptr_t)p + align - 1) & ~((intptr_t)align - 1));
 }
 
-static void pn_arena_init(PNArena* arena, uint32_t size) {
+static void pn_arena_init(PNArena* arena, uint32_t size, const char* name) {
   arena->data = malloc(size);
   arena->size = 0;
   arena->capacity = size;
   arena->last_alloc = NULL;
+  arena->name = name;
 }
 
 static void pn_arena_destroy(PNArena* arena) {
@@ -700,8 +702,8 @@ static void pn_arena_destroy(PNArena* arena) {
 static void* pn_arena_alloc(PNArena* arena, uint32_t size) {
   uint32_t avail = arena->capacity - arena->size;
   if (size > avail) {
-    PN_FATAL("Arena exhausted. Requested: %u, avail: %u, capacity: %u\n", size,
-             avail, arena->capacity);
+    PN_FATAL("Arena \"%s\" exhausted. Requested: %u, avail: %u, capacity: %u\n",
+             arena->name, size, avail, arena->capacity);
   }
 
   /* Align to 8 bytes */
@@ -724,8 +726,8 @@ static void* pn_arena_realloc(PNArena* arena, void* p, uint32_t new_size) {
     if (p != arena->last_alloc) {
       PN_FATAL(
           "Attempting to realloc, but it was not the last allocation:\n"
-          "p = %p, last_alloc = %p\n",
-          p, arena->last_alloc);
+          "arena \"%s\", p = %p, last_alloc = %p\n",
+          arena->name, p, arena->last_alloc);
     }
 
     arena->size = (uint8_t*)p - (uint8_t*)arena->data;
@@ -4136,10 +4138,11 @@ int main(int argc, char** argv, char** envp) {
 
   PNModule* module = calloc(1, sizeof(PNModule));
   PNBlockInfoContext context = {};
-  pn_arena_init(&module->arena, PN_ARENA_SIZE);
-  pn_arena_init(&module->value_arena, PN_VALUE_ARENA_SIZE);
-  pn_arena_init(&module->instruction_arena, PN_INSTRUCTION_ARENA_SIZE);
-  pn_arena_init(&module->temp_arena, PN_TEMP_ARENA_SIZE);
+  pn_arena_init(&module->arena, PN_ARENA_SIZE, "module");
+  pn_arena_init(&module->value_arena, PN_VALUE_ARENA_SIZE, "value");
+  pn_arena_init(&module->instruction_arena, PN_INSTRUCTION_ARENA_SIZE,
+                "instruction");
+  pn_arena_init(&module->temp_arena, PN_TEMP_ARENA_SIZE, "temp");
 
   PNMemory memory;
   memset(&memory, 0, sizeof(PNMemory));
