@@ -26,7 +26,7 @@ global var count: 0
 function %0 (_start)
   %1. function arg 0
 num bbs:1
-bb:0 (preds: succs:)
+bb:0 (succs:)
   ret
 *** END BLOCK
 done

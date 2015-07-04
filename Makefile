@@ -3,8 +3,8 @@ SHELL = bash
 .SUFFIXES:
 
 .PHONY: all
-all: out/pnacl out/pnacl-notrace out/pnacl-notimers out/pnacl-notrace-notimers \
-  out/pnacl-opt out/pnacl-msan out/pnacl-asan
+all: out/pnacl out/pnacl-liveness out/pnacl-notrace out/pnacl-notimers \
+	out/pnacl-notrace-notimers out/pnacl-opt out/pnacl-msan out/pnacl-asan
 
 CFLAGS = -Wall -Wno-unused-function -Werror -std=gnu89 -g
 
@@ -16,6 +16,9 @@ out/test/:
 
 out/pnacl: pnacl.c | out
 	gcc $(CFLAGS) -o $@ $^
+
+out/pnacl-liveness: pnacl.c | out
+	gcc -DPN_CALCULATE_LIVENESS=1 $(CFLAGS) -o $@ $^
 
 out/pnacl-notrace: pnacl.c | out
 	gcc -DPN_TRACING=0 $(CFLAGS) -o $@ $^
@@ -46,7 +49,7 @@ test: out/pnacl out/pnacl-asan $(TEST_PEXES)
 		for test in $(TESTS); do \
 			PEXE=out/test/$$test.pexe; \
 			echo "Testing $$exe -t $$PEXE"; \
-			diff -q --label "'output from $$PEXE'" <($$exe -t $$PEXE) test/$$test.c.golden; \
+			diff -u --label "'output from $$PEXE'" <($$exe -t $$PEXE) test/$$test.c.golden; \
 		done; \
 	done
 

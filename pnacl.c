@@ -21,6 +21,10 @@
 #define PN_TRACING 1
 #endif
 
+#ifndef PN_CALCULATE_LIVENESS
+#define PN_CALCULATE_LIVENESS 0
+#endif
+
 #define PN_WRITE_UNALIGNED 1
 #define PN_DEFAULT_ALIGN 8
 
@@ -1486,12 +1490,16 @@ static void pn_basic_block_trace(PNModule* module,
     return;
   }
 
-  printf("bb:%d (preds:", bb_id);
   uint32_t n;
+  printf("bb:%d (", bb_id);
+#if PN_CALCULATE_LIVENESS
+  printf("preds:");
   for (n = 0; n < bb->num_pred_bbs; ++n) {
     printf(" %d", bb->pred_bb_ids[n]);
   }
-  printf(" succs:");
+  printf(" ");
+#endif
+  printf("succs:");
   for (n = 0; n < bb->num_succ_bbs; ++n) {
     printf(" %d", bb->succ_bb_ids[n]);
   }
@@ -3008,10 +3016,12 @@ static void pn_function_block_read(PNModule* module,
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
         pn_function_calculate_result_value_types(module, function);
+#if PN_CALCULATE_LIVENESS
         pn_function_calculate_uses(module, function);
         pn_function_calculate_pred_bbs(module, function);
         pn_function_calculate_phi_assigns(module, function);
         pn_function_calculate_liveness(module, function);
+#endif
 #if PN_TRACING
         /* Print the header if it wasn't printed above */
         PNBool print_header = !PN_IS_TRACE(FUNCTION_BLOCK);
