@@ -17,7 +17,7 @@ out/pnacl-notrace-notimers: pnacl.c
 	gcc -DPN_TRACING=0 -DPN_TIMERS=0 $(CFLAGS) -o $@ $^
 
 out/pnacl-opt: pnacl.c
-	gcc -O3 $(CFLAGS) -o $@ $^
+	gcc -O3 $(CFLAGS) -DNDEBUG -o $@ $^
 
 out/pnacl-msan: pnacl.c
 	clang $(CFLAGS) -fsanitize=memory -fno-omit-frame-pointer -o $@ $^
