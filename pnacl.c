@@ -2850,6 +2850,8 @@ static void pn_constants_block_read(PNModule* module,
   PNBlockAbbrevs abbrevs = {};
   pn_block_info_context_get_abbrev(context, PN_BLOCKID_CONSTANTS, &abbrevs);
 
+  PNArenaMark mark = pn_arena_mark(&module->temp_arena);
+
   PNTypeId cur_type_id = -1;
   while (!pn_bitstream_at_end(bs)) {
     uint32_t entry = pn_bitstream_read(bs, codelen);
@@ -2857,6 +2859,7 @@ static void pn_constants_block_read(PNModule* module,
       case PN_ENTRY_END_BLOCK:
         PN_TRACE(CONSTANTS_BLOCK, "*** END BLOCK\n");
         pn_bitstream_align_32(bs);
+        pn_arena_reset_to_mark(&module->temp_arena, mark);
         PN_END_TIME(CONSTANTS_BLOCK_READ);
         return;
 
@@ -2878,7 +2881,12 @@ static void pn_constants_block_read(PNModule* module,
         switch (code) {
           case PN_CONSTANTS_CODE_SETTYPE:
             cur_type_id = pn_record_read_int32(&reader, "current type");
+#if PN_TRACING
+            PN_TRACE(CONSTANTS_BLOCK, "  constants settype %d (%s)\n",
+                     cur_type_id, pn_type_describe(module, cur_type_id));
+#else
             PN_TRACE(CONSTANTS_BLOCK, "  constants settype %d\n", cur_type_id);
+#endif
             break;
 
           case PN_CONSTANTS_CODE_UNDEF: {
