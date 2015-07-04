@@ -1,0 +1,32 @@
+*** ARGS:
+  [0] out/test/start.pexe
+*** ENVIRONMENT:
+entry: 1
+module version: 1
+*** SUBBLOCK BLOCKINFO (0)
+block id: 14
+block id: 11
+block id: 12
+block id: 19
+*** END BLOCK
+*** SUBBLOCK TYPE (17)
+num types: 3
+0: type void
+1: type integer 32
+2: type function is_varargs:0 ret:0 1 
+*** END BLOCK
+%0. module function: (type:2,cc:0,is_proto:0,linkage:0)
+*** SUBBLOCK GLOBALVAR (19)
+global var count: 0
+*** END BLOCK
+*** SUBBLOCK VALUE_SYMTAB (14)
+  entry: id:0 name:"_start"
+*** END BLOCK
+*** SUBBLOCK FUNCTION (12)
+function %0 (_start)
+  %1. function arg 0
+num bbs:1
+bb:0 (preds: succs:)
+  ret
+*** END BLOCK
+done

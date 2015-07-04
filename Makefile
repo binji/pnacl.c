@@ -1,42 +1,63 @@
+SHELL = bash
+
+.SUFFIXES:
+
 .PHONY: all
 all: out/pnacl out/pnacl-notrace out/pnacl-notimers out/pnacl-notrace-notimers \
   out/pnacl-opt out/pnacl-msan out/pnacl-asan
 
 CFLAGS = -Wall -Wno-unused-function -Werror -std=gnu89 -g
 
-out/pnacl: pnacl.c
+out/:
+	mkdir $@
+
+out/test/:
+	mkdir $@
+
+out/pnacl: pnacl.c | out
 	gcc $(CFLAGS) -o $@ $^
 
-out/pnacl-notrace: pnacl.c
+out/pnacl-notrace: pnacl.c | out
 	gcc -DPN_TRACING=0 $(CFLAGS) -o $@ $^
 
-out/pnacl-notimers: pnacl.c
+out/pnacl-notimers: pnacl.c | out
 	gcc -DPN_TIMERS=0 $(CFLAGS) -o $@ $^
 
-out/pnacl-notrace-notimers: pnacl.c
+out/pnacl-notrace-notimers: pnacl.c | out
 	gcc -DPN_TRACING=0 -DPN_TIMERS=0 $(CFLAGS) -o $@ $^
 
-out/pnacl-opt: pnacl.c
+out/pnacl-opt: pnacl.c | out
 	gcc -O3 $(CFLAGS) -DNDEBUG -o $@ $^
 
-out/pnacl-msan: pnacl.c
+out/pnacl-msan: pnacl.c | out
 	clang $(CFLAGS) -fsanitize=memory -fno-omit-frame-pointer -o $@ $^
 
-out/pnacl-asan: pnacl.c
+out/pnacl-asan: pnacl.c | out
 	clang $(CFLAGS) -fsanitize=address -fno-omit-frame-pointer -o $@ $^
+
+#### TESTS ####
+
+TESTS = start main
+TEST_PEXES = $(TESTS:%=out/test/%.pexe)
+
+.PHONY: test
+test: out/pnacl out/pnacl-asan $(TEST_PEXES)
+	@set -e; for exe in out/pnacl out/pnacl-asan; do \
+		for test in $(TESTS); do \
+			PEXE=out/test/$$test.pexe; \
+			echo "Testing $$exe -t $$PEXE"; \
+			diff -q --label "'output from $$PEXE'" <($$exe -t $$PEXE) test/$$test.c.golden; \
+		done; \
+	done
+
+out/test/%.bc: test/%.c | out/test
+	`$(NACL_SDK_ROOT)/tools/nacl_config.py --tool cc -t pnacl` -std=gnu89 -O2 -o $@ $^
+
+out/test/%.pexe: out/test/%.bc | out/test
+	`$(NACL_SDK_ROOT)/tools/nacl_config.py --tool finalize -t pnacl` -o $@ $^
+
+#### CLEAN ####
 
 .PHONY: clean
 clean:
 	rm -f out/*
-
-.PHONY: run
-run: out/pnacl
-	$< -tp test/simple.pexe
-
-.PHONY: debug
-debug: out/pnacl
-	gdb $<
-
-.PHONY: stress
-stress: out/pnacl
-	$< -p test/nacl_io_test.pexe
