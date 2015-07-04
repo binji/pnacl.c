@@ -50,6 +50,12 @@ test: out/pnacl out/pnacl-asan $(TEST_PEXES)
 		done; \
 	done
 
+.PHONY: reset-golden
+reset-golden: out/pnacl $(TEST_PEXES)
+	@set -e; for test in $(TESTS); do \
+		out/pnacl -t out/test/$$test.pexe > test/$$test.c.golden; \
+	done
+
 out/test/%.bc: test/%.c | out/test
 	`$(NACL_SDK_ROOT)/tools/nacl_config.py --tool cc -t pnacl` -std=gnu89 -O2 -o $@ $^
 
