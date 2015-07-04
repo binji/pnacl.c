@@ -496,7 +496,7 @@ typedef struct PNPhiAssign {
 
 typedef struct PNBasicBlock {
   uint32_t num_instructions;
-  void* instructions;
+  PNInstruction** instructions;
   uint32_t num_pred_bbs;
   PNBasicBlockId* pred_bb_ids;
   uint32_t num_succ_bbs;
@@ -1143,12 +1143,13 @@ static void* pn_function_append_instruction(
     PNBasicBlock* bb,
     uint32_t instruction_size,
     PNInstructionId* out_instruction_id) {
-  PNArena* arena = &module->instruction_arena;
-  void* p = pn_arena_allocz(arena, instruction_size);
-  if (bb->num_instructions == 0) {
-    bb->instructions = p;
-  }
-  *out_instruction_id = bb->num_instructions++;
+  *out_instruction_id = bb->num_instructions;
+  uint32_t new_size = sizeof(PNInstruction*) * (bb->num_instructions + 1);
+  bb->instructions =
+      pn_arena_realloc(&module->arena, bb->instructions, new_size);
+  void* p = pn_arena_allocz(&module->instruction_arena, instruction_size);
+  bb->instructions[*out_instruction_id] = p;
+  bb->num_instructions++;
   return p;
 }
 
@@ -1196,68 +1197,6 @@ static void pn_function_calculate_pred_bbs(PNModule* module,
     }
   }
   PN_END_TIME(CALCULATE_PRED_BBS);
-}
-
-static PNInstruction* pn_instruction_next(PNInstruction* inst) {
-  uint8_t* p = (uint8_t*)inst;
-
-#define INST_CASE(M, T) \
-  case M:               \
-    p += sizeof(T);     \
-    break;
-
-  switch (inst->code) {
-    INST_CASE(PN_FUNCTION_CODE_INST_BINOP, PNInstructionBinop)
-    INST_CASE(PN_FUNCTION_CODE_INST_CAST, PNInstructionCast)
-    INST_CASE(PN_FUNCTION_CODE_INST_RET, PNInstructionRet)
-    INST_CASE(PN_FUNCTION_CODE_INST_BR, PNInstructionBr)
-    INST_CASE(PN_FUNCTION_CODE_INST_UNREACHABLE, PNInstructionUnreachable)
-    INST_CASE(PN_FUNCTION_CODE_INST_ALLOCA, PNInstructionAlloca)
-    INST_CASE(PN_FUNCTION_CODE_INST_LOAD, PNInstructionLoad)
-    INST_CASE(PN_FUNCTION_CODE_INST_STORE, PNInstructionStore)
-    INST_CASE(PN_FUNCTION_CODE_INST_CMP2, PNInstructionCmp2)
-    INST_CASE(PN_FUNCTION_CODE_INST_VSELECT, PNInstructionVselect)
-    INST_CASE(PN_FUNCTION_CODE_INST_FORWARDTYPEREF, PNInstructionForwardtyperef)
-
-#undef INST_CASE
-
-    case PN_FUNCTION_CODE_INST_SWITCH: {
-      PNInstructionSwitch* i = (PNInstructionSwitch*)inst;
-      p += sizeof(PNInstructionSwitch);
-      p += sizeof(PNSwitchCase) * i->num_cases;
-      int32_t c;
-      for (c = 0; c < i->num_cases; ++c) {
-        PNSwitchCase* switch_case = &i->cases[c];
-        p += sizeof(PNSwitchCaseValue) * switch_case->num_values;
-      }
-      break;
-    }
-
-    case PN_FUNCTION_CODE_INST_PHI: {
-      PNInstructionPhi* i = (PNInstructionPhi*)inst;
-      p += sizeof(PNInstructionPhi);
-      p += sizeof(PNPhiIncoming) * i->num_incoming;
-      break;
-    }
-
-    case PN_FUNCTION_CODE_INST_CALL:
-    case PN_FUNCTION_CODE_INST_CALL_INDIRECT: {
-      PNInstructionCall* i = (PNInstructionCall*)inst;
-      p += sizeof(PNInstructionCall);
-      p += sizeof(PNValueId) * i->num_args;
-      break;
-    }
-
-    default:
-      PN_FATAL("Invalid instruction code: %d\n", inst->code);
-      break;
-  }
-
-  /* TODO(binji): this requires knowledge that the arena aligns to 8 bytes. Do
-   * something less fragile. */
-  p = (uint8_t*)pn_align_up_pointer(p, 8);
-
-  return (PNInstruction*)p;
 }
 
 #if PN_TRACING
@@ -1585,11 +1524,9 @@ static void pn_basic_block_trace(PNModule* module,
     printf("\n");
   }
 
-  PNInstruction* inst = (PNInstruction*)bb->instructions;
   uint32_t i;
   for (i = 0; i < bb->num_instructions; ++i) {
-    pn_instruction_trace(module, function, inst);
-    inst = pn_instruction_next(inst);
+    pn_instruction_trace(module, function, bb->instructions[i]);
   }
 }
 
@@ -1727,15 +1664,14 @@ static void pn_function_calculate_result_value_types(PNModule* module,
   for (n = 0; n < function->num_bbs; ++n) {
     PNBasicBlock* bb = &function->bbs[n];
     uint32_t m;
-    PNInstruction* inst = bb->instructions;
     for (m = 0; m < bb->num_instructions; ++m) {
+      PNInstruction* inst = bb->instructions[m];
       if (!pn_instruction_calculate_result_value_type(module, function, inst)) {
         /* One of the types is invalid, try again later */
         invalid = pn_arena_realloc(&module->temp_arena, invalid,
                                    sizeof(PNInstruction*) * (num_invalid + 1));
         invalid[num_invalid++] = inst;
       }
-      inst = pn_instruction_next(inst);
     }
   }
 
@@ -1792,9 +1728,9 @@ static void pn_basic_block_calculate_uses(PNModule* module,
 
   pn_bitset_init(&module->temp_arena, &uses, function->num_values);
 
-  PNInstruction* inst = (PNInstruction*)bb->instructions;
   uint32_t n;
   for (n = 0; n < bb->num_instructions; ++n) {
+    PNInstruction* inst = bb->instructions[n];
     switch (inst->code) {
       case PN_FUNCTION_CODE_INST_BINOP: {
         PNInstructionBinop* i = (PNInstructionBinop*)inst;
@@ -1902,7 +1838,6 @@ static void pn_basic_block_calculate_uses(PNModule* module,
         PN_FATAL("Invalid instruction code: %d\n", inst->code);
         break;
     }
-    inst = pn_instruction_next(inst);
   }
 
   bb->uses =
