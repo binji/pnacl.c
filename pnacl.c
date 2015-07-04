@@ -993,15 +993,6 @@ static PNTypeId pn_module_find_pointer_type(PNModule* module) {
   return pn_module_find_integer_type(module, 32);
 }
 
-static PNType* pn_module_append_type(PNModule* module, PNTypeId* out_type_id) {
-  *out_type_id = module->num_types;
-  uint32_t new_size = sizeof(PNType) * (module->num_types + 1);
-  module->types = pn_arena_realloc(&module->arena, module->types, new_size);
-
-  module->num_types++;
-  return &module->types[*out_type_id];
-}
-
 static void pn_string_concat(PNArena* arena,
                              char** dest,
                              uint32_t* dest_len,
@@ -2464,10 +2455,13 @@ static void pn_type_block_read(PNModule* module,
   PNBlockAbbrevs abbrevs = {};
   pn_block_info_context_get_abbrev(context, PN_BLOCKID_TYPE, &abbrevs);
 
+  PNTypeId current_type_id = 0;
+
   while (!pn_bitstream_at_end(bs)) {
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
+        assert(current_type_id == module->num_types);
         PN_TRACE(TYPE_BLOCK, "*** END BLOCK\n");
         pn_bitstream_align_32(bs);
         PN_END_TIME(TYPE_BLOCK_READ);
@@ -2490,40 +2484,44 @@ static void pn_type_block_read(PNModule* module,
 
         switch (code) {
           case PN_TYPE_CODE_NUMENTRY: {
-            uint32_t num_entries =
-                pn_record_read_uint32(&reader, "num entries");
-            (void)num_entries;
-            PN_TRACE(TYPE_BLOCK, "type num entries: %d\n", num_entries);
+            module->num_types = pn_record_read_uint32(&reader, "num types");
+            module->types = pn_arena_allocz(&module->arena,
+                                            module->num_types * sizeof(PNType));
+            PN_TRACE(TYPE_BLOCK, "num types: %d\n", module->num_types);
             break;
           }
 
           case PN_TYPE_CODE_VOID: {
-            PNTypeId type_id;
-            PNType* type = pn_module_append_type(module, &type_id);
+            assert(current_type_id < module->num_types);
+            PNTypeId type_id = current_type_id++;
+            PNType* type = &module->types[type_id];
             type->code = PN_TYPE_CODE_VOID;
             PN_TRACE(TYPE_BLOCK, "%d: type void\n", type_id);
             break;
           }
 
           case PN_TYPE_CODE_FLOAT: {
-            PNTypeId type_id;
-            PNType* type = pn_module_append_type(module, &type_id);
+            assert(current_type_id < module->num_types);
+            PNTypeId type_id = current_type_id++;
+            PNType* type = &module->types[type_id];
             type->code = PN_TYPE_CODE_FLOAT;
             PN_TRACE(TYPE_BLOCK, "%d: type float\n", type_id);
             break;
           }
 
           case PN_TYPE_CODE_DOUBLE: {
-            PNTypeId type_id;
-            PNType* type = pn_module_append_type(module, &type_id);
+            assert(current_type_id < module->num_types);
+            PNTypeId type_id = current_type_id++;
+            PNType* type = &module->types[type_id];
             type->code = PN_TYPE_CODE_DOUBLE;
             PN_TRACE(TYPE_BLOCK, "%d: type double\n", type_id);
             break;
           }
 
           case PN_TYPE_CODE_INTEGER: {
-            PNTypeId type_id;
-            PNType* type = pn_module_append_type(module, &type_id);
+            assert(current_type_id < module->num_types);
+            PNTypeId type_id = current_type_id++;
+            PNType* type = &module->types[type_id];
             type->code = PN_TYPE_CODE_INTEGER;
             type->width = pn_record_read_int32(&reader, "width");
             PN_TRACE(TYPE_BLOCK, "%d: type integer %d\n", type_id, type->width);
@@ -2531,8 +2529,9 @@ static void pn_type_block_read(PNModule* module,
           }
 
           case PN_TYPE_CODE_FUNCTION: {
-            PNTypeId type_id;
-            PNType* type = pn_module_append_type(module, &type_id);
+            assert(current_type_id < module->num_types);
+            PNTypeId type_id = current_type_id++;
+            PNType* type = &module->types[type_id];
             type->code = PN_TYPE_CODE_FUNCTION;
             type->is_varargs = pn_record_read_int32(&reader, "is_varargs");
             type->return_type = pn_record_read_int32(&reader, "return_type");
