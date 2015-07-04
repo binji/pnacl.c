@@ -1,6 +1,6 @@
 .PHONY: all
 all: out/pnacl out/pnacl-notrace out/pnacl-notimers out/pnacl-notrace-notimers \
-  out/pnacl-opt out/pnacl-msan
+  out/pnacl-opt out/pnacl-msan out/pnacl-asan
 
 CFLAGS = -Wall -Wno-unused-function -Werror -std=gnu89 -g
 
@@ -21,6 +21,9 @@ out/pnacl-opt: pnacl.c
 
 out/pnacl-msan: pnacl.c
 	clang $(CFLAGS) -fsanitize=memory -fno-omit-frame-pointer -o $@ $^
+
+out/pnacl-asan: pnacl.c
+	clang $(CFLAGS) -fsanitize=address -fno-omit-frame-pointer -o $@ $^
 
 .PHONY: clean
 clean:
