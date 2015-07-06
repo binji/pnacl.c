@@ -62,7 +62,7 @@
     PN_ERROR(__VA_ARGS__); \
     exit(1);               \
   } while (0)
-#define PN_UNREACHABLE() PN_FATAL("unreachable")
+#define PN_UNREACHABLE() PN_FATAL("unreachable\n")
 #define PN_STATIC_ASSERT(x) int __pn_static_assert_##__LINE__[x ? 1 : -1]
 
 #if PN_TIMERS
