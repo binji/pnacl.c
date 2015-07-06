@@ -1296,8 +1296,8 @@ static const char* pn_value_describe(PNModule* module,
 
 static void pn_instruction_trace(PNModule* module,
                                  PNFunction* function,
-                                 PNInstruction* inst) {
-  if (!PN_IS_TRACE(INSTRUCTIONS)) {
+                                 PNInstruction* inst, PNBool force) {
+  if (!PN_IS_TRACE(INSTRUCTIONS) && !force) {
     return;
   }
 
@@ -1547,7 +1547,7 @@ static void pn_basic_block_trace(PNModule* module,
 
   uint32_t i;
   for (i = 0; i < bb->num_instructions; ++i) {
-    pn_instruction_trace(module, function, bb->instructions[i]);
+    pn_instruction_trace(module, function, bb->instructions[i], PN_FALSE);
   }
 }
 
@@ -1579,6 +1579,39 @@ static void pn_function_trace(PNModule* module,
     pn_basic_block_trace(module, function, &function->bbs[i], i);
   }
   PN_END_TIME(FUNCTION_TRACE);
+}
+
+#else
+
+static const char* pn_type_describe(PNModule* module, PNTypeId type_id) {
+  return "Unknown";
+}
+
+static const char* pn_value_describe(PNModule* module,
+                                     PNFunction* function,
+                                     PNValueId value_id) {
+  return "Unknown";
+}
+
+static void pn_instruction_trace(PNModule* module,
+                                 PNFunction* function,
+                                 PNInstruction* inst, PNBool force) {
+}
+
+static void pn_basic_block_trace(PNModule* module,
+                                 PNFunction* function,
+                                 PNBasicBlock* bb,
+                                 PNBasicBlockId bb_id) {
+}
+
+static void pn_function_trace_header(PNFunction* function,
+                                     PNFunctionId function_id) {
+}
+
+static void pn_function_trace(PNModule* module,
+                              PNFunction* function,
+                              PNFunctionId function_id,
+                              PNBool print_header) {
 }
 
 #endif /* PN_TRACING */
@@ -1624,9 +1657,7 @@ static PNBool pn_function_assign_result_value_type(PNModule* module,
 
   if (result_value->type_id == PN_INVALID_TYPE_ID) {
     PN_ERROR("Incompatible types:\n");
-#if PN_TRACING
-    pn_instruction_trace(module, function, inst);
-#endif /* PN_TRACING */
+    pn_instruction_trace(module, function, inst, PN_TRUE);
     exit(1);
   }
 
@@ -1699,11 +1730,9 @@ static void pn_function_calculate_result_value_types(PNModule* module,
 
     if (num_invalid > 0 && last_invalid == num_invalid) {
       PN_ERROR("Unable to resolve types for %d values:\n", num_invalid);
-#if PN_TRACING
       for (n = 0; n < num_invalid; ++n) {
-        pn_instruction_trace(module, function, invalid[n]);
+        pn_instruction_trace(module, function, invalid[n], PN_TRUE);
       }
-#endif /* PN_TRACING */
       exit(1);
     }
   }
@@ -2871,12 +2900,8 @@ static void pn_constants_block_read(PNModule* module,
         switch (code) {
           case PN_CONSTANTS_CODE_SETTYPE:
             cur_type_id = pn_record_read_int32(&reader, "current type");
-#if PN_TRACING
             PN_TRACE(CONSTANTS_BLOCK, "  constants settype %d (%s)\n",
                      cur_type_id, pn_type_describe(module, cur_type_id));
-#else
-            PN_TRACE(CONSTANTS_BLOCK, "  constants settype %d\n", cur_type_id);
-#endif
             break;
 
           case PN_CONSTANTS_CODE_UNDEF: {
