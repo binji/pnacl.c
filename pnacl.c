@@ -3184,6 +3184,8 @@ static void pn_function_block_read(PNModule* module,
               pn_basic_block_list_append(&module->arena, &cur_bb->succ_bb_ids,
                                          &cur_bb->num_succ_bbs,
                                          inst->false_bb_id);
+            } else {
+              inst->value_id = PN_INVALID_VALUE_ID;
             }
 
             is_terminator = PN_TRUE;
