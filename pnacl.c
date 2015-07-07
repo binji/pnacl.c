@@ -390,7 +390,7 @@ typedef struct PNPhiIncoming {
 typedef struct PNInstruction { PNFunctionCode code; } PNInstruction;
 
 typedef struct PNInstructionBinop {
-  PNFunctionCode code;
+  PNInstruction base;
   PNValueId result_value_id;
   PNValueId value0_id;
   PNValueId value1_id;
@@ -399,7 +399,7 @@ typedef struct PNInstructionBinop {
 } PNInstructionBinop;
 
 typedef struct PNInstructionCast {
-  PNFunctionCode code;
+  PNInstruction base;
   PNValueId result_value_id;
   PNValueId value_id;
   PNCast opcode;
@@ -407,19 +407,19 @@ typedef struct PNInstructionCast {
 } PNInstructionCast;
 
 typedef struct PNInstructionRet {
-  PNFunctionCode code;
+  PNInstruction base;
   PNValueId value_id; /* Or PN_INVALID_VALUE_ID */
 } PNInstructionRet;
 
 typedef struct PNInstructionBr {
-  PNFunctionCode code;
+  PNInstruction base;
   PNBasicBlockId true_bb_id;
   PNBasicBlockId false_bb_id; /* Or PN_INVALID_BLOCK_ID */
   PNValueId value_id;         /* Or PN_INVALID_VALUE_ID */
 } PNInstructionBr;
 
 typedef struct PNInstructionSwitch {
-  PNFunctionCode code;
+  PNInstruction base;
   PNValueId value_id;
   PNBasicBlockId default_bb_id;
   uint32_t num_cases;
@@ -428,11 +428,11 @@ typedef struct PNInstructionSwitch {
 } PNInstructionSwitch;
 
 typedef struct PNInstructionUnreachable {
-  PNFunctionCode code;
+  PNInstruction base;
 } PNInstructionUnreachable;
 
 typedef struct PNInstructionPhi {
-  PNFunctionCode code;
+  PNInstruction base;
   PNValueId result_value_id;
   uint32_t num_incoming;
   PNPhiIncoming* incoming;
@@ -440,14 +440,14 @@ typedef struct PNInstructionPhi {
 } PNInstructionPhi;
 
 typedef struct PNInstructionAlloca {
-  PNFunctionCode code;
+  PNInstruction base;
   PNValueId result_value_id;
   PNValueId size_id;
   PNAlignment alignment;
 } PNInstructionAlloca;
 
 typedef struct PNInstructionLoad {
-  PNFunctionCode code;
+  PNInstruction base;
   PNValueId result_value_id;
   PNValueId src_id;
   PNAlignment alignment;
@@ -455,14 +455,14 @@ typedef struct PNInstructionLoad {
 } PNInstructionLoad;
 
 typedef struct PNInstructionStore {
-  PNFunctionCode code;
+  PNInstruction base;
   PNValueId dest_id;
   PNValueId value_id;
   PNAlignment alignment;
 } PNInstructionStore;
 
 typedef struct PNInstructionCmp2 {
-  PNFunctionCode code;
+  PNInstruction base;
   PNValueId result_value_id;
   PNValueId value0_id;
   PNValueId value1_id;
@@ -470,7 +470,7 @@ typedef struct PNInstructionCmp2 {
 } PNInstructionCmp2;
 
 typedef struct PNInstructionVselect {
-  PNFunctionCode code;
+  PNInstruction base;
   PNValueId result_value_id;
   PNValueId cond_id;
   PNValueId true_value_id;
@@ -478,13 +478,13 @@ typedef struct PNInstructionVselect {
 } PNInstructionVselect;
 
 typedef struct PNInstructionForwardtyperef {
-  PNFunctionCode code;
+  PNInstruction base;
   PNValueId value_id;
   PNValueId type_id;
 } PNInstructionForwardtyperef;
 
 typedef struct PNInstructionCall {
-  PNFunctionCode code;
+  PNInstruction base;
   PNValueId result_value_id;
   uint32_t calling_convention;
   PNValueId callee_id;
@@ -3193,7 +3193,7 @@ static void pn_function_block_read(PNModule* module,
             value->type_id = PN_INVALID_TYPE_ID;
             value->index = inst_id;
 
-            inst->code = code;
+            inst->base.code = code;
             inst->result_value_id = value_id;
             inst->value0_id = pn_record_read_uint32(&reader, "value 0");
             inst->value1_id = pn_record_read_uint32(&reader, "value 1");
@@ -3219,7 +3219,7 @@ static void pn_function_block_read(PNModule* module,
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = inst_id;
 
-            inst->code = code;
+            inst->base.code = code;
             inst->result_value_id = value_id;
             inst->value_id = pn_record_read_uint32(&reader, "value");
             inst->type_id = pn_record_read_uint32(&reader, "type_id");
@@ -3235,7 +3235,7 @@ static void pn_function_block_read(PNModule* module,
             PNInstructionId inst_id;
             PNInstructionRet* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
                 PNInstructionRet, module, cur_bb, &inst_id);
-            inst->code = code;
+            inst->base.code = code;
             inst->value_id = PN_INVALID_VALUE_ID;
 
             if (pn_record_try_read_uint16(&reader, &inst->value_id)) {
@@ -3250,7 +3250,7 @@ static void pn_function_block_read(PNModule* module,
             PNInstructionId inst_id;
             PNInstructionBr* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
                 PNInstructionBr, module, cur_bb, &inst_id);
-            inst->code = code;
+            inst->base.code = code;
             inst->true_bb_id = pn_record_read_uint32(&reader, "true_bb");
             inst->false_bb_id = PN_INVALID_BLOCK_ID;
 
@@ -3287,7 +3287,7 @@ static void pn_function_block_read(PNModule* module,
 
             pn_context_fix_value_ids(context, rel_id, 1, &inst->value_id);
 
-            inst->code = code;
+            inst->base.code = code;
             inst->num_cases = pn_record_read_int32(&reader, "num cases");
             inst->cases = pn_arena_alloc(&module->instruction_arena,
                                          sizeof(PNSwitchCase) * inst->num_cases,
@@ -3329,7 +3329,7 @@ static void pn_function_block_read(PNModule* module,
             PNInstructionId inst_id;
             PNInstructionUnreachable* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
                 PNInstructionUnreachable, module, cur_bb, &inst_id);
-            inst->code = code;
+            inst->base.code = code;
             is_terminator = PN_TRUE;
             break;
           }
@@ -3345,7 +3345,7 @@ static void pn_function_block_read(PNModule* module,
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = inst_id;
 
-            inst->code = code;
+            inst->base.code = code;
             inst->result_value_id = value_id;
             inst->type_id = pn_record_read_int32(&reader, "type_id");
             inst->num_incoming = 0;
@@ -3388,7 +3388,7 @@ static void pn_function_block_read(PNModule* module,
             value->type_id = pn_module_find_pointer_type(module);
             value->index = inst_id;
 
-            inst->code = code;
+            inst->base.code = code;
             inst->result_value_id = value_id;
             inst->size_id = pn_record_read_uint32(&reader, "size");
             inst->alignment =
@@ -3409,7 +3409,7 @@ static void pn_function_block_read(PNModule* module,
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->index = inst_id;
 
-            inst->code = code;
+            inst->base.code = code;
             inst->result_value_id = value_id;
             inst->src_id = pn_record_read_uint32(&reader, "src");
             inst->alignment =
@@ -3427,7 +3427,7 @@ static void pn_function_block_read(PNModule* module,
             PNInstructionStore* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
                 PNInstructionStore, module, cur_bb, &inst_id);
 
-            inst->code = code;
+            inst->base.code = code;
             inst->dest_id = pn_record_read_uint32(&reader, "dest");
             inst->value_id = pn_record_read_uint32(&reader, "value");
             inst->alignment =
@@ -3450,7 +3450,7 @@ static void pn_function_block_read(PNModule* module,
             value->type_id = pn_module_find_integer_type(module, 1);
             value->index = inst_id;
 
-            inst->code = code;
+            inst->base.code = code;
             inst->result_value_id = value_id;
             inst->value0_id = pn_record_read_uint32(&reader, "value 0");
             inst->value1_id = pn_record_read_uint32(&reader, "value 1");
@@ -3474,7 +3474,7 @@ static void pn_function_block_read(PNModule* module,
             value->type_id = PN_INVALID_TYPE_ID;
             value->index = inst_id;
 
-            inst->code = code;
+            inst->base.code = code;
             inst->result_value_id = value_id;
             inst->true_value_id = pn_record_read_uint32(&reader, "true_value");
             inst->false_value_id =
@@ -3492,7 +3492,7 @@ static void pn_function_block_read(PNModule* module,
                 PN_BASIC_BLOCK_APPEND_INSTRUCTION(PNInstructionForwardtyperef,
                                                   module, cur_bb, &inst_id);
 
-            inst->code = code;
+            inst->base.code = code;
             inst->value_id = pn_record_read_int32(&reader, "value");
             inst->type_id = pn_record_read_int32(&reader, "type");
             break;
@@ -3504,7 +3504,7 @@ static void pn_function_block_read(PNModule* module,
             PNInstructionCall* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
                 PNInstructionCall, module, cur_bb, &inst_id);
 
-            inst->code = code;
+            inst->base.code = code;
             inst->is_indirect = code == PN_FUNCTION_CODE_INST_CALL_INDIRECT;
             int32_t cc_info = pn_record_read_int32(&reader, "cc_info");
             inst->is_tail_call = cc_info & 1;
