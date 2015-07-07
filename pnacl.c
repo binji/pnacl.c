@@ -628,10 +628,12 @@ typedef struct PNModule {
   PNMemory* memory;
 } PNModule;
 
+#if PN_CALCULATE_LIVENESS
 typedef struct PNLivenessState {
   PNBitSet* livein;
   PNBitSet* liveout;
 } PNLivenessState;
+#endif /* PN_CALCULATE_LIVENESS */
 
 typedef struct PNBlockInfoContext {
   uint32_t num_abbrevs;
@@ -1272,41 +1274,6 @@ static void pn_basic_block_list_append(PNAllocator* allocator,
   (*bb_list)[(*num_els)++] = bb_id;
 }
 
-static void pn_function_calculate_pred_bbs(PNModule* module,
-                                           PNFunction* function) {
-  PN_BEGIN_TIME(CALCULATE_PRED_BBS);
-  uint32_t n;
-  for (n = 0; n < function->num_bbs; ++n) {
-    PNBasicBlock* bb = &function->bbs[n];
-    uint32_t m;
-    for (m = 0; m < bb->num_succ_bbs; ++m) {
-      PNBasicBlockId succ_bb_id = bb->succ_bb_ids[m];
-      assert(succ_bb_id < function->num_bbs);
-      PNBasicBlock* succ_bb = &function->bbs[succ_bb_id];
-      succ_bb->num_pred_bbs++;
-    }
-  }
-
-  for (n = 0; n < function->num_bbs; ++n) {
-    PNBasicBlock* bb = &function->bbs[n];
-    bb->pred_bb_ids = pn_allocator_alloc(
-        &module->allocator, sizeof(PNBasicBlockId) * bb->num_pred_bbs,
-        sizeof(PNBasicBlockId));
-    bb->num_pred_bbs = 0;
-  }
-
-  for (n = 0; n < function->num_bbs; ++n) {
-    PNBasicBlock* bb = &function->bbs[n];
-    uint32_t m;
-    for (m = 0; m < bb->num_succ_bbs; ++m) {
-      PNBasicBlockId succ_bb_id = bb->succ_bb_ids[m];
-      PNBasicBlock* succ_bb = &function->bbs[succ_bb_id];
-      succ_bb->pred_bb_ids[succ_bb->num_pred_bbs++] = n;
-    }
-  }
-  PN_END_TIME(CALCULATE_PRED_BBS);
-}
-
 #if PN_TRACING
 static const char* pn_type_describe(PNModule* module, PNTypeId type_id) {
   if (type_id == PN_INVALID_TYPE_ID) {
@@ -1835,6 +1802,7 @@ static void pn_function_calculate_result_value_types(PNModule* module,
   PN_END_TIME(CALCULATE_RESULT_VALUE_TYPES);
 }
 
+#if PN_CALCULATE_LIVENESS
 static void pn_basic_block_set_value_use(PNModule* module,
                                          PNFunction* function,
                                          PNBitSet* uses,
@@ -1985,6 +1953,41 @@ static void pn_function_calculate_uses(PNModule* module, PNFunction* function) {
     pn_basic_block_calculate_uses(module, function, &function->bbs[n]);
   }
   PN_END_TIME(CALCULATE_USES);
+}
+
+static void pn_function_calculate_pred_bbs(PNModule* module,
+                                           PNFunction* function) {
+  PN_BEGIN_TIME(CALCULATE_PRED_BBS);
+  uint32_t n;
+  for (n = 0; n < function->num_bbs; ++n) {
+    PNBasicBlock* bb = &function->bbs[n];
+    uint32_t m;
+    for (m = 0; m < bb->num_succ_bbs; ++m) {
+      PNBasicBlockId succ_bb_id = bb->succ_bb_ids[m];
+      assert(succ_bb_id < function->num_bbs);
+      PNBasicBlock* succ_bb = &function->bbs[succ_bb_id];
+      succ_bb->num_pred_bbs++;
+    }
+  }
+
+  for (n = 0; n < function->num_bbs; ++n) {
+    PNBasicBlock* bb = &function->bbs[n];
+    bb->pred_bb_ids = pn_allocator_alloc(
+        &module->allocator, sizeof(PNBasicBlockId) * bb->num_pred_bbs,
+        sizeof(PNBasicBlockId));
+    bb->num_pred_bbs = 0;
+  }
+
+  for (n = 0; n < function->num_bbs; ++n) {
+    PNBasicBlock* bb = &function->bbs[n];
+    uint32_t m;
+    for (m = 0; m < bb->num_succ_bbs; ++m) {
+      PNBasicBlockId succ_bb_id = bb->succ_bb_ids[m];
+      PNBasicBlock* succ_bb = &function->bbs[succ_bb_id];
+      succ_bb->pred_bb_ids[succ_bb->num_pred_bbs++] = n;
+    }
+  }
+  PN_END_TIME(CALCULATE_PRED_BBS);
 }
 
 static void pn_basic_block_calculate_liveness_per_value(
@@ -2161,6 +2164,7 @@ static void pn_function_calculate_phi_assigns(PNModule* module,
   }
   PN_END_TIME(CALCULATE_PHI_ASSIGNS);
 }
+#endif /* PN_CALCULATE_LIVENESS */
 
 static void pn_record_reader_init(PNRecordReader* reader,
                                   PNBitStream* bs,
