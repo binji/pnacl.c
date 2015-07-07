@@ -28,10 +28,7 @@
 #define PN_WRITE_UNALIGNED 1
 #define PN_DEFAULT_ALIGN 8
 
-#define PN_ARENA_SIZE (32 * 1024 * 1024)
-#define PN_VALUE_ARENA_SIZE (8 * 1024 * 1024)
-#define PN_INSTRUCTION_ARENA_SIZE (32 * 1024 * 1024)
-#define PN_TEMP_ARENA_SIZE (1 * 1024 * 1024)
+#define PN_MIN_CHUNKSIZE (64 * 1024)
 #define PN_MAX_BLOCK_ABBREV_OP 10
 #define PN_MAX_BLOCK_ABBREV 100
 #define PN_MAX_FUNCTION_ARGS 15
@@ -306,18 +303,27 @@ typedef enum PNCast {
   PN_CAST_BITCAST = 11,
 } PNCast;
 
-typedef struct PNArena {
-  const char* name;
-  void* start;
+typedef struct PNArenaChunk {
+  struct PNArenaChunk* next;
   void* current;
   void* end;
+} PNArenaChunk;
+
+typedef struct PNArena {
+  const char* name;
+  PNArenaChunk* chunk_head;
   /* Last allocation. This is the only one that can be realloc'd */
   void* last_alloc;
+  uint32_t min_chunk_size;
+  uint32_t total_used;
+  uint32_t internal_fragmentation;
 } PNArena;
 
 typedef struct PNArenaMark {
   void* current;
   void* last_alloc;
+  uint32_t total_used;
+  uint32_t internal_fragmentation;
 } PNArenaMark;
 
 typedef struct PNBitSet {
@@ -673,8 +679,22 @@ double PNTimespecToDouble(struct timespec* t) {
 
 #endif /* PN_TIMERS */
 
+static uint32_t pn_max(uint32_t x, uint32_t y) {
+  return x > y ? x : y;
+}
+
 static PNBool pn_is_power_of_two(uint32_t value) {
   return (value > 0) && ((value) & (value - 1)) == 0;
+}
+
+static uint32_t pn_next_power_of_two(uint32_t value) {
+  assert(value < 0x80000000);
+  uint32_t ret = 1;
+  while (ret < value) {
+    ret *= 2;
+  }
+
+  return ret;
 }
 
 static inline uint32_t pn_align_down(uint32_t size, uint32_t align) {
@@ -697,34 +717,63 @@ static inline PNBool pn_is_aligned_pointer(void* p, uint32_t align) {
   return ((intptr_t)p & (intptr_t)(align - 1)) == 0;
 }
 
-static void pn_arena_init(PNArena* arena, uint32_t size, const char* name) {
-  arena->start = malloc(size);
-  arena->current = arena->start;
-  arena->end = arena->start + size;
-  arena->last_alloc = NULL;
+static void pn_arena_init(PNArena* arena,
+                          uint32_t min_chunk_size,
+                          const char* name) {
+  assert(pn_is_power_of_two(min_chunk_size));
+  assert(min_chunk_size > sizeof(PNArenaChunk));
+
   arena->name = name;
+  arena->chunk_head = NULL;
+  arena->last_alloc = NULL;
+  arena->min_chunk_size = min_chunk_size;
+  arena->total_used = 0;
+  arena->internal_fragmentation = 0;
 }
 
-static void pn_arena_destroy(PNArena* arena) {
-  free(arena->start);
+static PNArenaChunk* pn_arena_new_chunk(PNArena* arena,
+                                        uint32_t initial_alloc_size,
+                                        uint32_t align) {
+  if (arena->chunk_head) {
+    arena->internal_fragmentation +=
+        (arena->chunk_head->end - arena->chunk_head->current);
+  }
+
+  uint32_t chunk_size = pn_next_power_of_two(
+      pn_max(initial_alloc_size + sizeof(PNArenaChunk) + align - 1,
+             arena->min_chunk_size));
+  PNArenaChunk* chunk = malloc(chunk_size);
+  assert(pn_is_aligned_pointer(chunk, sizeof(void*)));
+
+  chunk->current =
+      pn_align_up_pointer((void*)chunk + sizeof(PNArenaChunk), align);
+  chunk->end = (void*)chunk + chunk_size;
+  chunk->next = arena->chunk_head;
+  arena->chunk_head = chunk;
+  return chunk;
 }
 
 static void* pn_arena_alloc(PNArena* arena, uint32_t size, uint32_t align) {
-  void* ret = arena->current;
-  void* aligned_ret = pn_align_up_pointer(ret, align);
-  void* new_current = aligned_ret + size;
+  PNArenaChunk* chunk = arena->chunk_head;
+  void* ret;
+  void* new_current;
 
-  if (new_current > arena->end) {
-    PN_FATAL(
-        "Arena \"%s\" exhausted. Requested: %u, align: %u, avail: %ld, "
-        "capacity: %ld\n",
-        arena->name, size, align, arena->end - arena->current,
-        arena->end - arena->start);
+  if (chunk) {
+    ret = pn_align_up_pointer(chunk->current, align);
+    new_current = ret + size;
   }
 
-  arena->current = new_current;
-  arena->last_alloc = aligned_ret;
-  return aligned_ret;
+  if (!chunk || new_current > chunk->end) {
+    chunk = pn_arena_new_chunk(arena, size, align);
+    ret = pn_align_up_pointer(chunk->current, align);
+    new_current = ret + size;
+    assert(new_current <= chunk->end);
+  }
+
+  chunk->current = new_current;
+  arena->last_alloc = ret;
+  arena->total_used += size;
+  return ret;
 }
 
 static void* pn_arena_allocz(PNArena* arena, uint32_t size, uint32_t align) {
@@ -733,35 +782,82 @@ static void* pn_arena_allocz(PNArena* arena, uint32_t size, uint32_t align) {
   return p;
 }
 
-static void* pn_arena_realloc(PNArena* arena,
-                              void* p,
-                              uint32_t new_size,
-                              uint32_t align) {
-  if (p) {
-    assert(p == arena->last_alloc);
-    assert(pn_is_aligned_pointer(p, align));
-    arena->current = p;
+static void* pn_arena_realloc_add(PNArena* arena,
+                                  void** p,
+                                  uint32_t add_size,
+                                  uint32_t align) {
+  if (!*p) {
+    *p = pn_arena_alloc(arena, add_size, align);
+    return *p;
   }
-  void* ret = pn_arena_alloc(arena, new_size, align);
-  assert(!p || ret == p);
+
+  if (*p != arena->last_alloc) {
+    PN_FATAL(
+        "Attempting to realloc, but it was not the last allocation:\n"
+        "p = %p, last_alloc = %p\n",
+        *p, arena->last_alloc);
+  }
+
+  PNArenaChunk* chunk = arena->chunk_head;
+  assert(chunk);
+  void* ret = chunk->current;
+  void* new_current = chunk->current + add_size;
+
+  if (new_current > chunk->end) {
+    /* Doesn't fit, alloc a new chunk */
+    uint32_t old_size = chunk->current - *p;
+    uint32_t new_size = old_size + add_size;
+    chunk = pn_arena_new_chunk(arena, new_size, align);
+
+    assert(chunk->current + new_size <= chunk->end);
+    memcpy(chunk->current, *p, old_size);
+    *p = chunk->current;
+    ret = chunk->current + old_size;
+    new_current = ret + add_size;
+  }
+
+  chunk->current = new_current;
+  arena->last_alloc = *p;
+  arena->total_used += add_size;
   return ret;
+}
+
+static uint32_t pn_arena_last_alloc_size(PNArena* arena) {
+  PNArenaChunk* chunk = arena->chunk_head;
+  assert(chunk);
+  return chunk->current - arena->last_alloc;
 }
 
 static PNArenaMark pn_arena_mark(PNArena* arena) {
   PNArenaMark mark;
-  mark.current = arena->current;
+  mark.current = arena->chunk_head ? arena->chunk_head->current : 0;
   mark.last_alloc = arena->last_alloc;
-
+  mark.total_used = arena->total_used;
+  mark.internal_fragmentation = arena->internal_fragmentation;
   return mark;
 }
 
-static uint32_t pn_arena_used(PNArena* arena) {
-  return arena->current - arena->start;
-}
-
 static void pn_arena_reset_to_mark(PNArena* arena, PNArenaMark mark) {
-  arena->current = mark.current;
+  /* Free chunks until last_alloc is found */
+  PNArenaChunk* chunk = arena->chunk_head;
+  while (chunk) {
+    if (mark.last_alloc >= (void*)chunk &&
+        mark.last_alloc < (void*)chunk->end) {
+      break;
+    }
+
+    PNArenaChunk* next = chunk->next;
+    free(chunk);
+    chunk = next;
+  }
+
+  if (chunk) {
+    chunk->current = mark.current;
+  }
+  arena->chunk_head = chunk;
   arena->last_alloc = mark.last_alloc;
+  arena->total_used = mark.total_used;
+  arena->internal_fragmentation = mark.internal_fragmentation;
 }
 
 static void pn_bitset_init(PNArena* arena, PNBitSet* bitset, int32_t size) {
@@ -1018,7 +1114,7 @@ static void pn_string_concat(PNArena* arena,
 
   uint32_t old_dest_len = *dest_len;
   *dest_len += src_len;
-  *dest = pn_arena_realloc(arena, *dest, *dest_len, 1);
+  pn_arena_realloc_add(arena, (void**)dest, src_len, 1);
   memcpy(*dest + old_dest_len - 1, src, src_len);
   (*dest)[*dest_len - 1] = 0;
 }
@@ -1046,13 +1142,9 @@ static PNConstant* pn_function_get_constant(PNFunction* function,
 static PNConstant* pn_function_append_constant(PNModule* module,
                                                PNFunction* function,
                                                PNConstantId* out_constant_id) {
-  *out_constant_id = function->num_constants;
-  uint32_t new_size = sizeof(PNConstant) * (function->num_constants + 1);
-  function->constants = pn_arena_realloc(&module->arena, function->constants,
-                                         new_size, PN_DEFAULT_ALIGN);
-
-  function->num_constants++;
-  return &function->constants[*out_constant_id];
+  *out_constant_id = function->num_constants++;
+  return pn_arena_realloc_add(&module->arena, (void**)&function->constants,
+                              sizeof(PNConstant), PN_DEFAULT_ALIGN);
 }
 
 static PNGlobalVar* pn_module_get_global_var(PNModule* module,
@@ -1076,13 +1168,11 @@ static PNValue* pn_module_get_value(PNModule* module, PNValueId value_id) {
 
 static PNValue* pn_module_append_value(PNModule* module,
                                        PNValueId* out_value_id) {
-  *out_value_id = module->num_values;
-  uint32_t new_size = sizeof(PNValue) * (module->num_values + 1);
-  module->values = pn_arena_realloc(&module->value_arena, module->values,
-                                    new_size, PN_DEFAULT_ALIGN);
-
-  module->num_values++;
-  return &module->values[*out_value_id];
+  *out_value_id = module->num_values++;
+  PNValue* ret =
+      pn_arena_realloc_add(&module->value_arena, (void**)&module->values,
+                           sizeof(PNValue), PN_DEFAULT_ALIGN);
+  return ret;
 }
 
 static void pn_memory_check(PNMemory* memory, uint32_t offset, uint32_t size) {
@@ -1141,26 +1231,22 @@ static PNValue* pn_function_get_value(PNModule* module,
 static PNValue* pn_function_append_value(PNModule* module,
                                          PNFunction* function,
                                          PNValueId* out_value_id) {
-  uint32_t index = function->num_values;
+  uint32_t index = function->num_values++;
   *out_value_id = module->num_values + index;
-  uint32_t new_size = sizeof(PNValue) * (function->num_values + 1);
-  function->values = pn_arena_realloc(&module->value_arena, function->values,
-                                      new_size, PN_DEFAULT_ALIGN);
-
-  function->num_values++;
-  return &function->values[index];
+  PNValue* ret =
+      pn_arena_realloc_add(&module->value_arena, (void**)&function->values,
+                           sizeof(PNValue), PN_DEFAULT_ALIGN);
+  return ret;
 }
 
-static void* pn_function_append_instruction(
+static void* pn_basic_block_append_instruction(
     PNModule* module,
-    PNFunction* function,
     PNBasicBlock* bb,
     uint32_t instruction_size,
     PNInstructionId* out_instruction_id) {
   *out_instruction_id = bb->num_instructions;
-  uint32_t new_size = sizeof(PNInstruction*) * (bb->num_instructions + 1);
-  bb->instructions = pn_arena_realloc(&module->arena, bb->instructions,
-                                      new_size, sizeof(PNInstruction*));
+  pn_arena_realloc_add(&module->arena, (void**)&bb->instructions,
+                       sizeof(PNInstruction*), sizeof(PNInstruction*));
   void* p = pn_arena_allocz(&module->instruction_arena, instruction_size,
                             PN_DEFAULT_ALIGN);
   bb->instructions[*out_instruction_id] = p;
@@ -1168,15 +1254,14 @@ static void* pn_function_append_instruction(
   return p;
 }
 
-#define PN_FUNCTION_APPEND_INSTRUCTION(type, module, function, bb, id) \
-  (type*) pn_function_append_instruction(module, function, bb, sizeof(type), id)
+#define PN_BASIC_BLOCK_APPEND_INSTRUCTION(type, module, bb, id) \
+  (type*) pn_basic_block_append_instruction(module, bb, sizeof(type), id)
 
 static void pn_basic_block_list_append(PNArena* arena,
                                        PNBasicBlockId** bb_list,
                                        uint32_t* num_els,
                                        PNBasicBlockId bb_id) {
-  *bb_list =
-      pn_arena_realloc(arena, *bb_list, sizeof(PNBasicBlockId) * (*num_els + 1),
+  pn_arena_realloc_add(arena, (void**)bb_list, sizeof(PNBasicBlockId),
                        sizeof(PNBasicBlockId));
   (*bb_list)[(*num_els)++] = bb_id;
 }
@@ -1702,9 +1787,8 @@ static void pn_function_calculate_result_value_types(PNModule* module,
       PNInstruction* inst = bb->instructions[m];
       if (!pn_instruction_calculate_result_value_type(module, function, inst)) {
         /* One of the types is invalid, try again later */
-        invalid = pn_arena_realloc(&module->temp_arena, invalid,
-                                   sizeof(PNInstruction*) * (num_invalid + 1),
-                                   sizeof(PNInstruction*));
+        pn_arena_realloc_add(&module->temp_arena, (void**)&invalid,
+                             sizeof(PNInstruction*), sizeof(PNInstruction*));
         invalid[num_invalid++] = inst;
       }
     }
@@ -1804,10 +1888,8 @@ static void pn_basic_block_calculate_uses(PNModule* module,
         PNInstructionPhi* i = (PNInstructionPhi*)inst;
         int32_t n;
         for (n = 0; n < i->num_incoming; ++n) {
-          bb->phi_uses = pn_arena_realloc(
-              &module->arena, bb->phi_uses,
-              sizeof(PNPhiUse) * (bb->num_phi_uses + 1), PN_DEFAULT_ALIGN);
-
+          pn_arena_realloc_add(&module->arena, (void**)&bb->phi_uses,
+                               sizeof(PNPhiUse), PN_DEFAULT_ALIGN);
           PNPhiUse* use = &bb->phi_uses[bb->num_phi_uses++];
           use->dest_value_id = i->result_value_id;
           use->incoming = i->incoming[n];
@@ -2724,10 +2806,8 @@ static void pn_globalvar_block_read(PNModule* module,
               pn_globalvar_write_reloc(module, index, data_offset, addend);
             } else {
               /* Unknown value, this will need to be fixed up later */
-              reloc_infos =
-                  pn_arena_realloc(&module->temp_arena, reloc_infos,
-                                   sizeof(PNRelocInfo) * (num_reloc_infos + 1),
-                                   PN_DEFAULT_ALIGN);
+              pn_arena_realloc_add(&module->temp_arena, (void**)&reloc_infos,
+                                   sizeof(PNRelocInfo), PN_DEFAULT_ALIGN);
               PNRelocInfo* reloc_info = &reloc_infos[num_reloc_infos++];
               reloc_info->offset = data_offset;
               reloc_info->index = index;
@@ -3102,8 +3182,8 @@ static void pn_function_block_read(PNModule* module,
 
           case PN_FUNCTION_CODE_INST_BINOP: {
             PNInstructionId inst_id;
-            PNInstructionBinop* inst = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionBinop, module, function, cur_bb, &inst_id);
+            PNInstructionBinop* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
+                PNInstructionBinop, module, cur_bb, &inst_id);
 
             PNValueId value_id;
             PNValue* value =
@@ -3130,8 +3210,8 @@ static void pn_function_block_read(PNModule* module,
 
           case PN_FUNCTION_CODE_INST_CAST: {
             PNInstructionId inst_id;
-            PNInstructionCast* inst = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionCast, module, function, cur_bb, &inst_id);
+            PNInstructionCast* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
+                PNInstructionCast, module, cur_bb, &inst_id);
 
             PNValueId value_id;
             PNValue* value =
@@ -3153,8 +3233,8 @@ static void pn_function_block_read(PNModule* module,
 
           case PN_FUNCTION_CODE_INST_RET: {
             PNInstructionId inst_id;
-            PNInstructionRet* inst = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionRet, module, function, cur_bb, &inst_id);
+            PNInstructionRet* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
+                PNInstructionRet, module, cur_bb, &inst_id);
             inst->code = code;
             inst->value_id = PN_INVALID_VALUE_ID;
 
@@ -3168,8 +3248,8 @@ static void pn_function_block_read(PNModule* module,
 
           case PN_FUNCTION_CODE_INST_BR: {
             PNInstructionId inst_id;
-            PNInstructionBr* inst = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionBr, module, function, cur_bb, &inst_id);
+            PNInstructionBr* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
+                PNInstructionBr, module, cur_bb, &inst_id);
             inst->code = code;
             inst->true_bb_id = pn_record_read_uint32(&reader, "true_bb");
             inst->false_bb_id = PN_INVALID_BLOCK_ID;
@@ -3194,8 +3274,8 @@ static void pn_function_block_read(PNModule* module,
 
           case PN_FUNCTION_CODE_INST_SWITCH: {
             PNInstructionId inst_id;
-            PNInstructionSwitch* inst = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionSwitch, module, function, cur_bb, &inst_id);
+            PNInstructionSwitch* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
+                PNInstructionSwitch, module, cur_bb, &inst_id);
 
             inst->type_id = pn_record_read_uint32(&reader, "type_id");
             inst->value_id = pn_record_read_uint32(&reader, "value");
@@ -3247,8 +3327,8 @@ static void pn_function_block_read(PNModule* module,
 
           case PN_FUNCTION_CODE_INST_UNREACHABLE: {
             PNInstructionId inst_id;
-            PNInstructionUnreachable* inst = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionUnreachable, module, function, cur_bb, &inst_id);
+            PNInstructionUnreachable* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
+                PNInstructionUnreachable, module, cur_bb, &inst_id);
             inst->code = code;
             is_terminator = PN_TRUE;
             break;
@@ -3256,8 +3336,8 @@ static void pn_function_block_read(PNModule* module,
 
           case PN_FUNCTION_CODE_INST_PHI: {
             PNInstructionId inst_id;
-            PNInstructionPhi* inst = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionPhi, module, function, cur_bb, &inst_id);
+            PNInstructionPhi* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
+                PNInstructionPhi, module, cur_bb, &inst_id);
 
             PNValueId value_id;
             PNValue* value =
@@ -3286,23 +3366,20 @@ static void pn_function_block_read(PNModule* module,
                 PN_FATAL("unable to read phi bb index\n");
               }
 
-              inst->incoming = pn_arena_realloc(
-                  &module->instruction_arena, inst->incoming,
-                  sizeof(PNPhiIncoming) * (inst->num_incoming + 1),
-                  PN_DEFAULT_ALIGN);
-
-              PNPhiIncoming* incoming = &inst->incoming[inst->num_incoming];
+              pn_arena_realloc_add(&module->instruction_arena,
+                                   (void**)&inst->incoming,
+                                   sizeof(PNPhiIncoming), PN_DEFAULT_ALIGN);
+              PNPhiIncoming* incoming = &inst->incoming[inst->num_incoming++];
               incoming->bb_id = bb;
               incoming->value_id = value;
-              inst->num_incoming++;
             }
             break;
           }
 
           case PN_FUNCTION_CODE_INST_ALLOCA: {
             PNInstructionId inst_id;
-            PNInstructionAlloca* inst = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionAlloca, module, function, cur_bb, &inst_id);
+            PNInstructionAlloca* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
+                PNInstructionAlloca, module, cur_bb, &inst_id);
 
             PNValueId value_id;
             PNValue* value =
@@ -3323,8 +3400,8 @@ static void pn_function_block_read(PNModule* module,
 
           case PN_FUNCTION_CODE_INST_LOAD: {
             PNInstructionId inst_id;
-            PNInstructionLoad* inst = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionLoad, module, function, cur_bb, &inst_id);
+            PNInstructionLoad* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
+                PNInstructionLoad, module, cur_bb, &inst_id);
 
             PNValueId value_id;
             PNValue* value =
@@ -3347,8 +3424,8 @@ static void pn_function_block_read(PNModule* module,
 
           case PN_FUNCTION_CODE_INST_STORE: {
             PNInstructionId inst_id;
-            PNInstructionStore* inst = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionStore, module, function, cur_bb, &inst_id);
+            PNInstructionStore* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
+                PNInstructionStore, module, cur_bb, &inst_id);
 
             inst->code = code;
             inst->dest_id = pn_record_read_uint32(&reader, "dest");
@@ -3363,8 +3440,8 @@ static void pn_function_block_read(PNModule* module,
 
           case PN_FUNCTION_CODE_INST_CMP2: {
             PNInstructionId inst_id;
-            PNInstructionCmp2* inst = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionCmp2, module, function, cur_bb, &inst_id);
+            PNInstructionCmp2* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
+                PNInstructionCmp2, module, cur_bb, &inst_id);
 
             PNValueId value_id;
             PNValue* value =
@@ -3386,8 +3463,8 @@ static void pn_function_block_read(PNModule* module,
 
           case PN_FUNCTION_CODE_INST_VSELECT: {
             PNInstructionId inst_id;
-            PNInstructionVselect* inst = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionVselect, module, function, cur_bb, &inst_id);
+            PNInstructionVselect* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
+                PNInstructionVselect, module, cur_bb, &inst_id);
 
             PNValueId value_id;
             PNValue* value =
@@ -3411,9 +3488,9 @@ static void pn_function_block_read(PNModule* module,
 
           case PN_FUNCTION_CODE_INST_FORWARDTYPEREF: {
             PNInstructionId inst_id;
-            PNInstructionForwardtyperef* inst = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionForwardtyperef, module, function, cur_bb,
-                &inst_id);
+            PNInstructionForwardtyperef* inst =
+                PN_BASIC_BLOCK_APPEND_INSTRUCTION(PNInstructionForwardtyperef,
+                                                  module, cur_bb, &inst_id);
 
             inst->code = code;
             inst->value_id = pn_record_read_int32(&reader, "value");
@@ -3424,8 +3501,8 @@ static void pn_function_block_read(PNModule* module,
           case PN_FUNCTION_CODE_INST_CALL:
           case PN_FUNCTION_CODE_INST_CALL_INDIRECT: {
             PNInstructionId inst_id;
-            PNInstructionCall* inst = PN_FUNCTION_APPEND_INSTRUCTION(
-                PNInstructionCall, module, function, cur_bb, &inst_id);
+            PNInstructionCall* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
+                PNInstructionCall, module, cur_bb, &inst_id);
 
             inst->code = code;
             inst->is_indirect = code == PN_FUNCTION_CODE_INST_CALL_INDIRECT;
@@ -3474,12 +3551,10 @@ static void pn_function_block_read(PNModule* module,
                 arg = value_id - arg;
               }
 
-              inst->arg_ids = pn_arena_realloc(
-                  &module->instruction_arena, inst->arg_ids,
-                  sizeof(PNValueId) * (inst->num_args + 1), sizeof(PNValueId));
-
-              inst->arg_ids[inst->num_args] = arg;
-              inst->num_args++;
+              pn_arena_realloc_add(&module->instruction_arena,
+                                   (void**)&inst->arg_ids, sizeof(PNValueId),
+                                   sizeof(PNValueId));
+              inst->arg_ids[inst->num_args++] = arg;
             }
             break;
           }
@@ -3583,12 +3658,10 @@ static void pn_module_block_read(PNModule* module,
           }
 
           case PN_MODULE_CODE_FUNCTION: {
-            module->functions = pn_arena_realloc(
-                &module->arena, module->functions,
-                sizeof(PNFunction) * (module->num_functions + 1),
-                PN_DEFAULT_ALIGN);
+            PNFunction* function =
+                pn_arena_realloc_add(&module->arena, (void**)&module->functions,
+                                     sizeof(PNFunction), PN_DEFAULT_ALIGN);
             PNFunctionId function_id = module->num_functions++;
-            PNFunction* function = &module->functions[function_id];
 
             function->name[0] = 0;
             function->type_id = pn_record_read_int32(&reader, "type_id");
@@ -4127,11 +4200,10 @@ int main(int argc, char** argv, char** envp) {
 
   PNModule* module = calloc(1, sizeof(PNModule));
   PNBlockInfoContext context = {};
-  pn_arena_init(&module->arena, PN_ARENA_SIZE, "module");
-  pn_arena_init(&module->value_arena, PN_VALUE_ARENA_SIZE, "value");
-  pn_arena_init(&module->instruction_arena, PN_INSTRUCTION_ARENA_SIZE,
-                "instruction");
-  pn_arena_init(&module->temp_arena, PN_TEMP_ARENA_SIZE, "temp");
+  pn_arena_init(&module->arena, PN_MIN_CHUNKSIZE, "module");
+  pn_arena_init(&module->value_arena, PN_MIN_CHUNKSIZE, "value");
+  pn_arena_init(&module->instruction_arena, PN_MIN_CHUNKSIZE, "instruction");
+  pn_arena_init(&module->temp_arena, PN_MIN_CHUNKSIZE, "temp");
 
   PNMemory memory;
   memset(&memory, 0, sizeof(PNMemory));
@@ -4181,10 +4253,14 @@ int main(int argc, char** argv, char** envp) {
     printf("max num_constants: %u\n", pn_max_num_constants(module));
     printf("max num_values: %u\n", pn_max_num_values(module));
     printf("max num_bbs: %u\n", pn_max_num_bbs(module));
-    printf("arena: %u\n", pn_arena_used(&module->arena));
-    printf("value arena: %u\n", pn_arena_used(&module->value_arena));
-    printf("instruction arena: %u\n",
-           pn_arena_used(&module->instruction_arena));
+    printf("arena:             used: %10u frag: %10u\n",
+           module->arena.total_used, module->arena.internal_fragmentation);
+    printf("value arena:       used: %10u frag: %10u\n",
+           module->value_arena.total_used,
+           module->value_arena.internal_fragmentation);
+    printf("instruction arena: used: %10u frag: %10u\n",
+           module->instruction_arena.total_used,
+           module->instruction_arena.internal_fragmentation);
   }
 
   return 0;
