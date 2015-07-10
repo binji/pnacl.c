@@ -370,16 +370,9 @@ typedef struct PNRecordReader {
   uint32_t value_index;
 } PNRecordReader;
 
-typedef struct PNSwitchCaseValue {
-  int32_t low;
-  int32_t high;
-  PNBool is_single;
-} PNSwitchCaseValue;
-
 typedef struct PNSwitchCase {
+  int32_t value;
   PNBasicBlockId bb_id;
-  uint32_t num_values;
-  PNSwitchCaseValue* values;
 } PNSwitchCase;
 
 typedef struct PNPhiIncoming {
@@ -1414,18 +1407,7 @@ static void pn_instruction_trace(PNModule* module,
       uint32_t c;
       for (c = 0; c < i->num_cases; ++c) {
         PNSwitchCase* switch_case = &i->cases[c];
-        printf(" [");
-
-        int32_t i;
-        for (i = 0; i < switch_case->num_values; ++i) {
-          PNSwitchCaseValue* value = &switch_case->values[i];
-          if (value->is_single) {
-            printf("[%d] ", value->low);
-          } else {
-            printf("[%d,%d] ", value->low, value->high);
-          }
-        }
-        printf("=> bb:%d]", switch_case->bb_id);
+        printf(" [%d => bb:%d]", switch_case->value, switch_case->bb_id);
       }
       printf("\n");
       break;
@@ -3305,38 +3287,51 @@ static void pn_function_block_read(PNModule* module,
             pn_context_fix_value_ids(context, rel_id, 1, &inst->value_id);
 
             inst->base.code = code;
-            inst->num_cases = pn_record_read_int32(&reader, "num cases");
-            inst->cases = pn_allocator_alloc(
-                &module->instruction_allocator,
-                sizeof(PNSwitchCase) * inst->num_cases, PN_DEFAULT_ALIGN);
+            int32_t num_cases = pn_record_read_int32(&reader, "num cases");
+            uint32_t total_values = 0;
 
             int32_t c = 0;
-            for (c = 0; c < inst->num_cases; ++c) {
-              PNSwitchCase* switch_case = &inst->cases[c];
-              switch_case->num_values =
-                  pn_record_read_int32(&reader, "num values");
-              switch_case->values = pn_allocator_alloc(
-                  &module->instruction_allocator,
-                  sizeof(PNSwitchCaseValue) * switch_case->num_values,
-                  PN_DEFAULT_ALIGN);
+            for (c = 0; c < num_cases; ++c) {
+              int32_t num_case_values = 0;
 
               int32_t i;
-              for (i = 0; i < switch_case->num_values; ++i) {
-                PNSwitchCaseValue* value = &switch_case->values[i];
-                value->is_single = pn_record_read_int32(&reader, "is_single");
-                value->low = pn_decode_sign_rotated_value(
+              int32_t num_values = pn_record_read_int32(&reader, "num values");
+              for (i = 0; i < num_values; ++i) {
+                PNBool is_single = pn_record_read_int32(&reader, "is_single");
+                int32_t low = pn_decode_sign_rotated_value(
                     pn_record_read_int32(&reader, "low"));
-                if (!value->is_single) {
-                  value->high = pn_decode_sign_rotated_value(
+                int32_t high = low;
+                if (!is_single) {
+                  high = pn_decode_sign_rotated_value(
                       pn_record_read_int32(&reader, "high"));
                 }
-              }
-              switch_case->bb_id = pn_record_read_int32(&reader, "bb");
 
-              pn_basic_block_list_append(
-                  &module->allocator, &cur_bb->succ_bb_ids,
-                  &cur_bb->num_succ_bbs, switch_case->bb_id);
+                int32_t diff = high - low + 1;
+                PNSwitchCase* new_switch_cases = pn_allocator_realloc_add(
+                    &module->instruction_allocator, (void**)&inst->cases,
+                    diff * sizeof(PNSwitchCase), PN_DEFAULT_ALIGN);
+
+                int32_t n;
+                for (n = 0; n < diff; ++n) {
+                  new_switch_cases[n].value = n + low;
+                }
+
+                num_case_values += diff;
+              }
+
+              PNBasicBlockId bb_id = pn_record_read_int32(&reader, "bb");
+              for (i = total_values; i < total_values + num_case_values; ++i) {
+                inst->cases[i].bb_id = bb_id;
+              }
+
+              total_values += num_case_values;
+
+              pn_basic_block_list_append(&module->allocator,
+                                         &cur_bb->succ_bb_ids,
+                                         &cur_bb->num_succ_bbs, bb_id);
             }
+
+            inst->num_cases = total_values;
 
             is_terminator = PN_TRUE;
             break;

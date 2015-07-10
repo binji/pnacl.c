@@ -203,7 +203,7 @@ bb:1 (succs: 3 4 2)
   forwardtyperef %88(int32) int32
   %84(int32). phi bb:0=>%83(int32) bb:3=>%88(int32)
   %85(int32). load src:%84(int32) align=1
-  switch value:%85(int32) [default:3] [[0] => bb:4] [[32] => bb:2]
+  switch value:%85(int32) [default:3] [0 => bb:4] [32 => bb:2]
 bb:2 (succs: 3)
  defs: [%86,%87]
   %86(int32). binop op:add(0) %84(int32) %41(int32) (flags:0)
