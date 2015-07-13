@@ -980,50 +980,6 @@ static PNBool pn_bitset_is_set(PNBitSet* bitset, uint32_t bit) {
   return (bitset->words[word] & mask) != 0;
 }
 
-static const char* pn_binop_get_name(uint32_t op) {
-  const char* names[] = {
-      "add", "sub", "mul", "udiv", "sdiv", "urem", "srem", "shl", "lshr",
-      "ashr", "and", "or", "xor"
-  };
-
-  if (op >= PN_ARRAY_SIZE(names)) {
-    PN_FATAL("Invalid op: %u\n", op);
-  }
-
-  return names[op];
-}
-
-static const char* pn_cast_get_name(uint32_t op) {
-  const char* names[] = {
-      "trunc", "zext", "sext", "fptoui", "fptosi", "uitofp", "sitofp",
-      "fptrunc", "fpext", NULL, NULL, "bitcast"
-  };
-
-  if (op >= PN_ARRAY_SIZE(names)) {
-    PN_FATAL("Invalid op: %u\n", op);
-  }
-
-  return names[op];
-}
-
-static const char* pn_cmp2_get_name(uint32_t op) {
-  const char* names[] = {
-      "fcmp_false", "fcmp_oeq", "fcmp_ogt", "fcmp_oge",  "fcmp_olt", "fcmp_ole",
-      "fcmp_one",   "fcmp_ord", "fcmp_uno", "fcmp_ueq",  "fcmp_ugt", "fcmp_uge",
-      "fcmp_ult",   "fcmp_ule", "fcmp_une", "fcmp_true", NULL,       NULL,
-      NULL,         NULL,       NULL,       NULL,        NULL,       NULL,
-      NULL,         NULL,       NULL,       NULL,        NULL,       NULL,
-      NULL,         NULL,       "icmp_eq",  "icmp_ne",   "icmp_ugt", "icmp_uge",
-      "icmp_ult",   "icmp_ule", "icmp_sgt", "icmp_sge",  "icmp_slt", "icmp_sle",
-  };
-
-  if (op >= PN_ARRAY_SIZE(names)) {
-    PN_FATAL("Invalid op: %u\n", op);
-  }
-
-  return names[op];
-}
-
 static uint32_t pn_decode_char6(uint32_t value) {
   const char data[] =
       "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._";
@@ -1461,6 +1417,50 @@ static const char* pn_value_describe(PNModule* module,
   buffer[buffer_len] = 0;
 
   return buffer;
+}
+
+static const char* pn_binop_get_name(uint32_t op) {
+  const char* names[] = {
+      "add", "sub", "mul", "udiv", "sdiv", "urem", "srem", "shl", "lshr",
+      "ashr", "and", "or", "xor"
+  };
+
+  if (op >= PN_ARRAY_SIZE(names)) {
+    PN_FATAL("Invalid op: %u\n", op);
+  }
+
+  return names[op];
+}
+
+static const char* pn_cast_get_name(uint32_t op) {
+  const char* names[] = {
+      "trunc", "zext", "sext", "fptoui", "fptosi", "uitofp", "sitofp",
+      "fptrunc", "fpext", NULL, NULL, "bitcast"
+  };
+
+  if (op >= PN_ARRAY_SIZE(names)) {
+    PN_FATAL("Invalid op: %u\n", op);
+  }
+
+  return names[op];
+}
+
+static const char* pn_cmp2_get_name(uint32_t op) {
+  const char* names[] = {
+      "fcmp_false", "fcmp_oeq", "fcmp_ogt", "fcmp_oge",  "fcmp_olt", "fcmp_ole",
+      "fcmp_one",   "fcmp_ord", "fcmp_uno", "fcmp_ueq",  "fcmp_ugt", "fcmp_uge",
+      "fcmp_ult",   "fcmp_ule", "fcmp_une", "fcmp_true", NULL,       NULL,
+      NULL,         NULL,       NULL,       NULL,        NULL,       NULL,
+      NULL,         NULL,       NULL,       NULL,        NULL,       NULL,
+      NULL,         NULL,       "icmp_eq",  "icmp_ne",   "icmp_ugt", "icmp_uge",
+      "icmp_ult",   "icmp_ule", "icmp_sgt", "icmp_sge",  "icmp_slt", "icmp_sle",
+  };
+
+  if (op >= PN_ARRAY_SIZE(names)) {
+    PN_FATAL("Invalid op: %u\n", op);
+  }
+
+  return names[op];
 }
 
 static void pn_instruction_trace(PNModule* module,
