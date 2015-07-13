@@ -2,10 +2,15 @@ SHELL = bash
 
 .SUFFIXES:
 
+CC = clang
+
 .PHONY: all
-all: out/pnacl out/pnacl-liveness out/pnacl-notrace out/pnacl-notimers \
+all: out/pnacl out/pnacl-opt-assert
+
+.PHONY: everything
+everything: out/pnacl out/pnacl-liveness out/pnacl-notrace out/pnacl-notimers \
 	out/pnacl-notrace-notimers out/pnacl-opt out/pnacl-opt-assert out/pnacl-msan \
-	out/pnacl-asan
+	out/pnacl-asan out/pnacl-32
 
 CFLAGS = -Wall -Wno-unused-function -Werror -std=gnu89 -g
 
@@ -16,31 +21,34 @@ out/test/:
 	mkdir $@
 
 out/pnacl: pnacl.c | out
-	gcc $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^
 
 out/pnacl-liveness: pnacl.c | out
-	gcc -DPN_CALCULATE_LIVENESS=1 $(CFLAGS) -o $@ $^
+	$(CC) -DPN_CALCULATE_LIVENESS=1 $(CFLAGS) -o $@ $^
 
 out/pnacl-notrace: pnacl.c | out
-	gcc -DPN_TRACING=0 $(CFLAGS) -o $@ $^
+	$(CC) -DPN_TRACING=0 $(CFLAGS) -o $@ $^
 
 out/pnacl-notimers: pnacl.c | out
-	gcc -DPN_TIMERS=0 $(CFLAGS) -o $@ $^
+	$(CC) -DPN_TIMERS=0 $(CFLAGS) -o $@ $^
 
 out/pnacl-notrace-notimers: pnacl.c | out
-	gcc -DPN_TRACING=0 -DPN_TIMERS=0 $(CFLAGS) -o $@ $^
+	$(CC) -DPN_TRACING=0 -DPN_TIMERS=0 $(CFLAGS) -o $@ $^
 
 out/pnacl-opt: pnacl.c | out
-	gcc -O3 $(CFLAGS) -DNDEBUG -o $@ $^
+	$(CC) -O3 $(CFLAGS) -DNDEBUG -o $@ $^
 
 out/pnacl-opt-assert: pnacl.c | out
-	gcc -O3 $(CFLAGS) -o $@ $^
+	$(CC) -O3 $(CFLAGS) -o $@ $^
 
 out/pnacl-msan: pnacl.c | out
 	clang $(CFLAGS) -fsanitize=memory -fno-omit-frame-pointer -o $@ $^
 
 out/pnacl-asan: pnacl.c | out
 	clang $(CFLAGS) -fsanitize=address -fno-omit-frame-pointer -o $@ $^
+
+out/pnacl-32: pnacl.c | out
+	$(CC) $(CFLAGS) -m32 -o $@ $^
 
 #### TESTS ####
 

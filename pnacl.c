@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <getopt.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -1513,7 +1514,8 @@ static void pn_instruction_trace(PNModule* module,
       uint32_t c;
       for (c = 0; c < i->num_cases; ++c) {
         PNSwitchCase* switch_case = &i->cases[c];
-        printf(" [%ld => bb:%d]", switch_case->value, switch_case->bb_id);
+        printf(" [%" PRId64 " => bb:%d]", switch_case->value,
+               switch_case->bb_id);
       }
       printf("\n");
       break;
@@ -2536,7 +2538,7 @@ static int32_t pn_record_read_decoded_int32(PNRecordReader* reader,
 
   int64_t ret = pn_decode_sign_rotated_value_int64(value);
   if (ret < INT32_MIN || ret > INT32_MAX) {
-    PN_FATAL("value %ld out of int32 range.\n", ret);
+    PN_FATAL("value %" PRId64 " out of int32 range.\n", ret);
   }
 
   return ret;
@@ -3353,8 +3355,8 @@ static void pn_constants_block_read(PNModule* module,
                     pn_record_read_decoded_int64(&reader, "integer64 value");
                 constant->value.i64 = data;
 
-                PN_TRACE(CONSTANTS_BLOCK, "  %%%d. integer %ld\n", value_id,
-                         data);
+                PN_TRACE(CONSTANTS_BLOCK, "  %%%d. integer %" PRId64 "\n",
+                         value_id, data);
                 break;
               }
 
@@ -4623,9 +4625,9 @@ int main(int argc, char** argv, char** envp) {
     printf("num_types: %u\n", module->num_types);
     printf("num_functions: %u\n", module->num_functions);
     printf("num_global_vars: %u\n", module->num_global_vars);
-    printf("global_var size : %ld\n",
+    printf("global_var size : %" PRIdPTR "\n",
            memory.globalvar_end - memory.globalvar_start);
-    printf("startinfo size : %ld\n",
+    printf("startinfo size : %" PRIdPTR "\n",
            memory.startinfo_end - memory.startinfo_start);
     printf("max num_constants: %u\n", pn_max_num_constants(module));
     printf("max num_values: %u\n", pn_max_num_values(module));
