@@ -119,7 +119,7 @@ static struct timespec g_pn_timer_times[PN_NUM_TIMERS];
 
 typedef uint8_t PNBool;
 typedef uint16_t PNTypeId;
-typedef uint16_t PNValueId;
+typedef uint32_t PNValueId;
 typedef uint32_t PNFunctionId;
 typedef uint16_t PNConstantId;
 typedef uint32_t PNGlobalVarId;
@@ -3673,7 +3673,7 @@ static void pn_function_block_read(PNModule* module,
             while (1) {
               PNBasicBlockId bb;
               PNValueId value;
-              if (!pn_record_try_read_uint16(&reader, &value)) {
+              if (!pn_record_try_read_uint32(&reader, &value)) {
                 break;
               }
               if (context->use_relative_ids) {
