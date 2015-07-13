@@ -67,6 +67,11 @@
     exit(1);               \
   } while (0)
 #define PN_UNREACHABLE() PN_FATAL("unreachable\n")
+#define PN_CHECK(x)                         \
+  if (!(x)) {                               \
+    PN_FATAL("PN_CHECK failed: %s.\n", #x); \
+  } else                                    \
+  (void)0
 #define PN_STATIC_ASSERT__(x, line) int __pn_static_assert_##line[x ? 1 : -1]
 #define PN_STATIC_ASSERT_(x, line) PN_STATIC_ASSERT__(x, line)
 #define PN_STATIC_ASSERT(x) PN_STATIC_ASSERT_(x, __LINE__)
@@ -338,16 +343,16 @@ typedef struct PNAllocator {
   PNAllocatorChunk* chunk_head;
   /* Last allocation. This is the only one that can be realloc'd */
   void* last_alloc;
-  uint32_t min_chunk_size;
-  uint32_t total_used;
-  uint32_t internal_fragmentation;
+  size_t min_chunk_size;
+  size_t total_used;
+  size_t internal_fragmentation;
 } PNAllocator;
 
 typedef struct PNAllocatorMark {
   void* current;
   void* last_alloc;
-  uint32_t total_used;
-  uint32_t internal_fragmentation;
+  size_t total_used;
+  size_t internal_fragmentation;
 } PNAllocatorMark;
 
 typedef struct PNBitSet {
@@ -755,30 +760,29 @@ static void pn_free(void* p) {
 #undef free
 #define free DONT_CALL_THIS_FUNCTION
 
-static uint32_t pn_max(uint32_t x, uint32_t y) {
+static size_t pn_max(size_t x, size_t y) {
   return x > y ? x : y;
 }
 
-static PNBool pn_is_power_of_two(uint32_t value) {
+static PNBool pn_is_power_of_two(size_t value) {
   return (value > 0) && ((value) & (value - 1)) == 0;
 }
 
-static uint32_t pn_next_power_of_two(uint32_t value) {
-  assert(value < 0x80000000);
-  uint32_t ret = 1;
+static size_t pn_next_power_of_two(size_t value) {
+  size_t ret = 1;
   while (ret < value) {
-    ret *= 2;
+    ret <<= 1;
   }
 
   return ret;
 }
 
-static inline uint32_t pn_align_down(uint32_t size, uint32_t align) {
+static inline size_t pn_align_down(size_t size, uint32_t align) {
   assert(pn_is_power_of_two(align));
   return size & ~(align - 1);
 }
 
-static inline uint32_t pn_align_up(uint32_t size, uint32_t align) {
+static inline size_t pn_align_up(size_t size, uint32_t align) {
   assert(pn_is_power_of_two(align));
   return (size + align - 1) & ~(align - 1);
 }
@@ -794,7 +798,7 @@ static inline PNBool pn_is_aligned_pointer(void* p, uint32_t align) {
 }
 
 static void pn_allocator_init(PNAllocator* allocator,
-                              uint32_t min_chunk_size,
+                              size_t min_chunk_size,
                               const char* name) {
   assert(pn_is_power_of_two(min_chunk_size));
   assert(min_chunk_size > sizeof(PNAllocatorChunk));
@@ -808,14 +812,15 @@ static void pn_allocator_init(PNAllocator* allocator,
 }
 
 static PNAllocatorChunk* pn_allocator_new_chunk(PNAllocator* allocator,
-                                                uint32_t initial_alloc_size,
+                                                size_t initial_alloc_size,
                                                 uint32_t align) {
+  PN_CHECK(initial_alloc_size < 0x80000000);
   if (allocator->chunk_head) {
     allocator->internal_fragmentation +=
         (allocator->chunk_head->end - allocator->chunk_head->current);
   }
 
-  uint32_t chunk_size = pn_next_power_of_two(
+  size_t chunk_size = pn_next_power_of_two(
       pn_max(initial_alloc_size + sizeof(PNAllocatorChunk) + align - 1,
              allocator->min_chunk_size));
   PNAllocatorChunk* chunk = pn_malloc(chunk_size);
@@ -830,7 +835,7 @@ static PNAllocatorChunk* pn_allocator_new_chunk(PNAllocator* allocator,
 }
 
 static void* pn_allocator_alloc(PNAllocator* allocator,
-                                uint32_t size,
+                                size_t size,
                                 uint32_t align) {
   PNAllocatorChunk* chunk = allocator->chunk_head;
   void* ret;
@@ -839,12 +844,14 @@ static void* pn_allocator_alloc(PNAllocator* allocator,
   if (chunk) {
     ret = pn_align_up_pointer(chunk->current, align);
     new_current = ret + size;
+    PN_CHECK(new_current >= ret);
   }
 
   if (!chunk || new_current > chunk->end) {
     chunk = pn_allocator_new_chunk(allocator, size, align);
     ret = pn_align_up_pointer(chunk->current, align);
     new_current = ret + size;
+    PN_CHECK(new_current >= ret);
     assert(new_current <= chunk->end);
   }
 
@@ -855,7 +862,7 @@ static void* pn_allocator_alloc(PNAllocator* allocator,
 }
 
 static void* pn_allocator_allocz(PNAllocator* allocator,
-                                 uint32_t size,
+                                 size_t size,
                                  uint32_t align) {
   void* p = pn_allocator_alloc(allocator, size, align);
   memset(p, 0, size);
@@ -864,7 +871,7 @@ static void* pn_allocator_allocz(PNAllocator* allocator,
 
 static void* pn_allocator_realloc_add(PNAllocator* allocator,
                                       void** p,
-                                      uint32_t add_size,
+                                      size_t add_size,
                                       uint32_t align) {
   if (!*p) {
     *p = pn_allocator_alloc(allocator, add_size, align);
@@ -882,11 +889,12 @@ static void* pn_allocator_realloc_add(PNAllocator* allocator,
   assert(chunk);
   void* ret = chunk->current;
   void* new_current = chunk->current + add_size;
+  PN_CHECK(new_current > chunk->current);
 
   if (new_current > chunk->end) {
     /* Doesn't fit, alloc a new chunk */
-    uint32_t old_size = chunk->current - *p;
-    uint32_t new_size = old_size + add_size;
+    size_t old_size = chunk->current - *p;
+    size_t new_size = old_size + add_size;
     chunk = pn_allocator_new_chunk(allocator, new_size, align);
 
     assert(chunk->current + new_size <= chunk->end);
@@ -902,7 +910,7 @@ static void* pn_allocator_realloc_add(PNAllocator* allocator,
   return ret;
 }
 
-static uint32_t pn_allocator_last_alloc_size(PNAllocator* allocator) {
+static size_t pn_allocator_last_alloc_size(PNAllocator* allocator) {
   PNAllocatorChunk* chunk = allocator->chunk_head;
   assert(chunk);
   return chunk->current - allocator->last_alloc;
@@ -1021,7 +1029,7 @@ static void pn_bitstream_init(PNBitStream* bs, void* data, uint32_t data_len) {
 }
 
 static uint32_t pn_bitstream_read_frac_bits(PNBitStream* bs, int num_bits) {
-  assert(num_bits <= bs->curword_bits);
+  PN_CHECK(num_bits <= bs->curword_bits);
   uint32_t result;
   if (num_bits == 32) {
     result = bs->curword;
@@ -1041,6 +1049,7 @@ static void pn_bitstream_fill_curword(PNBitStream* bs) {
     bs->curword_bits = 32;
     bs->curword = *(uint32_t*)(bs->data + byte_offset);
   } else {
+    PN_CHECK(byte_offset <= bs->data_len);
     bs->curword_bits = (bs->data_len - byte_offset) * 8;
     if (bs->curword_bits) {
       bs->curword = *(uint32_t*)(bs->data + byte_offset);
@@ -1050,7 +1059,7 @@ static void pn_bitstream_fill_curword(PNBitStream* bs) {
 }
 
 static uint32_t pn_bitstream_read(PNBitStream* bs, int num_bits) {
-  assert(num_bits <= 32);
+  PN_CHECK(num_bits <= 32);
   if (num_bits <= bs->curword_bits) {
     return pn_bitstream_read_frac_bits(bs, num_bits);
   }
@@ -1075,13 +1084,13 @@ static uint32_t pn_bitstream_read_vbr(PNBitStream* bs, int num_bits) {
   uint64_t result = 0;
   int shift = 0;
   while (1) {
-    assert(shift < 64);
+    PN_CHECK(shift < 64);
     result |= (piece & lo_mask) << shift;
     if ((piece & hi_mask) == 0) {
       /* The value should be < 2**32, or should be sign-extended so the top
        * 32-bits are all 1 */
-      assert(result <= UINT32_MAX ||
-             ((result & 0x80000000) && ((result >> 32) == UINT32_MAX)));
+      PN_CHECK(result <= UINT32_MAX ||
+               ((result & 0x80000000) && ((result >> 32) == UINT32_MAX)));
       return result;
     }
     shift += num_bits - 1;
@@ -1100,7 +1109,7 @@ static uint64_t pn_bitstream_read_vbr_uint64(PNBitStream* bs, int num_bits) {
   uint64_t result = 0;
   int shift = 0;
   while (1) {
-    assert(shift < 64);
+    PN_CHECK(shift < 64);
     result |= (uint64_t)(piece & lo_mask) << shift;
     if ((piece & hi_mask) == 0) {
       return result;
@@ -2282,7 +2291,7 @@ static void pn_record_reader_init(PNRecordReader* reader,
 
 static PNBool pn_record_read_abbrev(PNRecordReader* reader,
                                     uint32_t* out_value) {
-  assert(reader->entry - 4 < reader->abbrevs->num_abbrevs);
+  PN_CHECK(reader->entry - 4 < reader->abbrevs->num_abbrevs);
   PNBlockAbbrev* abbrev = &reader->abbrevs->abbrevs[reader->entry - 4];
   if (reader->op_index >= abbrev->num_ops) {
     return PN_FALSE;
@@ -2313,6 +2322,7 @@ static PNBool pn_record_read_abbrev(PNRecordReader* reader,
       if (reader->value_index == 0) {
         /* First read is the number of elements */
         reader->num_values = pn_bitstream_read_vbr(reader->bs, 6);
+        PN_CHECK(reader->num_values > 0);
       }
 
       PNBlockAbbrevOp* elt_op = &abbrev->ops[reader->op_index + 1];
@@ -2622,7 +2632,7 @@ static void pn_record_reader_finish(PNRecordReader* reader) {
 static void pn_block_info_context_get_abbrev(PNBlockInfoContext* context,
                                              PNBlockId block_id,
                                              PNBlockAbbrevs* abbrevs) {
-  assert(block_id < PN_MAX_BLOCK_IDS);
+  PN_CHECK(block_id < PN_MAX_BLOCK_IDS);
   PNBlockAbbrevs* context_abbrevs = &context->block_abbrev_map[block_id];
   assert(abbrevs->num_abbrevs + context_abbrevs->num_abbrevs <=
          PN_MAX_BLOCK_ABBREV);
@@ -2638,7 +2648,7 @@ static void pn_block_info_context_get_abbrev(PNBlockInfoContext* context,
 static void pn_block_info_context_append_abbrev(PNBlockInfoContext* context,
                                                 PNBlockId block_id,
                                                 PNBlockAbbrev* abbrev) {
-  assert(block_id < PN_MAX_BLOCK_IDS);
+  PN_CHECK(block_id < PN_MAX_BLOCK_IDS);
   PNBlockAbbrevs* abbrevs = &context->block_abbrev_map[block_id];
   assert(abbrevs->num_abbrevs < PN_MAX_BLOCK_ABBREV);
   PNBlockAbbrev* dest_abbrev = &abbrevs->abbrevs[abbrevs->num_abbrevs++];
@@ -2651,7 +2661,7 @@ static PNBlockAbbrev* pn_block_abbrev_read(PNBitStream* bs,
   PNBlockAbbrev* abbrev = &abbrevs->abbrevs[abbrevs->num_abbrevs++];
 
   uint32_t num_ops = pn_bitstream_read_vbr(bs, 5);
-  assert(num_ops < PN_MAX_BLOCK_ABBREV_OP);
+  PN_CHECK(num_ops < PN_MAX_BLOCK_ABBREV_OP);
   while (abbrev->num_ops < num_ops) {
     PNBlockAbbrevOp* op = &abbrev->ops[abbrev->num_ops++];
 
@@ -2791,7 +2801,7 @@ static void pn_type_block_read(PNModule* module,
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
-        assert(current_type_id == module->num_types);
+        PN_CHECK(current_type_id == module->num_types);
         PN_TRACE(TYPE_BLOCK, "*** END BLOCK\n");
         pn_bitstream_align_32(bs);
         PN_END_TIME(TYPE_BLOCK_READ);
@@ -2823,7 +2833,7 @@ static void pn_type_block_read(PNModule* module,
           }
 
           case PN_TYPE_CODE_VOID: {
-            assert(current_type_id < module->num_types);
+            PN_CHECK(current_type_id < module->num_types);
             PNTypeId type_id = current_type_id++;
             PNType* type = &module->types[type_id];
             type->code = PN_TYPE_CODE_VOID;
@@ -2833,7 +2843,7 @@ static void pn_type_block_read(PNModule* module,
           }
 
           case PN_TYPE_CODE_FLOAT: {
-            assert(current_type_id < module->num_types);
+            PN_CHECK(current_type_id < module->num_types);
             PNTypeId type_id = current_type_id++;
             PNType* type = &module->types[type_id];
             type->code = PN_TYPE_CODE_FLOAT;
@@ -2843,7 +2853,7 @@ static void pn_type_block_read(PNModule* module,
           }
 
           case PN_TYPE_CODE_DOUBLE: {
-            assert(current_type_id < module->num_types);
+            PN_CHECK(current_type_id < module->num_types);
             PNTypeId type_id = current_type_id++;
             PNType* type = &module->types[type_id];
             type->code = PN_TYPE_CODE_DOUBLE;
@@ -2853,7 +2863,7 @@ static void pn_type_block_read(PNModule* module,
           }
 
           case PN_TYPE_CODE_INTEGER: {
-            assert(current_type_id < module->num_types);
+            PN_CHECK(current_type_id < module->num_types);
             PNTypeId type_id = current_type_id++;
             PNType* type = &module->types[type_id];
             type->code = PN_TYPE_CODE_INTEGER;
@@ -2882,7 +2892,7 @@ static void pn_type_block_read(PNModule* module,
           }
 
           case PN_TYPE_CODE_FUNCTION: {
-            assert(current_type_id < module->num_types);
+            PN_CHECK(current_type_id < module->num_types);
             PNTypeId type_id = current_type_id++;
             PNType* type = &module->types[type_id];
             type->code = PN_TYPE_CODE_FUNCTION;
@@ -2923,7 +2933,7 @@ static void pn_globalvar_write_reloc(PNModule* module,
                                      PNValueId value_id,
                                      uint32_t offset,
                                      uint32_t addend) {
-  assert(value_id < module->num_values);
+  PN_CHECK(value_id < module->num_values);
   PNValue* value = pn_module_get_value(module, value_id);
   uint32_t reloc_value;
   switch (value->code) {
@@ -2934,7 +2944,7 @@ static void pn_globalvar_write_reloc(PNModule* module,
     }
 
     case PN_VALUE_CODE_FUNCTION:
-      assert(addend == 0);
+      PN_CHECK(addend == 0);
       /* Use the function index as the function "address". */
       reloc_value = value->index;
       break;
@@ -3021,7 +3031,7 @@ static void pn_globalvar_block_read(PNModule* module,
         switch (code) {
           case PN_GLOBALVAR_CODE_VAR: {
             PNGlobalVarId global_var_id = module->num_global_vars++;
-            assert(global_var_id < num_global_vars);
+            PN_CHECK(global_var_id < num_global_vars);
 
             global_var = &module->global_vars[global_var_id];
             global_var->alignment =
@@ -3030,6 +3040,7 @@ static void pn_globalvar_block_read(PNModule* module,
                 pn_record_read_int32(&reader, "is_constant") != 0;
             global_var->num_initializers = 1;
 
+            PN_CHECK(pn_is_power_of_two(global_var->alignment));
             data_offset = pn_align_up(data_offset, global_var->alignment);
             global_var->offset = data_offset;
             initializer_id = 0;
@@ -3048,6 +3059,7 @@ static void pn_globalvar_block_read(PNModule* module,
           }
 
           case PN_GLOBALVAR_CODE_COMPOUND: {
+            PN_CHECK(global_var);
             global_var->num_initializers =
                 pn_record_read_int32(&reader, "num_initializers");
             PN_TRACE(GLOBALVAR_BLOCK, "  compound. num initializers: %d\n",
@@ -3056,7 +3068,8 @@ static void pn_globalvar_block_read(PNModule* module,
           }
 
           case PN_GLOBALVAR_CODE_ZEROFILL: {
-            assert(initializer_id < global_var->num_initializers);
+            PN_CHECK(global_var);
+            PN_CHECK(initializer_id < global_var->num_initializers);
             initializer_id++;
             uint32_t num_bytes = pn_record_read_uint32(&reader, "num_bytes");
 
@@ -3070,7 +3083,8 @@ static void pn_globalvar_block_read(PNModule* module,
           }
 
           case PN_GLOBALVAR_CODE_DATA: {
-            assert(initializer_id < global_var->num_initializers);
+            PN_CHECK(global_var);
+            PN_CHECK(initializer_id < global_var->num_initializers);
             initializer_id++;
             uint32_t num_bytes = 0;
             uint32_t value;
@@ -3095,7 +3109,8 @@ static void pn_globalvar_block_read(PNModule* module,
           }
 
           case PN_GLOBALVAR_CODE_RELOC: {
-            assert(initializer_id < global_var->num_initializers);
+            PN_CHECK(global_var);
+            PN_CHECK(initializer_id < global_var->num_initializers);
             initializer_id++;
             uint32_t index = pn_record_read_uint32(&reader, "reloc index");
             uint32_t addend = 0;
@@ -3464,6 +3479,7 @@ static void pn_function_block_read(PNModule* module,
     PN_TRACE(FUNCTION_BLOCK, "  %%%d. function arg %d\n", value_id, i);
   }
 
+  uint32_t num_bbs = 0;
   PNValueId first_bb_value_id = PN_INVALID_VALUE_ID;
   /* These are initialized with different values so the first instruction
    * creates the basic block */
@@ -3474,6 +3490,7 @@ static void pn_function_block_read(PNModule* module,
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
+        PN_CHECK(num_bbs == function->num_bbs);
         pn_function_calculate_result_value_types(module, function);
 #if PN_CALCULATE_LIVENESS
         pn_function_calculate_uses(module, function);
@@ -3537,13 +3554,14 @@ static void pn_function_block_read(PNModule* module,
         }
 
         if (prev_bb_id != cur_bb_id) {
-          assert(cur_bb_id < function->num_bbs);
+          PN_CHECK(cur_bb_id < function->num_bbs);
           prev_bb_id = cur_bb_id;
           cur_bb = &function->bbs[cur_bb_id];
           cur_bb->first_def_id = PN_INVALID_VALUE_ID;
           cur_bb->last_def_id = PN_INVALID_VALUE_ID;
 
           first_bb_value_id = pn_function_num_values(module, function);
+          num_bbs++;
         }
 
         switch (code) {
@@ -3677,6 +3695,7 @@ static void pn_function_block_read(PNModule* module,
                 int64_t high = low;
                 if (!is_single) {
                   high = pn_record_read_decoded_int64(&reader, "high");
+                  PN_CHECK(low <= high);
                 }
 
                 int64_t diff = high - low + 1;
@@ -3778,6 +3797,7 @@ static void pn_function_block_read(PNModule* module,
             inst->size_id = pn_record_read_uint32(&reader, "size");
             inst->alignment =
                 (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
+            PN_CHECK(pn_is_power_of_two(inst->alignment));
 
             pn_context_fix_value_ids(context, rel_id, 1, &inst->size_id);
             break;
@@ -3800,6 +3820,7 @@ static void pn_function_block_read(PNModule* module,
             inst->alignment =
                 (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
             inst->type_id = pn_record_read_int32(&reader, "type_id");
+            PN_CHECK(pn_is_power_of_two(inst->alignment));
 
             value->type_id = inst->type_id;
 
@@ -3817,6 +3838,7 @@ static void pn_function_block_read(PNModule* module,
             inst->value_id = pn_record_read_uint32(&reader, "value");
             inst->alignment =
                 (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
+            PN_CHECK(pn_is_power_of_two(inst->alignment));
 
             pn_context_fix_value_ids(context, rel_id, 2, &inst->dest_id,
                                      &inst->value_id);
@@ -4067,7 +4089,7 @@ static void pn_module_block_read(PNModule* module,
             /* Cache number of arguments to function */
             PNType* function_type =
                 pn_module_get_type(module, function->type_id);
-            assert(function_type->code == PN_TYPE_CODE_FUNCTION);
+            PN_CHECK(function_type->code == PN_TYPE_CODE_FUNCTION);
             function->num_args = function_type->num_args;
 
             PNValueId value_id;
@@ -4631,8 +4653,7 @@ int main(int argc, char** argv, char** envp) {
   }
 
   PNBlockId block_id = pn_bitstream_read_vbr(&bs, 8);
-  assert(block_id == PN_BLOCKID_MODULE);
-  (void)block_id;
+  PN_CHECK(block_id == PN_BLOCKID_MODULE);
   pn_module_block_read(module, &context, &bs);
   PN_TRACE(MODULE_BLOCK, "done\n");
 

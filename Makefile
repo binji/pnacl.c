@@ -77,6 +77,28 @@ out/test/%.bc: test/%.c | out/test
 out/test/%.pexe: out/test/%.bc | out/test
 	`$(NACL_SDK_ROOT)/tools/nacl_config.py --tool finalize -t pnacl` -o $@ $^
 
+#### FUZZ ####
+
+AFL_DIR ?= ~/dev/afl/afl-1.83b
+FUZZ_IN = fuzz-in
+FUZZ_OUT = fuzz-out
+
+.PHONY: fuzz-master fuzz-slave1 fuzz-slave2 fuzz-slave3
+fuzz-master: out/pnacl-afl
+	$(AFL_DIR)/afl-fuzz -i $(FUZZ_IN) -o $(FUZZ_OUT) -m 800 -M fuzz01 -- $^ @@
+
+fuzz-slave1: out/pnacl-afl
+	$(AFL_DIR)/afl-fuzz -i $(FUZZ_IN) -o $(FUZZ_OUT) -m 800 -S fuzz02 -- $^ @@
+
+fuzz-slave2: out/pnacl-afl
+	$(AFL_DIR)/afl-fuzz -i $(FUZZ_IN) -o $(FUZZ_OUT) -m 800 -S fuzz03 -- $^ @@
+
+fuzz-slave3: out/pnacl-afl
+	$(AFL_DIR)/afl-fuzz -i $(FUZZ_IN) -o $(FUZZ_OUT) -m 800 -S fuzz04 -- $^ @@
+
+out/pnacl-afl: pnacl.c | out
+	$(AFL_DIR)/afl-gcc -O3 $(CFLAGS) -o $@ $^
+
 #### CLEAN ####
 
 .PHONY: clean
