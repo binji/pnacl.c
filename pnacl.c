@@ -238,12 +238,12 @@ typedef enum PNFunctionCode {
   PN_FUNCTION_CODE_INST_CALL_INDIRECT = 44,
 } PNFunctionCode;
 
-typedef enum PNConstantsCode {
+typedef enum PNConstantCode {
   PN_CONSTANTS_CODE_SETTYPE = 1,
   PN_CONSTANTS_CODE_UNDEF = 3,
   PN_CONSTANTS_CODE_INTEGER = 4,
   PN_CONSTANTS_CODE_FLOAT = 6,
-} PNConstantsCode;
+} PNConstantCode;
 
 typedef enum PNBinOp {
   PN_BINOP_ADD = 0,
@@ -302,6 +302,17 @@ typedef enum PNCast {
   PN_CAST_FPEXT = 8,
   PN_CAST_BITCAST = 11,
 } PNCast;
+
+typedef enum PNBasicType {
+  PN_BASIC_TYPE_VOID,
+  PN_BASIC_TYPE_INT1,
+  PN_BASIC_TYPE_INT8,
+  PN_BASIC_TYPE_INT16,
+  PN_BASIC_TYPE_INT32,
+  PN_BASIC_TYPE_INT64,
+  PN_BASIC_TYPE_FLOAT,
+  PN_BASIC_TYPE_DOUBLE,
+} PNBasicType;
 
 typedef struct PNAllocatorChunk {
   struct PNAllocatorChunk* next;
@@ -519,15 +530,24 @@ typedef struct PNBasicBlock {
   PNValueId* liveout;
 } PNBasicBlock;
 
+typedef union PNRuntimeValue {
+  int8_t i8;
+  uint8_t u8;
+  int16_t i16;
+  uint16_t u16;
+  int32_t i32;
+  uint32_t u32;
+  int64_t i64;
+  uint64_t u64;
+  float f32;
+  double f64;
+} PNRuntimeValue;
+
 typedef struct PNConstant {
-  PNConstantsCode code;
+  PNConstantCode code;
   PNTypeId type_id;
-  union {
-    /* PN_CONSTANTS_CODE_INTEGER */
-    int32_t int_value;
-    /* PN_CONSTANTS_CODE_FLOAT */
-    float float_value;
-  };
+  PNBasicType basic_type;
+  PNRuntimeValue value;
 } PNConstant;
 
 typedef enum PNValueCode {
@@ -568,6 +588,7 @@ typedef struct PNFunction {
 
 typedef struct PNType {
   PNTypeCode code;
+  PNBasicType basic_type;
   union {
     /* PN_TYPE_CODE_INTEGER */
     uint32_t width;
@@ -2553,6 +2574,7 @@ static void pn_type_block_read(PNModule* module,
             PNTypeId type_id = current_type_id++;
             PNType* type = &module->types[type_id];
             type->code = PN_TYPE_CODE_VOID;
+            type->basic_type = PN_BASIC_TYPE_VOID;
             PN_TRACE(TYPE_BLOCK, "%d: type void\n", type_id);
             break;
           }
@@ -2562,6 +2584,7 @@ static void pn_type_block_read(PNModule* module,
             PNTypeId type_id = current_type_id++;
             PNType* type = &module->types[type_id];
             type->code = PN_TYPE_CODE_FLOAT;
+            type->basic_type = PN_BASIC_TYPE_FLOAT;
             PN_TRACE(TYPE_BLOCK, "%d: type float\n", type_id);
             break;
           }
@@ -2571,6 +2594,7 @@ static void pn_type_block_read(PNModule* module,
             PNTypeId type_id = current_type_id++;
             PNType* type = &module->types[type_id];
             type->code = PN_TYPE_CODE_DOUBLE;
+            type->basic_type = PN_BASIC_TYPE_DOUBLE;
             PN_TRACE(TYPE_BLOCK, "%d: type double\n", type_id);
             break;
           }
@@ -2581,6 +2605,25 @@ static void pn_type_block_read(PNModule* module,
             PNType* type = &module->types[type_id];
             type->code = PN_TYPE_CODE_INTEGER;
             type->width = pn_record_read_int32(&reader, "width");
+            switch (type->width) {
+              case 1:
+                type->basic_type = PN_BASIC_TYPE_INT1;
+                break;
+              case 8:
+                type->basic_type = PN_BASIC_TYPE_INT8;
+                break;
+              case 16:
+                type->basic_type = PN_BASIC_TYPE_INT16;
+                break;
+              case 32:
+                type->basic_type = PN_BASIC_TYPE_INT32;
+                break;
+              case 64:
+                type->basic_type = PN_BASIC_TYPE_INT64;
+                break;
+              default:
+                PN_FATAL("Bad integer width: %d\n", type->width);
+            }
             PN_TRACE(TYPE_BLOCK, "%d: type integer %d\n", type_id, type->width);
             break;
           }
@@ -2590,6 +2633,7 @@ static void pn_type_block_read(PNModule* module,
             PNTypeId type_id = current_type_id++;
             PNType* type = &module->types[type_id];
             type->code = PN_TYPE_CODE_FUNCTION;
+            type->basic_type = PN_BASIC_TYPE_INT32;
             type->is_varargs = pn_record_read_int32(&reader, "is_varargs");
             type->return_type = pn_record_read_int32(&reader, "return_type");
             type->num_args = 0;
@@ -2953,6 +2997,7 @@ static void pn_constants_block_read(PNModule* module,
   PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
 
   PNTypeId cur_type_id = -1;
+  PNBasicType cur_basic_type = PN_BASIC_TYPE_VOID;
   while (!pn_bitstream_at_end(bs)) {
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
@@ -2981,6 +3026,8 @@ static void pn_constants_block_read(PNModule* module,
         switch (code) {
           case PN_CONSTANTS_CODE_SETTYPE:
             cur_type_id = pn_record_read_int32(&reader, "current type");
+            cur_basic_type =
+                pn_module_get_type(module, cur_type_id)->basic_type;
             PN_TRACE(CONSTANTS_BLOCK, "  constants settype %d (%s)\n",
                      cur_type_id, pn_type_describe(module, cur_type_id));
             break;
@@ -2991,6 +3038,7 @@ static void pn_constants_block_read(PNModule* module,
                 pn_function_append_constant(module, function, &constant_id);
             constant->code = code;
             constant->type_id = cur_type_id;
+            constant->basic_type = cur_basic_type;
 
             PNValueId value_id;
             PNValue* value =
@@ -3012,7 +3060,15 @@ static void pn_constants_block_read(PNModule* module,
                 pn_function_append_constant(module, function, &constant_id);
             constant->code = code;
             constant->type_id = cur_type_id;
-            constant->int_value = data;
+            constant->basic_type = cur_basic_type;
+            switch (cur_basic_type) {
+              case PN_BASIC_TYPE_INT1: constant->value.i8 = -(data & 1); break;
+              case PN_BASIC_TYPE_INT8: constant->value.i8 = data; break;
+              case PN_BASIC_TYPE_INT16: constant->value.i16 = data; break;
+              case PN_BASIC_TYPE_INT32: constant->value.i32 = data; break;
+              case PN_BASIC_TYPE_INT64: constant->value.i64 = data; break;
+              default: PN_UNREACHABLE(); break;
+            }
 
             PNValueId value_id;
             PNValue* value =
@@ -3033,7 +3089,12 @@ static void pn_constants_block_read(PNModule* module,
                 pn_function_append_constant(module, function, &constant_id);
             constant->code = code;
             constant->type_id = cur_type_id;
-            constant->float_value = data;
+            constant->basic_type = cur_basic_type;
+            switch (cur_basic_type) {
+              case PN_BASIC_TYPE_FLOAT: constant->value.f32 = data; break;
+              case PN_BASIC_TYPE_DOUBLE: constant->value.f64 = data; break;
+              default: PN_UNREACHABLE(); break;
+            }
 
             PNValueId value_id;
             PNValue* value =
