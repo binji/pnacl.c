@@ -31,7 +31,6 @@
 #define PN_MIN_CHUNKSIZE (64 * 1024)
 #define PN_MAX_BLOCK_ABBREV_OP 10
 #define PN_MAX_BLOCK_ABBREV 100
-#define PN_MAX_FUNCTION_NAME 256
 #define PN_DEFAULT_MEMORY_SIZE (1024 * 1024)
 #define PN_MEMORY_GUARD_SIZE 1024
 
@@ -575,7 +574,7 @@ typedef struct PNValue {
 } PNValue;
 
 typedef struct PNFunction {
-  char name[PN_MAX_FUNCTION_NAME];
+  char* name;
   PNTypeId type_id;
   uint32_t num_args;
   uint32_t calling_convention;
@@ -3174,26 +3173,33 @@ static void pn_value_symtab_block_read(PNModule* module,
         switch (code) {
           case PN_VALUESYMBTAB_CODE_ENTRY: {
             PNValueId value_id = pn_record_read_int32(&reader, "value_id");
-            char buffer[1024];
-            char* p = &buffer[0];
+            char* name = NULL;
+            char* p;
             int32_t c;
 
             while (pn_record_try_read_int32(&reader, &c)) {
-              assert(p - &buffer[0] < 1024);
-              *p++ = c;
+              p = pn_allocator_realloc_add(&module->allocator, (void**)&name, 1,
+                                           1);
+              *p = c;
             }
-            *p = 0;
+
+            /* NULL-terminate the string if any characters were read. */
+            if (name) {
+              p = pn_allocator_realloc_add(&module->allocator, (void**)&name, 1,
+                                           1);
+              *p = 0;
+            }
 
             PNValue* value = pn_module_get_value(module, value_id);
             if (value->code == PN_VALUE_CODE_FUNCTION) {
               PNFunctionId function_id = value->index;
               PNFunction* function =
                   pn_module_get_function(module, function_id);
-              strncpy(function->name, buffer, PN_MAX_FUNCTION_NAME);
+              function->name = name;
             }
 
             PN_TRACE(VALUE_SYMTAB_BLOCK, "  entry: id:%d name:\"%s\"\n",
-                     value_id, buffer);
+                     value_id, name);
             break;
           }
 
@@ -4033,7 +4039,7 @@ static void pn_module_block_read(PNModule* module,
                 sizeof(PNFunction), PN_DEFAULT_ALIGN);
             PNFunctionId function_id = module->num_functions++;
 
-            function->name[0] = 0;
+            function->name = NULL;
             function->type_id = pn_record_read_int32(&reader, "type_id");
             function->calling_convention =
                 pn_record_read_int32(&reader, "calling_convention");

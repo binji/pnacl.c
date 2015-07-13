@@ -534,7 +534,7 @@ bb:56 (succs:)
   unreachable
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %3 ()
+function %3
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
@@ -563,7 +563,7 @@ bb:4 (succs:)
   ret
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %4 ()
+function %4
   %39. function arg 0
 num bbs:5
 *** SUBBLOCK CONSTANTS (11)
@@ -609,7 +609,7 @@ bb:4 (succs:)
   unreachable
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %5 ()
+function %5
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
@@ -623,7 +623,7 @@ bb:0 (succs:)
   ret %43(int32)
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %6 ()
+function %6
   %39. function arg 0
   %40. function arg 1
 num bbs:1
@@ -635,7 +635,7 @@ bb:0 (succs:)
   ret %41(int32)
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %7 ()
+function %7
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
@@ -649,7 +649,7 @@ bb:0 (succs:)
   ret %43(int32)
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %8 ()
+function %8
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
@@ -663,7 +663,7 @@ bb:0 (succs:)
   ret %43(int32)
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %9 ()
+function %9
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
@@ -677,7 +677,7 @@ bb:0 (succs:)
   ret %43(int32)
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %10 ()
+function %10
   %39. function arg 0
   %40. function arg 1
 num bbs:1
@@ -689,7 +689,7 @@ bb:0 (succs:)
   ret %41(int32)
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %11 ()
+function %11
   %39. function arg 0
   %40. function arg 1
 num bbs:1
@@ -701,7 +701,7 @@ bb:0 (succs:)
   ret %41(int32)
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %12 ()
+function %12
   %39. function arg 0
 num bbs:1
 *** SUBBLOCK CONSTANTS (11)
@@ -712,7 +712,7 @@ bb:0 (succs:)
   ret %40(int32)
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %13 ()
+function %13
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
@@ -725,7 +725,7 @@ bb:0 (succs:)
   ret %42(int32)
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %14 ()
+function %14
 num bbs:1
 bb:0 (succs:)
   ret
