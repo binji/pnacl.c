@@ -1496,8 +1496,10 @@ static void pn_instruction_trace(PNModule* module,
       if (i->is_indirect) {
         printf("indirect ");
       } else {
+        PNValue* function_value =
+            pn_module_get_value(module, i->callee_id);
         PNFunction* called_function =
-            pn_module_get_function(module, i->callee_id);
+            pn_module_get_function(module, function_value->index);
         name = called_function->name;
       }
       if (name && name[0]) {
@@ -3530,8 +3532,11 @@ static void pn_function_block_read(PNModule* module,
               inst->return_type_id =
                   pn_record_read_int32(&reader, "return_type");
             } else {
+              PNValue* function_value =
+                  pn_module_get_value(module, inst->callee_id);
+              assert(function_value->code == PN_VALUE_CODE_FUNCTION);
               PNFunction* called_function =
-                  pn_module_get_function(module, inst->callee_id);
+                  pn_module_get_function(module, function_value->index);
               type_id = called_function->type_id;
               PNType* function_type = pn_module_get_type(module, type_id);
               assert(function_type->code == PN_TYPE_CODE_FUNCTION);
