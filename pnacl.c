@@ -62,6 +62,10 @@
 #define PN_UNREACHABLE() PN_FATAL("unreachable\n")
 #define PN_STATIC_ASSERT(x) int __pn_static_assert_##__LINE__[x ? 1 : -1]
 
+/* Some crazy system where this isn't true? */
+PN_STATIC_ASSERT(sizeof(float) == sizeof(uint32_t));
+PN_STATIC_ASSERT(sizeof(double) == sizeof(uint64_t));
+
 #if PN_TIMERS
 
 #define PN_NANOSECONDS_IN_A_SECOND 1000000000
@@ -382,7 +386,7 @@ typedef struct PNRecordReader {
 } PNRecordReader;
 
 typedef struct PNSwitchCase {
-  int32_t value;
+  int64_t value;
   PNBasicBlockId bb_id;
 } PNSwitchCase;
 
@@ -985,6 +989,17 @@ static int32_t pn_decode_sign_rotated_value(uint32_t value) {
   }
 }
 
+static int64_t pn_decode_sign_rotated_value_int64(uint64_t value) {
+  if ((value & 1) == 0) {
+    return value >> 1;
+  }
+  if (value != 1) {
+    return -(value >> 1);
+  } else {
+    return INT64_MIN;
+  }
+}
+
 static void pn_bitstream_init(PNBitStream* bs, void* data, uint32_t data_len) {
   bs->data = data;
   bs->data_len = data_len;
@@ -1038,6 +1053,31 @@ static uint32_t pn_bitstream_read(PNBitStream* bs, int num_bits) {
 }
 
 static uint32_t pn_bitstream_read_vbr(PNBitStream* bs, int num_bits) {
+  uint64_t piece = pn_bitstream_read(bs, num_bits);
+  uint64_t hi_mask = 1 << (num_bits - 1);
+  if ((piece & hi_mask) == 0) {
+    return piece;
+  }
+
+  uint64_t lo_mask = hi_mask - 1;
+  uint64_t result = 0;
+  int shift = 0;
+  while (1) {
+    assert(shift < 64);
+    result |= (piece & lo_mask) << shift;
+    if ((piece & hi_mask) == 0) {
+      /* The value should be < 2**32, or should be sign-extended so the top
+       * 32-bits are all 1 */
+      assert(result <= UINT32_MAX ||
+             ((result & 0x80000000) && ((result >> 32) == UINT32_MAX)));
+      return result;
+    }
+    shift += num_bits - 1;
+    piece = pn_bitstream_read(bs, num_bits);
+  }
+}
+
+static uint64_t pn_bitstream_read_vbr_uint64(PNBitStream* bs, int num_bits) {
   uint32_t piece = pn_bitstream_read(bs, num_bits);
   uint32_t hi_mask = 1 << (num_bits - 1);
   if ((piece & hi_mask) == 0) {
@@ -1045,10 +1085,11 @@ static uint32_t pn_bitstream_read_vbr(PNBitStream* bs, int num_bits) {
   }
 
   uint32_t lo_mask = hi_mask - 1;
-  uint32_t result = 0;
+  uint64_t result = 0;
   int shift = 0;
   while (1) {
-    result |= (piece & lo_mask) << shift;
+    assert(shift < 64);
+    result |= (uint64_t)(piece & lo_mask) << shift;
     if ((piece & hi_mask) == 0) {
       return result;
     }
@@ -1056,6 +1097,7 @@ static uint32_t pn_bitstream_read_vbr(PNBitStream* bs, int num_bits) {
     piece = pn_bitstream_read(bs, num_bits);
   }
 }
+
 
 static void pn_bitstream_seek_bit(PNBitStream* bs, uint32_t bit_offset) {
   bs->bit_offset = pn_align_down(bit_offset, 32);
@@ -1180,7 +1222,7 @@ static PNGlobalVar* pn_module_get_global_var(PNModule* module,
 }
 
 static PNValue* pn_module_get_value(PNModule* module, PNValueId value_id) {
-  if (value_id < 0 || value_id >= module->num_values) {
+  if (value_id >= module->num_values) {
     PN_FATAL("accessing invalid value %d (max %d)", value_id,
              module->num_values);
   }
@@ -1234,9 +1276,7 @@ static uint32_t pn_function_num_values(PNModule* module, PNFunction* function) {
 static PNValue* pn_function_get_value(PNModule* module,
                                       PNFunction* function,
                                       PNValueId value_id) {
-  if (value_id < 0) {
-    PN_FATAL("accessing invalid value %d", value_id);
-  } else if (value_id < module->num_values) {
+  if (value_id < module->num_values) {
     return &module->values[value_id];
   }
 
@@ -1428,7 +1468,7 @@ static void pn_instruction_trace(PNModule* module,
       uint32_t c;
       for (c = 0; c < i->num_cases; ++c) {
         PNSwitchCase* switch_case = &i->cases[c];
-        printf(" [%d => bb:%d]", switch_case->value, switch_case->bb_id);
+        printf(" [%ld => bb:%d]", switch_case->value, switch_case->bb_id);
       }
       printf("\n");
       break;
@@ -2273,6 +2313,98 @@ static PNBool pn_record_read_abbrev(PNRecordReader* reader,
   }
 }
 
+static PNBool pn_record_read_abbrev_uint64(PNRecordReader* reader,
+                                    uint64_t* out_value) {
+  assert(reader->entry - 4 < reader->abbrevs->num_abbrevs);
+  PNBlockAbbrev* abbrev = &reader->abbrevs->abbrevs[reader->entry - 4];
+  if (reader->op_index >= abbrev->num_ops) {
+    return PN_FALSE;
+  }
+
+  PNBlockAbbrevOp* op = &abbrev->ops[reader->op_index];
+
+  switch (op->encoding) {
+    case PN_ENCODING_LITERAL:
+      *out_value = op->value;
+      reader->op_index++;
+      reader->value_index = 0;
+      return PN_TRUE;
+
+    case PN_ENCODING_FIXED:
+      *out_value = pn_bitstream_read(reader->bs, op->num_bits);
+      reader->op_index++;
+      reader->value_index = 0;
+      return PN_TRUE;
+
+    case PN_ENCODING_VBR:
+      *out_value = pn_bitstream_read_vbr_uint64(reader->bs, op->num_bits);
+      reader->op_index++;
+      reader->value_index = 0;
+      return PN_TRUE;
+
+    case PN_ENCODING_ARRAY: {
+      if (reader->value_index == 0) {
+        /* First read is the number of elements */
+        reader->num_values = pn_bitstream_read_vbr(reader->bs, 6);
+      }
+
+      PNBlockAbbrevOp* elt_op = &abbrev->ops[reader->op_index + 1];
+      switch (elt_op->encoding) {
+        case PN_ENCODING_LITERAL:
+          *out_value = elt_op->value;
+          break;
+
+        case PN_ENCODING_FIXED:
+          *out_value = pn_bitstream_read(reader->bs, elt_op->num_bits);
+          break;
+
+        case PN_ENCODING_VBR:
+          *out_value =
+              pn_bitstream_read_vbr_uint64(reader->bs, elt_op->num_bits);
+          break;
+
+        case PN_ENCODING_CHAR6:
+          *out_value = pn_decode_char6(pn_bitstream_read(reader->bs, 6));
+          break;
+
+        default:
+          PN_FATAL("bad encoding for array element: %d\n", elt_op->encoding);
+      }
+
+      if (++reader->value_index == reader->num_values) {
+        /* Array encoding uses the following op as the element op. Skip both */
+        reader->op_index += 2;
+      }
+      return PN_TRUE;
+    }
+
+    case PN_ENCODING_CHAR6:
+      *out_value = pn_decode_char6(pn_bitstream_read(reader->bs, 6));
+      reader->op_index++;
+      reader->value_index = 0;
+      return PN_TRUE;
+
+    case PN_ENCODING_BLOB:
+      if (reader->value_index == 0) {
+        /* First read is the number of elements */
+        reader->num_values = pn_bitstream_read(reader->bs, 6);
+        pn_bitstream_align_32(reader->bs);
+      }
+
+      /* TODO(binji): optimize? this is aligned, so it should be easy to extract
+       * all the data in a buffer.*/
+      *out_value = pn_bitstream_read(reader->bs, 8);
+      if (reader->value_index++ == reader->num_values) {
+        reader->op_index++;
+      }
+      return PN_TRUE;
+
+    default:
+      PN_FATAL("bad encoding: %d\n", op->encoding);
+  }
+}
+
+
 static PNBool pn_record_read_code(PNRecordReader* reader, uint32_t* out_code) {
   if (reader->entry == PN_ENTRY_UNABBREV_RECORD) {
     *out_code = pn_bitstream_read_vbr(reader->bs, 6);
@@ -2299,12 +2431,28 @@ static PNBool pn_record_try_read_uint32(PNRecordReader* reader,
   }
 }
 
+static PNBool pn_record_try_read_uint64(PNRecordReader* reader,
+                                        uint64_t* out_value) {
+  if (reader->entry == PN_ENTRY_UNABBREV_RECORD) {
+    /* num_values must be set, see if we're over the limit */
+    if (reader->value_index >= reader->num_values) {
+      return PN_FALSE;
+    }
+    *out_value = pn_bitstream_read_vbr_uint64(reader->bs, 6);
+    reader->value_index++;
+    return PN_TRUE;
+  } else {
+    /* Reading an abbreviation */
+    return pn_record_read_abbrev_uint64(reader, out_value);
+  }
+}
+
 static PNBool pn_record_try_read_uint16(PNRecordReader* reader,
                                         uint16_t* out_value) {
   uint32_t value;
   PNBool ret = pn_record_try_read_uint32(reader, &value);
   if (ret) {
-    if (value >= 1 << 16) {
+    if (value > UINT16_MAX) {
       PN_FATAL("value too large for u16; (%u)\n", value);
     }
 
@@ -2332,6 +2480,23 @@ static int32_t pn_record_read_int32(PNRecordReader* reader, const char* name) {
   return value;
 }
 
+static int32_t pn_record_read_decoded_int32(PNRecordReader* reader,
+                                            const char* name) {
+  /* We must decode int32 via int64 types because INT32_MIN is
+   * encoded as a 64-bit value (0x100000001) */
+  uint64_t value;
+  if (!pn_record_try_read_uint64(reader, &value)) {
+    PN_FATAL("unable to read %s.\n", name);
+  }
+
+  int64_t ret = pn_decode_sign_rotated_value_int64(value);
+  if (ret < INT32_MIN || ret > INT32_MAX) {
+    PN_FATAL("value %ld out of int32 range.\n", ret);
+  }
+
+  return ret;
+}
+
 static uint32_t pn_record_read_uint32(PNRecordReader* reader,
                                       const char* name) {
   uint32_t value;
@@ -2342,17 +2507,48 @@ static uint32_t pn_record_read_uint32(PNRecordReader* reader,
   return value;
 }
 
-static float pn_record_read_float(PNRecordReader* reader, const char* name) {
-  int32_t value;
-  if (!pn_record_try_read_int32(reader, &value)) {
+static uint64_t pn_record_read_uint64(PNRecordReader* reader,
+                                      const char* name) {
+  uint64_t value;
+  if (!pn_record_try_read_uint64(reader, &value)) {
     PN_FATAL("unable to read %s.\n", name);
   }
 
-  assert(sizeof(float) == sizeof(int32_t));
+  return value;
+}
+
+static int64_t pn_record_read_decoded_int64(PNRecordReader* reader,
+                                            const char* name) {
+  uint64_t value;
+  if (!pn_record_try_read_uint64(reader, &value)) {
+    PN_FATAL("unable to read %s.\n", name);
+  }
+
+  return pn_decode_sign_rotated_value_int64(value);
+}
+
+static float pn_record_read_float(PNRecordReader* reader, const char* name) {
+  uint32_t value;
+  if (!pn_record_try_read_uint32(reader, &value)) {
+    PN_FATAL("unable to read %s.\n", name);
+  }
+
   float float_value;
   memcpy(&float_value, &value, sizeof(float));
 
   return float_value;
+}
+
+static double pn_record_read_double(PNRecordReader* reader, const char* name) {
+  uint64_t value;
+  if (!pn_record_try_read_uint64(reader, &value)) {
+    PN_FATAL("unable to read %s.\n", name);
+  }
+
+  double double_value;
+  memcpy(&double_value, &value, sizeof(double));
+
+  return double_value;
 }
 
 static void pn_record_reader_finish(PNRecordReader* reader) {
@@ -3052,23 +3248,12 @@ static void pn_constants_block_read(PNModule* module,
           }
 
           case PN_CONSTANTS_CODE_INTEGER: {
-            int32_t data = pn_decode_sign_rotated_value(
-                pn_record_read_int32(&reader, "integer value"));
-
             PNConstantId constant_id;
             PNConstant* constant =
                 pn_function_append_constant(module, function, &constant_id);
             constant->code = code;
             constant->type_id = cur_type_id;
             constant->basic_type = cur_basic_type;
-            switch (cur_basic_type) {
-              case PN_BASIC_TYPE_INT1: constant->value.i8 = -(data & 1); break;
-              case PN_BASIC_TYPE_INT8: constant->value.i8 = data; break;
-              case PN_BASIC_TYPE_INT16: constant->value.i16 = data; break;
-              case PN_BASIC_TYPE_INT32: constant->value.i32 = data; break;
-              case PN_BASIC_TYPE_INT64: constant->value.i64 = data; break;
-              default: PN_UNREACHABLE(); break;
-            }
 
             PNValueId value_id;
             PNValue* value =
@@ -3077,24 +3262,62 @@ static void pn_constants_block_read(PNModule* module,
             value->type_id = cur_type_id;
             value->index = constant_id;
 
-            PN_TRACE(CONSTANTS_BLOCK, "  %%%d. integer %d\n", value_id, data);
+            switch (cur_basic_type) {
+              case PN_BASIC_TYPE_INT1:
+              case PN_BASIC_TYPE_INT8:
+              case PN_BASIC_TYPE_INT16:
+              case PN_BASIC_TYPE_INT32: {
+                int32_t data =
+                    pn_record_read_decoded_int32(&reader, "integer value");
+
+                switch (cur_basic_type) {
+                  case PN_BASIC_TYPE_INT1:
+                    constant->value.i8 = -(data & 1);
+                    break;
+                  case PN_BASIC_TYPE_INT8:
+                    constant->value.i8 = data;
+                    break;
+                  case PN_BASIC_TYPE_INT16:
+                    constant->value.i16 = data;
+                    break;
+                  case PN_BASIC_TYPE_INT32:
+                    constant->value.i32 = data;
+                    break;
+                  default:
+                    PN_UNREACHABLE();
+                    break;
+                }
+
+                PN_TRACE(CONSTANTS_BLOCK, "  %%%d. integer %d\n", value_id,
+                         data);
+                break;
+              }
+
+              case PN_BASIC_TYPE_INT64: {
+                int64_t data =
+                    pn_record_read_decoded_int64(&reader, "integer64 value");
+                constant->value.i64 = data;
+
+                PN_TRACE(CONSTANTS_BLOCK, "  %%%d. integer %ld\n", value_id,
+                         data);
+                break;
+              }
+
+              default:
+                PN_UNREACHABLE();
+                break;
+            }
+
             break;
           }
 
           case PN_CONSTANTS_CODE_FLOAT: {
-            float data = pn_record_read_float(&reader, "float value");
-
             PNConstantId constant_id;
             PNConstant* constant =
                 pn_function_append_constant(module, function, &constant_id);
             constant->code = code;
             constant->type_id = cur_type_id;
             constant->basic_type = cur_basic_type;
-            switch (cur_basic_type) {
-              case PN_BASIC_TYPE_FLOAT: constant->value.f32 = data; break;
-              case PN_BASIC_TYPE_DOUBLE: constant->value.f64 = data; break;
-              default: PN_UNREACHABLE(); break;
-            }
 
             PNValueId value_id;
             PNValue* value =
@@ -3103,7 +3326,27 @@ static void pn_constants_block_read(PNModule* module,
             value->type_id = cur_type_id;
             value->index = constant_id;
 
-            PN_TRACE(CONSTANTS_BLOCK, "  %%%d. float %g\n", value_id, data);
+            switch (cur_basic_type) {
+              case PN_BASIC_TYPE_FLOAT: {
+                float data = pn_record_read_float(&reader, "float value");
+                constant->value.f32 = data;
+                PN_TRACE(CONSTANTS_BLOCK, "  %%%d. float %g\n", value_id, data);
+                break;
+              }
+
+              case PN_BASIC_TYPE_DOUBLE: {
+                double data = pn_record_read_double(&reader, "double value");
+                constant->value.f64 = data;
+                PN_TRACE(CONSTANTS_BLOCK, "  %%%d. double %g\n", value_id,
+                         data);
+                break;
+              }
+
+              default:
+                PN_UNREACHABLE();
+                break;
+            }
+
             break;
           }
 
@@ -3300,7 +3543,9 @@ static void pn_function_block_read(PNModule* module,
             inst->base.code = code;
             inst->value_id = PN_INVALID_VALUE_ID;
 
-            if (pn_record_try_read_uint16(&reader, &inst->value_id)) {
+            uint32_t value_id;
+            if (pn_record_try_read_uint32(&reader, &value_id)) {
+              inst->value_id = value_id;
               pn_context_fix_value_ids(context, rel_id, 1, &inst->value_id);
             }
 
@@ -3361,20 +3606,18 @@ static void pn_function_block_read(PNModule* module,
               int32_t num_values = pn_record_read_int32(&reader, "num values");
               for (i = 0; i < num_values; ++i) {
                 PNBool is_single = pn_record_read_int32(&reader, "is_single");
-                int32_t low = pn_decode_sign_rotated_value(
-                    pn_record_read_int32(&reader, "low"));
-                int32_t high = low;
+                int64_t low = pn_record_read_decoded_int64(&reader, "low");
+                int64_t high = low;
                 if (!is_single) {
-                  high = pn_decode_sign_rotated_value(
-                      pn_record_read_int32(&reader, "high"));
+                  high = pn_record_read_decoded_int64(&reader, "high");
                 }
 
-                int32_t diff = high - low + 1;
+                int64_t diff = high - low + 1;
                 PNSwitchCase* new_switch_cases = pn_allocator_realloc_add(
                     &module->instruction_allocator, (void**)&inst->cases,
                     diff * sizeof(PNSwitchCase), PN_DEFAULT_ALIGN);
 
-                int32_t n;
+                int64_t n;
                 for (n = 0; n < diff; ++n) {
                   new_switch_cases[n].value = n + low;
                 }
