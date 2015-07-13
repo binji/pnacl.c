@@ -698,6 +698,53 @@ double PNTimespecToDouble(struct timespec* t) {
 
 #endif /* PN_TIMERS */
 
+static void* pn_malloc(size_t size) {
+  void* ret = malloc(size);
+  if (!ret) {
+    PN_FATAL("Out of memory.\n");
+  }
+  return ret;
+}
+
+static void* pn_realloc(void* p, size_t size) {
+  void* ret = realloc(p, size);
+  if (!ret) {
+    PN_FATAL("Out of memory.\n");
+  }
+  return ret;
+}
+
+static void* pn_calloc(size_t nmemb, size_t size) {
+  void* ret = calloc(nmemb, size);
+  if (!ret) {
+    PN_FATAL("Out of memory.\n");
+  }
+  return ret;
+}
+
+static char* pn_strdup(char* s) {
+  char* ret = strdup(s);
+  if (!ret) {
+    PN_FATAL("Out of memory.\n");
+  }
+  return ret;
+}
+
+static void pn_free(void* p) {
+  free(p);
+}
+
+#undef malloc
+#define malloc DONT_CALL_THIS_FUNCTION
+#undef realloc
+#define realloc DONT_CALL_THIS_FUNCTION
+#undef calloc
+#define calloc DONT_CALL_THIS_FUNCTION
+#undef strdup
+#define strdup DONT_CALL_THIS_FUNCTION
+#undef free
+#define free DONT_CALL_THIS_FUNCTION
+
 static uint32_t pn_max(uint32_t x, uint32_t y) {
   return x > y ? x : y;
 }
@@ -761,7 +808,7 @@ static PNAllocatorChunk* pn_allocator_new_chunk(PNAllocator* allocator,
   uint32_t chunk_size = pn_next_power_of_two(
       pn_max(initial_alloc_size + sizeof(PNAllocatorChunk) + align - 1,
              allocator->min_chunk_size));
-  PNAllocatorChunk* chunk = malloc(chunk_size);
+  PNAllocatorChunk* chunk = pn_malloc(chunk_size);
   assert(pn_is_aligned_pointer(chunk, sizeof(void*)));
 
   chunk->current =
@@ -871,7 +918,7 @@ static void pn_allocator_reset_to_mark(PNAllocator* allocator,
     }
 
     PNAllocatorChunk* next = chunk->next;
-    free(chunk);
+    pn_free(chunk);
     chunk = next;
   }
 
@@ -4266,10 +4313,10 @@ static char** pn_environ_copy(char** environ) {
     num_keys++;
   }
 
-  char** result = calloc(num_keys + 1, sizeof(char*));
+  char** result = pn_calloc(num_keys + 1, sizeof(char*));
   int i = 0;
   for (env = environ; *env; ++env, ++i) {
-    result[i] = strdup(*env);
+    result[i] = pn_strdup(*env);
   }
 
   return result;
@@ -4278,9 +4325,9 @@ static char** pn_environ_copy(char** environ) {
 static void pn_environ_free(char** environ) {
   char** env;
   for (env = environ; *env; ++env) {
-    free(*env);
+    pn_free(*env);
   }
-  free(environ);
+  pn_free(environ);
 }
 
 static void pn_environ_put(char*** environ, char* value) {
@@ -4296,21 +4343,21 @@ static void pn_environ_put(char*** environ, char* value) {
         continue;
       }
 
-      free(*env);
+      pn_free(*env);
       if (remove) {
         for (; *env; ++env) {
           *env = *(env + 1);
         }
       } else {
-        *env = strdup(value);
+        *env = pn_strdup(value);
       }
       return;
     }
   }
 
   if (!remove) {
-    *environ = realloc(*environ, (num_keys + 2) * sizeof(char*));
-    (*environ)[num_keys] = strdup(value);
+    *environ = pn_realloc(*environ, (num_keys + 2) * sizeof(char*));
+    (*environ)[num_keys] = pn_strdup(value);
     (*environ)[num_keys + 1] = 0;
   }
 }
@@ -4507,7 +4554,7 @@ int main(int argc, char** argv, char** envp) {
   size_t fsize = ftell(f);
   fseek(f, 0, SEEK_SET);
 
-  void* data = malloc(fsize);
+  void* data = pn_malloc(fsize);
 
   size_t read_size = fread(data, 1, fsize, f);
   if (read_size != fsize) {
@@ -4521,7 +4568,7 @@ int main(int argc, char** argv, char** envp) {
   pn_bitstream_init(&bs, data, fsize);
   pn_header_read(&bs);
 
-  PNModule* module = calloc(1, sizeof(PNModule));
+  PNModule* module = pn_calloc(1, sizeof(PNModule));
   PNBlockInfoContext context = {};
   pn_allocator_init(&module->allocator, PN_MIN_CHUNKSIZE, "module");
   pn_allocator_init(&module->value_allocator, PN_MIN_CHUNKSIZE, "value");
@@ -4532,7 +4579,7 @@ int main(int argc, char** argv, char** envp) {
   PNMemory memory;
   memset(&memory, 0, sizeof(PNMemory));
   memory.size = g_pn_memory_size;
-  memory.data = malloc(memory.size);
+  memory.data = pn_malloc(memory.size);
 
   module->memory = &memory;
 
