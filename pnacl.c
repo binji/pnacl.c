@@ -45,13 +45,21 @@
 #define PN_ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
 #if PN_TRACING
-#define PN_TRACE(flag, ...) if (g_pn_trace_##flag) printf(__VA_ARGS__)
+#define PN_TRACE(flag, ...) \
+  if (g_pn_trace_##flag)    \
+    printf(__VA_ARGS__);    \
+  else                      \
+  (void)0
 #define PN_IS_TRACE(flag) g_pn_trace_##flag
 #else
 #define PN_TRACE(flag, ...) (void)0
 #define PN_IS_TRACE(flag) PN_FALSE
 #endif /* PN_TRACING */
-#define PN_WARN(...) if( g_pn_verbose > 0) fprintf(stderr, __VA_ARGS__)
+#define PN_WARN(...)              \
+  if (g_pn_verbose > 0)           \
+    fprintf(stderr, __VA_ARGS__); \
+  else                            \
+  (void)0
 #define PN_ERROR(...) fprintf(stderr, __VA_ARGS__)
 #define PN_FATAL(...)      \
   do {                     \
@@ -59,7 +67,9 @@
     exit(1);               \
   } while (0)
 #define PN_UNREACHABLE() PN_FATAL("unreachable\n")
-#define PN_STATIC_ASSERT(x) int __pn_static_assert_##__LINE__[x ? 1 : -1]
+#define PN_STATIC_ASSERT__(x, line) int __pn_static_assert_##line[x ? 1 : -1]
+#define PN_STATIC_ASSERT_(x, line) PN_STATIC_ASSERT__(x, line)
+#define PN_STATIC_ASSERT(x) PN_STATIC_ASSERT_(x, __LINE__)
 
 /* Some crazy system where this isn't true? */
 PN_STATIC_ASSERT(sizeof(float) == sizeof(uint32_t));
