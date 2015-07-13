@@ -83,17 +83,17 @@ PN_STATIC_ASSERT(sizeof(double) == sizeof(uint64_t));
   struct timespec start_time_##name; \
   clock_gettime(CLOCK_MONOTONIC, &start_time_##name) /* no semicolon */
 
-#define PN_END_TIME(name)                                               \
-  do {                                                                  \
-    struct timespec end_time_##name;                                    \
-    clock_gettime(CLOCK_MONOTONIC, &end_time_##name);                   \
-    struct timespec time_delta_##name;                                  \
-    PNTimespecSubtract(&time_delta_##name, &end_time_##name,            \
-                       &start_time_##name);                             \
-    struct timespec* timer_##name = &g_pn_timer_times[PN_TIMER_##name]; \
-    struct timespec new_timer_##name;                                   \
-    PNTimespecAdd(&new_timer_##name, timer_##name, &time_delta_##name); \
-    *timer_##name = new_timer_##name;                                   \
+#define PN_END_TIME(name)                                                 \
+  do {                                                                    \
+    struct timespec end_time_##name;                                      \
+    clock_gettime(CLOCK_MONOTONIC, &end_time_##name);                     \
+    struct timespec time_delta_##name;                                    \
+    pn_timespec_subtract(&time_delta_##name, &end_time_##name,            \
+                         &start_time_##name);                             \
+    struct timespec* timer_##name = &g_pn_timer_times[PN_TIMER_##name];   \
+    struct timespec new_timer_##name;                                     \
+    pn_timespec_add(&new_timer_##name, timer_##name, &time_delta_##name); \
+    *timer_##name = new_timer_##name;                                     \
   } while (0) /* no semicolon */
 
 #define PN_FOREACH_TIMER(V)       \
@@ -669,40 +669,40 @@ typedef struct PNBlockInfoContext {
 } PNBlockInfoContext;
 
 #if PN_TIMERS
-void PNTimespecCheck(struct timespec* a) {
+void pn_timespec_check(struct timespec* a) {
   assert(a->tv_sec >= 0);
   assert(a->tv_nsec >= 0 && a->tv_nsec < PN_NANOSECONDS_IN_A_SECOND);
 }
 
-void PNTimespecSubtract(struct timespec* result,
-                        struct timespec* a,
-                        struct timespec* b) {
-  PNTimespecCheck(a);
-  PNTimespecCheck(b);
+void pn_timespec_subtract(struct timespec* result,
+                          struct timespec* a,
+                          struct timespec* b) {
+  pn_timespec_check(a);
+  pn_timespec_check(b);
   result->tv_sec = a->tv_sec - b->tv_sec;
   result->tv_nsec = a->tv_nsec - b->tv_nsec;
   if (result->tv_nsec < 0) {
     result->tv_sec--;
     result->tv_nsec += PN_NANOSECONDS_IN_A_SECOND;
   }
-  PNTimespecCheck(result);
+  pn_timespec_check(result);
 }
 
-void PNTimespecAdd(struct timespec* result,
-                   struct timespec* a,
-                   struct timespec* b) {
-  PNTimespecCheck(a);
-  PNTimespecCheck(b);
+void pn_timespec_add(struct timespec* result,
+                     struct timespec* a,
+                     struct timespec* b) {
+  pn_timespec_check(a);
+  pn_timespec_check(b);
   result->tv_sec = a->tv_sec + b->tv_sec;
   result->tv_nsec = a->tv_nsec + b->tv_nsec;
   if (result->tv_nsec >= PN_NANOSECONDS_IN_A_SECOND) {
     result->tv_sec++;
     result->tv_nsec -= PN_NANOSECONDS_IN_A_SECOND;
   }
-  PNTimespecCheck(result);
+  pn_timespec_check(result);
 }
 
-double PNTimespecToDouble(struct timespec* t) {
+double pn_timespec_to_double(struct timespec* t) {
   return (double)t->tv_sec + (double)t->tv_nsec / PN_NANOSECONDS_IN_A_SECOND;
 }
 
@@ -4646,9 +4646,9 @@ int main(int argc, char** argv, char** envp) {
 #define PN_PRINT_TIMER(name)                                          \
   struct timespec* timer_##name = &g_pn_timer_times[PN_TIMER_##name]; \
   printf("timer %-30s: %f sec (%%%.0f)\n", #name,                     \
-         PNTimespecToDouble(timer_##name),                            \
-         100 * PNTimespecToDouble(timer_##name) /                     \
-             PNTimespecToDouble(timer_TOTAL));
+         pn_timespec_to_double(timer_##name),                         \
+         100 * pn_timespec_to_double(timer_##name) /                  \
+             pn_timespec_to_double(timer_TOTAL));
     PN_FOREACH_TIMER(PN_PRINT_TIMER);
   }
 #endif /* PN_TIMERS */
