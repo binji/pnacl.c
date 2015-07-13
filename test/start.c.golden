@@ -20,6 +20,7 @@ num types: 3
 global var count: 0
 *** END BLOCK
 *** SUBBLOCK VALUE_SYMTAB (14)
+  start function id = 0
   entry: id:0 name:"_start"
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)

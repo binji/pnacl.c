@@ -136,6 +136,7 @@ global var count: 23
 *** SUBBLOCK VALUE_SYMTAB (14)
   entry: id:15 name:"llvm.nacl.read.tp"
   entry: id:1 name:"llvm.trap"
+  start function id = 2
   entry: id:2 name:"_start"
   entry: id:0 name:"llvm.memcpy.p0i8.p0i8.i32"
 *** END BLOCK

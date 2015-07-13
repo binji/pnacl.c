@@ -41,6 +41,7 @@
 #define PN_INVALID_VALUE_ID ((PNValueId)~0)
 #define PN_INVALID_BLOCK_ID ((PNBasicBlockId)~0)
 #define PN_INVALID_TYPE_ID ((PNTypeId)~0)
+#define PN_INVALID_FUNCTION_ID ((PNFunctionId)~0)
 
 #define PN_ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
@@ -650,6 +651,7 @@ typedef struct PNModule {
   PNGlobalVar* global_vars;
   uint32_t num_values;
   PNValue* values;
+  PNFunctionId start_function_id;
 
   PNAllocator allocator;
   PNAllocator value_allocator;
@@ -3223,6 +3225,12 @@ static void pn_value_symtab_block_read(PNModule* module,
               PNFunction* function =
                   pn_module_get_function(module, function_id);
               function->name = name;
+
+              if (strcmp(name, "_start") == 0) {
+                module->start_function_id = function_id;
+                PN_TRACE(VALUE_SYMTAB_BLOCK, "  start function id = %d\n",
+                         function_id);
+              }
             }
 
             PN_TRACE(VALUE_SYMTAB_BLOCK, "  entry: id:%d name:\"%s\"\n",
@@ -4632,6 +4640,8 @@ int main(int argc, char** argv, char** envp) {
   pn_header_read(&bs);
 
   PNModule* module = pn_calloc(1, sizeof(PNModule));
+  module->start_function_id = PN_INVALID_FUNCTION_ID;
+
   PNBlockInfoContext context = {};
   pn_allocator_init(&module->allocator, PN_MIN_CHUNKSIZE, "module");
   pn_allocator_init(&module->value_allocator, PN_MIN_CHUNKSIZE, "value");
