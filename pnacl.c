@@ -31,7 +31,6 @@
 #define PN_MIN_CHUNKSIZE (64 * 1024)
 #define PN_MAX_BLOCK_ABBREV_OP 10
 #define PN_MAX_BLOCK_ABBREV 100
-#define PN_MAX_FUNCTION_ARGS 15
 #define PN_MAX_FUNCTION_NAME 256
 #define PN_DEFAULT_MEMORY_SIZE (1024 * 1024)
 #define PN_MEMORY_GUARD_SIZE 1024
@@ -601,7 +600,7 @@ typedef struct PNType {
       PNBool is_varargs;
       PNTypeId return_type;
       uint32_t num_args;
-      PNTypeId arg_types[PN_MAX_FUNCTION_ARGS];
+      PNTypeId* arg_types;
     };
   };
 } PNType;
@@ -2833,13 +2832,16 @@ static void pn_type_block_read(PNModule* module,
             type->is_varargs = pn_record_read_int32(&reader, "is_varargs");
             type->return_type = pn_record_read_int32(&reader, "return_type");
             type->num_args = 0;
+            type->arg_types = NULL;
             PN_TRACE(TYPE_BLOCK, "%d: type function is_varargs:%d ret:%d ",
                      type_id, type->is_varargs, type->return_type);
 
             PNTypeId arg_type_id;
             while (pn_record_try_read_uint16(&reader, &arg_type_id)) {
-              assert(type->num_args < PN_ARRAY_SIZE(type->arg_types));
-              type->arg_types[type->num_args] = arg_type_id;
+              PNTypeId* new_arg_type_id = pn_allocator_realloc_add(
+                  &module->allocator, (void**)&type->arg_types,
+                  sizeof(PNTypeId), sizeof(PNTypeId));
+              *new_arg_type_id = arg_type_id;
               PN_TRACE(TYPE_BLOCK, "%d ", arg_type_id);
               type->num_args++;
             }
