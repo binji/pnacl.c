@@ -4086,77 +4086,6 @@ static void pn_module_block_read(PNModule* module,
   PN_FATAL("Unexpected end of stream.\n");
 }
 
-static void pn_header_read(PNBitStream* bs) {
-  const char sig[] = "PEXE";
-  int i;
-  for (i = 0; i < 4; ++i) {
-    if (pn_bitstream_read(bs, 8) != sig[i]) {
-      PN_FATAL("Expected '%c'\n", sig[i]);
-    }
-  }
-
-  uint32_t num_fields = pn_bitstream_read(bs, 16);
-  pn_bitstream_read(bs, 16); /* num_bytes */
-  for (i = 0; i < num_fields; ++i) {
-    uint32_t ftype = pn_bitstream_read(bs, 4);
-    uint32_t id = pn_bitstream_read(bs, 4);
-    if (id != 1) {
-      PN_FATAL("bad header id: %d\n", id);
-    }
-
-    /* Align to u16 */
-    pn_bitstream_read(bs, 8);
-    uint32_t length = pn_bitstream_read(bs, 16);
-
-    switch (ftype) {
-      case 0:
-        pn_bitstream_skip_bytes(bs, length);
-        break;
-      case 1:
-        pn_bitstream_read(bs, 32);
-        break;
-      default:
-        PN_FATAL("bad ftype %d\n", ftype);
-    }
-  }
-}
-
-static uint32_t pn_max_num_constants(PNModule* module) {
-  uint32_t result = 0;
-  uint32_t n;
-  for (n = 0; n < module->num_functions; ++n) {
-    if (module->functions[n].num_constants > result) {
-      result = module->functions[n].num_constants;
-    }
-  }
-
-  return result;
-}
-
-static uint32_t pn_max_num_values(PNModule* module) {
-  uint32_t result = 0;
-  uint32_t n;
-  for (n = 0; n < module->num_functions; ++n) {
-    if (module->functions[n].num_values > result) {
-      result = module->functions[n].num_values;
-    }
-  }
-
-  return result;
-}
-
-static uint32_t pn_max_num_bbs(PNModule* module) {
-  uint32_t result = 0;
-  uint32_t n;
-  for (n = 0; n < module->num_functions; ++n) {
-    if (module->functions[n].num_bbs > result) {
-      result = module->functions[n].num_bbs;
-    }
-  }
-
-  return result;
-}
-
 static int pn_string_list_count(char** p) {
   int result = 0;
   if (p) {
@@ -4549,6 +4478,100 @@ static void pn_options_parse(int argc, char** argv, char** env) {
 #endif /* PN_TRACING */
 }
 
+static void pn_header_read(PNBitStream* bs) {
+  const char sig[] = "PEXE";
+  int i;
+  for (i = 0; i < 4; ++i) {
+    if (pn_bitstream_read(bs, 8) != sig[i]) {
+      PN_FATAL("Expected '%c'\n", sig[i]);
+    }
+  }
+
+  uint32_t num_fields = pn_bitstream_read(bs, 16);
+  pn_bitstream_read(bs, 16); /* num_bytes */
+  for (i = 0; i < num_fields; ++i) {
+    uint32_t ftype = pn_bitstream_read(bs, 4);
+    uint32_t id = pn_bitstream_read(bs, 4);
+    if (id != 1) {
+      PN_FATAL("bad header id: %d\n", id);
+    }
+
+    /* Align to u16 */
+    pn_bitstream_read(bs, 8);
+    uint32_t length = pn_bitstream_read(bs, 16);
+
+    switch (ftype) {
+      case 0:
+        pn_bitstream_skip_bytes(bs, length);
+        break;
+      case 1:
+        pn_bitstream_read(bs, 32);
+        break;
+      default:
+        PN_FATAL("bad ftype %d\n", ftype);
+    }
+  }
+}
+
+static uint32_t pn_max_num_constants(PNModule* module) {
+  uint32_t result = 0;
+  uint32_t n;
+  for (n = 0; n < module->num_functions; ++n) {
+    if (module->functions[n].num_constants > result) {
+      result = module->functions[n].num_constants;
+    }
+  }
+
+  return result;
+}
+
+static uint32_t pn_max_num_values(PNModule* module) {
+  uint32_t result = 0;
+  uint32_t n;
+  for (n = 0; n < module->num_functions; ++n) {
+    if (module->functions[n].num_values > result) {
+      result = module->functions[n].num_values;
+    }
+  }
+
+  return result;
+}
+
+static uint32_t pn_max_num_bbs(PNModule* module) {
+  uint32_t result = 0;
+  uint32_t n;
+  for (n = 0; n < module->num_functions; ++n) {
+    if (module->functions[n].num_bbs > result) {
+      result = module->functions[n].num_bbs;
+    }
+  }
+
+  return result;
+}
+
+static const char* pn_human_readable_size_leaky(size_t size) {
+  const size_t gig = 1024*1024*1024;
+  const size_t meg = 1024*1024;
+  const size_t kilo = 1024;
+  char buffer[100];
+  if (size >= gig) {
+    snprintf(buffer, 100, "%.1fG", (size + gig - 1) / (double)gig);
+  } else if (size >= meg) {
+    snprintf(buffer, 100, "%.1fM", (size + meg - 1) / (double)meg);
+  } else if (size >= kilo) {
+    snprintf(buffer, 100, "%.1fK", (size + kilo - 1) / (double)kilo);
+  } else {
+    snprintf(buffer, 100, "%d", (int)size);
+  }
+  return pn_strdup(buffer);
+}
+
+static void pn_allocator_print_stats_leaky(PNAllocator* allocator) {
+  printf("%12s allocator: used: %7s frag: %7s\n", allocator->name,
+         pn_human_readable_size_leaky(allocator->total_used),
+         pn_human_readable_size_leaky(allocator->internal_fragmentation));
+}
+
 int main(int argc, char** argv, char** envp) {
   PN_BEGIN_TIME(TOTAL);
   pn_options_parse(argc, argv, envp);
@@ -4625,22 +4648,18 @@ int main(int argc, char** argv, char** envp) {
     printf("num_types: %u\n", module->num_types);
     printf("num_functions: %u\n", module->num_functions);
     printf("num_global_vars: %u\n", module->num_global_vars);
-    printf("global_var size : %" PRIdPTR "\n",
-           memory.globalvar_end - memory.globalvar_start);
-    printf("startinfo size : %" PRIdPTR "\n",
-           memory.startinfo_end - memory.startinfo_start);
     printf("max num_constants: %u\n", pn_max_num_constants(module));
     printf("max num_values: %u\n", pn_max_num_values(module));
     printf("max num_bbs: %u\n", pn_max_num_bbs(module));
-    printf("allocator:             used: %10u frag: %10u\n",
-           module->allocator.total_used,
-           module->allocator.internal_fragmentation);
-    printf("value allocator:       used: %10u frag: %10u\n",
-           module->value_allocator.total_used,
-           module->value_allocator.internal_fragmentation);
-    printf("instruction allocator: used: %10u frag: %10u\n",
-           module->instruction_allocator.total_used,
-           module->instruction_allocator.internal_fragmentation);
+    printf("global_var size : %s\n",
+           pn_human_readable_size_leaky(memory.globalvar_end -
+                                        memory.globalvar_start));
+    printf("startinfo size : %s\n",
+           pn_human_readable_size_leaky(memory.startinfo_end -
+                                        memory.startinfo_start));
+    pn_allocator_print_stats_leaky(&module->allocator);
+    pn_allocator_print_stats_leaky(&module->value_allocator);
+    pn_allocator_print_stats_leaky(&module->instruction_allocator);
   }
 
   return 0;
