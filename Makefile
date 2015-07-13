@@ -4,7 +4,8 @@ SHELL = bash
 
 .PHONY: all
 all: out/pnacl out/pnacl-liveness out/pnacl-notrace out/pnacl-notimers \
-	out/pnacl-notrace-notimers out/pnacl-opt out/pnacl-msan out/pnacl-asan
+	out/pnacl-notrace-notimers out/pnacl-opt out/pnacl-opt-assert out/pnacl-msan \
+	out/pnacl-asan
 
 CFLAGS = -Wall -Wno-unused-function -Werror -std=gnu89 -g
 
@@ -31,6 +32,9 @@ out/pnacl-notrace-notimers: pnacl.c | out
 
 out/pnacl-opt: pnacl.c | out
 	gcc -O3 $(CFLAGS) -DNDEBUG -o $@ $^
+
+out/pnacl-opt-assert: pnacl.c | out
+	gcc -O3 $(CFLAGS) -o $@ $^
 
 out/pnacl-msan: pnacl.c | out
 	clang $(CFLAGS) -fsanitize=memory -fno-omit-frame-pointer -o $@ $^
