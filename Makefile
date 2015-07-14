@@ -61,7 +61,7 @@ test: out/pnacl out/pnacl-asan $(TEST_PEXES)
 		for test in $(TESTS); do \
 			PEXE=out/test/$$test.pexe; \
 			echo "Testing $$exe -t $$PEXE"; \
-			diff -u --label "'output from $$PEXE'" <($$exe -t $$PEXE) test/$$test.c.golden; \
+			diff -u test/$$test.c.golden --label "'output from $$PEXE'" <($$exe -t $$PEXE); \
 		done; \
 	done
 
