@@ -4639,23 +4639,6 @@ int main(int argc, char** argv, char** envp) {
   pn_bitstream_init(&bs, data, fsize);
   pn_header_read(&bs);
 
-  PNModule* module = pn_calloc(1, sizeof(PNModule));
-  module->start_function_id = PN_INVALID_FUNCTION_ID;
-
-  PNBlockInfoContext context = {};
-  pn_allocator_init(&module->allocator, PN_MIN_CHUNKSIZE, "module");
-  pn_allocator_init(&module->value_allocator, PN_MIN_CHUNKSIZE, "value");
-  pn_allocator_init(&module->instruction_allocator, PN_MIN_CHUNKSIZE,
-                    "instruction");
-  pn_allocator_init(&module->temp_allocator, PN_MIN_CHUNKSIZE, "temp");
-
-  PNMemory memory;
-  memset(&memory, 0, sizeof(PNMemory));
-  memory.size = g_pn_memory_size;
-  memory.data = pn_malloc(memory.size);
-
-  module->memory = &memory;
-
   uint32_t entry = pn_bitstream_read(&bs, 2);
   PN_TRACE(MODULE_BLOCK, "entry: %d\n", entry);
   if (entry != PN_ENTRY_SUBBLOCK) {
@@ -4664,7 +4647,22 @@ int main(int argc, char** argv, char** envp) {
 
   PNBlockId block_id = pn_bitstream_read_vbr(&bs, 8);
   PN_CHECK(block_id == PN_BLOCKID_MODULE);
-  pn_module_block_read(module, &context, &bs);
+
+  PNMemory memory = {};
+  memory.size = g_pn_memory_size;
+  memory.data = pn_malloc(memory.size);
+
+  PNModule module = {};
+  module.start_function_id = PN_INVALID_FUNCTION_ID;
+  module.memory = &memory;
+  pn_allocator_init(&module.allocator, PN_MIN_CHUNKSIZE, "module");
+  pn_allocator_init(&module.value_allocator, PN_MIN_CHUNKSIZE, "value");
+  pn_allocator_init(&module.instruction_allocator, PN_MIN_CHUNKSIZE,
+                    "instruction");
+  pn_allocator_init(&module.temp_allocator, PN_MIN_CHUNKSIZE, "temp");
+
+  PNBlockInfoContext context = {};
+  pn_module_block_read(&module, &context, &bs);
   PN_TRACE(MODULE_BLOCK, "done\n");
 
   pn_memory_init_startinfo(&memory, g_pn_argv, g_pn_environ);
@@ -4686,21 +4684,21 @@ int main(int argc, char** argv, char** envp) {
 
   if (g_pn_print_stats) {
     printf("-----------------\n");
-    printf("num_types: %u\n", module->num_types);
-    printf("num_functions: %u\n", module->num_functions);
-    printf("num_global_vars: %u\n", module->num_global_vars);
-    printf("max num_constants: %u\n", pn_max_num_constants(module));
-    printf("max num_values: %u\n", pn_max_num_values(module));
-    printf("max num_bbs: %u\n", pn_max_num_bbs(module));
+    printf("num_types: %u\n", module.num_types);
+    printf("num_functions: %u\n", module.num_functions);
+    printf("num_global_vars: %u\n", module.num_global_vars);
+    printf("max num_constants: %u\n", pn_max_num_constants(&module));
+    printf("max num_values: %u\n", pn_max_num_values(&module));
+    printf("max num_bbs: %u\n", pn_max_num_bbs(&module));
     printf("global_var size : %s\n",
            pn_human_readable_size_leaky(memory.globalvar_end -
                                         memory.globalvar_start));
     printf("startinfo size : %s\n",
            pn_human_readable_size_leaky(memory.startinfo_end -
                                         memory.startinfo_start));
-    pn_allocator_print_stats_leaky(&module->allocator);
-    pn_allocator_print_stats_leaky(&module->value_allocator);
-    pn_allocator_print_stats_leaky(&module->instruction_allocator);
+    pn_allocator_print_stats_leaky(&module.allocator);
+    pn_allocator_print_stats_leaky(&module.value_allocator);
+    pn_allocator_print_stats_leaky(&module.instruction_allocator);
   }
 
   return 0;
