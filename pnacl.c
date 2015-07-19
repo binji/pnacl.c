@@ -5553,6 +5553,7 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);
       pn_executor_set_value(executor, i->result_value_id, value);
       location->instruction_id++;
+      break;
     }
 
 #define OPCODE_CAST(from, to)                                            \
