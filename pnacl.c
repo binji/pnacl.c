@@ -150,6 +150,7 @@ static char** g_pn_argv;
 static char** g_pn_environ;
 static uint32_t g_pn_memory_size = PN_DEFAULT_MEMORY_SIZE;
 static PNBool g_pn_print_stats;
+static PNBool g_pn_run;
 
 #if PN_TIMERS
 static PNBool g_pn_print_time;
@@ -5817,6 +5818,7 @@ enum {
   PN_FLAG_VERBOSE,
   PN_FLAG_HELP,
   PN_FLAG_MEMORY_SIZE,
+  PN_FLAG_RUN,
   PN_FLAG_ENV,
   PN_FLAG_USE_HOST_ENV,
 #if PN_TRACING
@@ -5838,6 +5840,7 @@ static struct option long_options[] = {
     {"verbose", no_argument, NULL, 'v'},
     {"help", no_argument, NULL, 'h'},
     {"memory-size", required_argument, NULL, 'm'},
+    {"run", no_argument, NULL, 'r'},
     {"env", required_argument, NULL, 'e'},
     {"use-host-env", no_argument, NULL, 'E'},
 #if PN_TRACING
@@ -5951,7 +5954,7 @@ static void pn_options_parse(int argc, char** argv, char** env) {
   char** environ_copy = pn_environ_copy(env);
 
   while (1) {
-    c = getopt_long(argc, argv, "vm:e:Ehtp", long_options, &option_index);
+    c = getopt_long(argc, argv, "vm:re:Ehtp", long_options, &option_index);
     if (c == -1) {
       break;
     }
@@ -5968,6 +5971,7 @@ static void pn_options_parse(int argc, char** argv, char** env) {
           case PN_FLAG_VERBOSE:
           case PN_FLAG_HELP:
           case PN_FLAG_MEMORY_SIZE:
+          case PN_FLAG_RUN:
           case PN_FLAG_ENV:
           case PN_FLAG_USE_HOST_ENV:
 #if PN_TRACING
@@ -6033,6 +6037,10 @@ static void pn_options_parse(int argc, char** argv, char** env) {
         g_pn_memory_size = size;
         break;
       }
+
+      case 'r':
+        g_pn_run = PN_TRUE;
+        break;
 
       case 'e':
         pn_environ_put(&g_pn_environ, optarg);
@@ -6256,6 +6264,11 @@ int main(int argc, char** argv, char** envp) {
   PN_TRACE(MODULE_BLOCK, "done\n");
 
   pn_memory_init_startinfo(&memory, g_pn_argv, g_pn_environ);
+
+  if (g_pn_run) {
+    PNExecutor executor;
+    pn_executor_init(&executor, &module);
+  }
 
   PN_END_TIME(TOTAL);
 
