@@ -342,6 +342,43 @@ typedef enum PNBasicType {
   PN_BASIC_TYPE_DOUBLE,
 } PNBasicType;
 
+#define PN_FOREACH_INTRINSIC(V)                                   \
+  V(LLVM_BSWAP_I16, "llvm.bswap.i16")                             \
+  V(LLVM_BSWAP_I32, "llvm.bswap.i32")                             \
+  V(LLVM_BSWAP_I64, "llvm.bswap.i64")                             \
+  V(LLVM_CTLZ_I32, "llvm.ctlz.i32")                               \
+  V(LLVM_CTTZ_I32, "llvm.cttz.i32")                               \
+  V(LLVM_FABS_F32, "llvm.fabs.f32")                               \
+  V(LLVM_FABS_F64, "llvm.fabs.f64")                               \
+  V(LLVM_MEMCPY, "llvm.memcpy.p0i8.p0i8.i32")                     \
+  V(LLVM_MEMMOVE, "llvm.memmove.p0i8.p0i8.i32")                   \
+  V(LLVM_MEMSET, "llvm.memset.p0i8.i32")                          \
+  V(LLVM_NACL_ATOMIC_CMPXCHG_I8, "llvm.nacl.atomic.cmpxchg.i8")   \
+  V(LLVM_NACL_ATOMIC_CMPXCHG_I16, "llvm.nacl.atomic.cmpxchg.i16") \
+  V(LLVM_NACL_ATOMIC_CMPXCHG_I32, "llvm.nacl.atomic.cmpxchg.i32") \
+  V(LLVM_NACL_ATOMIC_CMPXCHG_I64, "llvm.nacl.atomic.cmpxchg.i64") \
+  V(LLVM_NACL_ATOMIC_LOAD_I8, "llvm.nacl.atomic.load.i8")         \
+  V(LLVM_NACL_ATOMIC_LOAD_I16, "llvm.nacl.atomic.load.i16")       \
+  V(LLVM_NACL_ATOMIC_LOAD_I32, "llvm.nacl.atomic.load.i32")       \
+  V(LLVM_NACL_ATOMIC_LOAD_I64, "llvm.nacl.atomic.load.i64")       \
+  V(LLVM_NACL_ATOMIC_RMW_I8, "llvm.nacl.atomic.rmw.i8")           \
+  V(LLVM_NACL_ATOMIC_RMW_I16, "llvm.nacl.atomic.rmw.i16")         \
+  V(LLVM_NACL_ATOMIC_RMW_I32, "llvm.nacl.atomic.rmw.i32")         \
+  V(LLVM_NACL_ATOMIC_RMW_I64, "llvm.nacl.atomic.rmw.i64")         \
+  V(LLVM_NACL_ATOMIC_STORE_I8, "llvm.nacl.atomic.store.i8")       \
+  V(LLVM_NACL_ATOMIC_STORE_I16, "llvm.nacl.atomic.store.i16")     \
+  V(LLVM_NACL_ATOMIC_STORE_I32, "llvm.nacl.atomic.store.i32")     \
+  V(LLVM_NACL_ATOMIC_STORE_I64, "llvm.nacl.atomic.store.i64")     \
+  V(LLVM_NACL_LONGJMP, "llvm.nacl.longjmp")                       \
+  V(LLVM_NACL_READ_TP, "llvm.nacl.read.tp")                       \
+  V(LLVM_NACL_SETJMP, "llvm.nacl.setjmp")                         \
+  V(LLVM_SQRT_F32, "llvm.sqrt.f32")                               \
+  V(LLVM_SQRT_F64, "llvm.sqrt.f64")                               \
+  V(LLVM_STACKRESTORE, "llvm.stackrestore")                       \
+  V(LLVM_STACKSAVE, "llvm.stacksave")                             \
+  V(LLVM_TRAP, "llvm.trap")                                       \
+  V(START, "_start")
+
 typedef enum PNOpcode {
   PN_OPCODE_ALLOCA_INT32,
   PN_OPCODE_BINOP_ADD_DOUBLE,
@@ -543,6 +580,11 @@ typedef enum PNOpcode {
   PN_OPCODE_ICMP_ULT_INT16,
   PN_OPCODE_ICMP_ULT_INT32,
   PN_OPCODE_ICMP_ULT_INT64,
+
+#define PN_INTRINSIC_OPCODE(e, name) PN_OPCODE_INTRINSIC_##e,
+  PN_FOREACH_INTRINSIC(PN_INTRINSIC_OPCODE)
+#undef PN_INTRINSIC_OPCODE
+
   PN_OPCODE_LOAD_DOUBLE,
   PN_OPCODE_LOAD_FLOAT,
   PN_OPCODE_LOAD_INT8,
@@ -566,43 +608,6 @@ typedef enum PNOpcode {
   PN_OPCODE_UNREACHABLE,
   PN_OPCODE_VSELECT,
 } PNOpcode;
-
-#define PN_FOREACH_INTRINSIC(V)                                   \
-  V(LLVM_BSWAP_I16, "llvm.bswap.i16")                             \
-  V(LLVM_BSWAP_I32, "llvm.bswap.i32")                             \
-  V(LLVM_BSWAP_I64, "llvm.bswap.i64")                             \
-  V(LLVM_CTLZ_I32, "llvm.ctlz.i32")                               \
-  V(LLVM_CTTZ_I32, "llvm.cttz.i32")                               \
-  V(LLVM_FABS_F32, "llvm.fabs.f32")                               \
-  V(LLVM_FABS_F64, "llvm.fabs.f64")                               \
-  V(LLVM_MEMCPY, "llvm.memcpy.p0i8.p0i8.i32")                     \
-  V(LLVM_MEMMOVE, "llvm.memmove.p0i8.p0i8.i32")                   \
-  V(LLVM_MEMSET, "llvm.memset.p0i8.i32")                          \
-  V(LLVM_NACL_ATOMIC_CMPXCHG_I8, "llvm.nacl.atomic.cmpxchg.i8")   \
-  V(LLVM_NACL_ATOMIC_CMPXCHG_I16, "llvm.nacl.atomic.cmpxchg.i16") \
-  V(LLVM_NACL_ATOMIC_CMPXCHG_I32, "llvm.nacl.atomic.cmpxchg.i32") \
-  V(LLVM_NACL_ATOMIC_CMPXCHG_I64, "llvm.nacl.atomic.cmpxchg.i64") \
-  V(LLVM_NACL_ATOMIC_LOAD_I8, "llvm.nacl.atomic.load.i8")         \
-  V(LLVM_NACL_ATOMIC_LOAD_I16, "llvm.nacl.atomic.load.i16")       \
-  V(LLVM_NACL_ATOMIC_LOAD_I32, "llvm.nacl.atomic.load.i32")       \
-  V(LLVM_NACL_ATOMIC_LOAD_I64, "llvm.nacl.atomic.load.i64")       \
-  V(LLVM_NACL_ATOMIC_RMW_I8, "llvm.nacl.atomic.rmw.i8")           \
-  V(LLVM_NACL_ATOMIC_RMW_I16, "llvm.nacl.atomic.rmw.i16")         \
-  V(LLVM_NACL_ATOMIC_RMW_I32, "llvm.nacl.atomic.rmw.i32")         \
-  V(LLVM_NACL_ATOMIC_RMW_I64, "llvm.nacl.atomic.rmw.i64")         \
-  V(LLVM_NACL_ATOMIC_STORE_I8, "llvm.nacl.atomic.store.i8")       \
-  V(LLVM_NACL_ATOMIC_STORE_I16, "llvm.nacl.atomic.store.i16")     \
-  V(LLVM_NACL_ATOMIC_STORE_I32, "llvm.nacl.atomic.store.i32")     \
-  V(LLVM_NACL_ATOMIC_STORE_I64, "llvm.nacl.atomic.store.i64")     \
-  V(LLVM_NACL_LONGJMP, "llvm.nacl.longjmp")                       \
-  V(LLVM_NACL_READ_TP, "llvm.nacl.read.tp")                       \
-  V(LLVM_NACL_SETJMP, "llvm.nacl.setjmp")                         \
-  V(LLVM_SQRT_F32, "llvm.sqrt.f32")                               \
-  V(LLVM_SQRT_F64, "llvm.sqrt.f64")                               \
-  V(LLVM_STACKRESTORE, "llvm.stackrestore")                       \
-  V(LLVM_STACKSAVE, "llvm.stacksave")                             \
-  V(LLVM_TRAP, "llvm.trap")                                       \
-  V(START, "_start")
 
 typedef enum PNIntrinsicId {
   PN_INTRINSIC_NULL,
@@ -2856,7 +2861,25 @@ static void pn_basic_block_calculate_opcodes(PNModule* module,
 
       case PN_FUNCTION_CODE_INST_CALL: {
         PNInstructionCall* i = (PNInstructionCall*)inst;
-        i->base.opcode = PN_OPCODE_CALL;
+        PNValue* callee = pn_function_get_value(module, function, i->callee_id);
+        assert(callee->code == PN_VALUE_CODE_FUNCTION);
+        PNFunction* callee_function =
+            pn_module_get_function(module, callee->index);
+        if (callee_function->intrinsic_id != PN_INTRINSIC_NULL) {
+          switch (callee_function->intrinsic_id) {
+#define PN_INTRINSIC_CHECK(e, name)           \
+  case PN_INTRINSIC_##e:                      \
+    i->base.opcode = PN_OPCODE_INTRINSIC_##e; \
+    break;
+            PN_FOREACH_INTRINSIC(PN_INTRINSIC_CHECK)
+#undef PN_INTRINSIC_CHECK
+            default:
+              i->base.opcode = PN_OPCODE_CALL;
+              break;
+          }
+        } else {
+          i->base.opcode = PN_OPCODE_CALL;
+        }
         /* TODO(binji): check arg types against function type? */
         break;
       }
