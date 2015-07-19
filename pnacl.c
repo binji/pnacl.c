@@ -5195,22 +5195,34 @@ DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(f64, double)
 
 static PNRuntimeValue pn_executor_get_value(PNExecutor* executor,
                                             PNValueId value_id) {
-  value_id -= executor->module->num_values;
-  return executor->current_call_frame->function_values[value_id];
+  if (value_id >= executor->module->num_values) {
+    value_id -= executor->module->num_values;
+    return executor->current_call_frame->function_values[value_id];
+  } else {
+    return executor->module_values[value_id];
+  }
 }
 
 static PNRuntimeValue pn_executor_get_value_from_frame(PNExecutor* executor,
                                                        PNCallFrame* frame,
                                                        PNValueId value_id) {
-  value_id -= executor->module->num_values;
-  return frame->function_values[value_id];
+  if (value_id >= executor->module->num_values) {
+    value_id -= executor->module->num_values;
+    return frame->function_values[value_id];
+  } else {
+    return executor->module_values[value_id];
+  }
 }
 
 static void pn_executor_set_value(PNExecutor* executor,
                                   PNValueId value_id,
                                   PNRuntimeValue value) {
-  value_id -= executor->module->num_values;
-  executor->current_call_frame->function_values[value_id] = value;
+  if (value_id >= executor->module->num_values) {
+    value_id -= executor->module->num_values;
+    executor->current_call_frame->function_values[value_id] = value;
+  } else {
+    executor->module_values[value_id ] = value;
+  }
 }
 
 static void pn_executor_init_module_values(PNExecutor* executor) {
