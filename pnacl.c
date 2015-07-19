@@ -39,7 +39,8 @@
 #define PN_TRUE 1
 
 #define PN_INVALID_VALUE_ID ((PNValueId)~0)
-#define PN_INVALID_BLOCK_ID ((PNBasicBlockId)~0)
+#define PN_INVALID_BB_ID ((PNBasicBlockId)~0)
+#define PN_INVALID_FUNCTION_ID ((PNFunctionId)~0)
 #define PN_INVALID_TYPE_ID ((PNTypeId)~0)
 #define PN_INVALID_FUNCTION_ID ((PNFunctionId)~0)
 
@@ -437,7 +438,7 @@ typedef struct PNInstructionRet {
 typedef struct PNInstructionBr {
   PNInstruction base;
   PNBasicBlockId true_bb_id;
-  PNBasicBlockId false_bb_id; /* Or PN_INVALID_BLOCK_ID */
+  PNBasicBlockId false_bb_id; /* Or PN_INVALID_BB_ID */
   PNValueId value_id;         /* Or PN_INVALID_VALUE_ID */
 } PNInstructionBr;
 
@@ -1567,7 +1568,7 @@ static void pn_instruction_trace(PNModule* module,
 
     case PN_FUNCTION_CODE_INST_BR: {
       PNInstructionBr* i = (PNInstructionBr*)inst;
-      if (i->false_bb_id != PN_INVALID_BLOCK_ID) {
+      if (i->false_bb_id != PN_INVALID_BB_ID) {
         printf("  br %s ? %d : %d\n",
                pn_value_describe(module, function, i->value_id), i->true_bb_id,
                i->false_bb_id);
@@ -3703,7 +3704,7 @@ static void pn_function_block_read(PNModule* module,
                 PNInstructionBr, module, cur_bb, &inst_id);
             inst->base.code = code;
             inst->true_bb_id = pn_record_read_uint32(&reader, "true_bb");
-            inst->false_bb_id = PN_INVALID_BLOCK_ID;
+            inst->false_bb_id = PN_INVALID_BB_ID;
 
             pn_basic_block_list_append(&module->allocator, &cur_bb->succ_bb_ids,
                                        &cur_bb->num_succ_bbs, inst->true_bb_id);
