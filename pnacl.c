@@ -26,7 +26,7 @@
 #define PN_CALCULATE_LIVENESS 0
 #endif
 
-#define PN_WRITE_UNALIGNED 1
+#define PN_UNALIGNED_MEMORY_ACCESS 1
 #define PN_DEFAULT_ALIGN 8
 
 #define PN_MIN_CHUNKSIZE (64 * 1024)
@@ -1273,17 +1273,68 @@ static void pn_memory_check_pointer(PNMemory* memory, void* p, uint32_t size) {
   pn_memory_check(memory, p - memory->data, size);
 }
 
-static void pn_memory_write_uint32(PNMemory* memory,
-                                   uint32_t offset,
-                                   uint32_t value) {
-  pn_memory_check(memory, offset, sizeof(value));
-  uint32_t* memory32 = (uint32_t*)(memory->data + offset);
-#if PN_WRITE_UNALIGNED
-  *memory32 = value;
+#if PN_UNALIGNED_MEMORY_ACCESS
+
+#define DEFINE_MEMORY_READ(type, ctype)                                   \
+  static ctype pn_memory_read_##type(PNMemory* memory, uint32_t offset) { \
+    pn_memory_check(memory, offset, sizeof(ctype));                       \
+    ctype* m = (ctype*)(memory->data + offset);                           \
+    return *m;                                                            \
+  }
+
+#define DEFINE_MEMORY_WRITE(type, ctype)                                \
+  static void pn_memory_write_##type(PNMemory* memory, uint32_t offset, \
+                                     ctype value) {                     \
+    pn_memory_check(memory, offset, sizeof(value));                     \
+    ctype* m = (ctype*)(memory->data + offset);                         \
+    *m = value;                                                         \
+  }
+
 #else
-  memcpy(memory32, &value, sizeof(value));
+
+#define DEFINE_MEMORY_READ(type, ctype)                                   \
+  static ctype pn_memory_read_##type(PNMemory* memory, uint32_t offset) { \
+    pn_memory_check(memory, offset, sizeof(ctype));                       \
+    ctype* m = (ctype*)(memory->data + offset);                           \
+    ctype ret;                                                            \
+    memcpy(&ret, m, sizeof(type));                                        \
+    return ret;                                                           \
+  }
+
+#define DEFINE_MEMORY_WRITE(type, ctype)                                \
+  static void pn_memory_write_##type(PNMemory* memory, uint32_t offset, \
+                                     ctype value) {                     \
+    pn_memory_check(memory, offset, sizeof(value));                     \
+    ctype* m = (ctype*)(memory->data + offset);                         \
+    memcpy(memory32, &value, sizeof(value));                            \
+  }
+
 #endif
-}
+
+DEFINE_MEMORY_READ(int8, int8_t)
+DEFINE_MEMORY_READ(uint8, uint8_t)
+DEFINE_MEMORY_READ(int16, int16_t)
+DEFINE_MEMORY_READ(uint16, uint16_t)
+DEFINE_MEMORY_READ(int32, int32_t)
+DEFINE_MEMORY_READ(uint32, uint32_t)
+DEFINE_MEMORY_READ(int64, int64_t)
+DEFINE_MEMORY_READ(uint64, uint64_t)
+DEFINE_MEMORY_READ(float, float)
+DEFINE_MEMORY_READ(double, double)
+
+DEFINE_MEMORY_WRITE(int8, int8_t)
+DEFINE_MEMORY_WRITE(uint8, uint8_t)
+DEFINE_MEMORY_WRITE(int16, int16_t)
+DEFINE_MEMORY_WRITE(uint16, uint16_t)
+DEFINE_MEMORY_WRITE(int32, int32_t)
+DEFINE_MEMORY_WRITE(uint32, uint32_t)
+DEFINE_MEMORY_WRITE(int64, int64_t)
+DEFINE_MEMORY_WRITE(uint64, uint64_t)
+DEFINE_MEMORY_WRITE(float, float)
+DEFINE_MEMORY_WRITE(double, double)
+
+#undef DEFINE_MEMORY_READ
+#undef DEFINE_MEMORY_WRITE
 
 static void pn_memory_zerofill(PNMemory* memory,
                                uint32_t offset,
