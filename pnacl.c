@@ -1252,6 +1252,14 @@ static int64_t pn_decode_sign_rotated_value_int64(uint64_t value) {
   }
 }
 
+static uint32_t pn_function_index_to_pointer(PNFunctionId function_id) {
+  return function_id << 2;
+}
+
+static PNFunctionId pn_function_pointer_to_index(uint32_t fp) {
+  return fp >> 2;
+}
+
 static void pn_bitstream_init(PNBitStream* bs, void* data, uint32_t data_len) {
   bs->data = data;
   bs->data_len = data_len;
@@ -3847,7 +3855,7 @@ static void pn_globalvar_write_reloc(PNModule* module,
     case PN_VALUE_CODE_FUNCTION:
       PN_CHECK(addend == 0);
       /* Use the function index as the function "address". */
-      reloc_value = value->index;
+      reloc_value = pn_function_index_to_pointer(value->index);
       break;
 
     default:
