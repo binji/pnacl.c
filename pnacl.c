@@ -866,8 +866,6 @@ typedef struct PNMemory {
   void* startinfo_start;
   void* startinfo_end;
   void* heap_start;
-  void* heap_end;    /* Grows up */
-  void* stack_start; /* Grows down */
   void* stack_end;
 } PNMemory;
 
@@ -904,6 +902,31 @@ typedef struct PNBlockInfoContext {
   PNBlockAbbrevs block_abbrev_map[PN_MAX_BLOCK_IDS];
   PNBool use_relative_ids;
 } PNBlockInfoContext;
+
+typedef struct PNLocation {
+  PNFunctionId function_id;
+  PNBasicBlockId bb_id;
+  PNBasicBlockId last_bb_id;
+  PNInstructionId instruction_id;
+} PNLocation;
+
+typedef struct PNCallFrame {
+  PNLocation location;
+  PNRuntimeValue* function_values;
+  void* memory_stack_top; /* Grows down */
+  struct PNCallFrame* parent;
+  PNAllocatorMark mark;
+} PNCallFrame;
+
+typedef struct PNExecutor {
+  PNModule* module;
+  PNMemory* memory;
+  PNCallFrame* current_call_frame;
+  PNRuntimeValue* module_values;
+  void* heap_end; /* Grows up */
+  PNCallFrame sentinel_frame;
+  PNAllocator allocator;
+} PNExecutor;
 
 #if PN_TIMERS
 void pn_timespec_check(struct timespec* a) {
@@ -1014,7 +1037,12 @@ static inline size_t pn_align_down(size_t size, uint32_t align) {
   return size & ~(align - 1);
 }
 
-static inline size_t pn_align_up(size_t size, uint32_t align) {
+static inline void* pn_align_down_pointer(void* p, uint32_t align) {
+  assert(pn_is_power_of_two(align));
+  return (void*)((intptr_t)p & ~((intptr_t)align - 1));
+}
+
+static inline uint32_t pn_align_up(uint32_t size, uint32_t align) {
   assert(pn_is_power_of_two(align));
   return (size + align - 1) & ~(align - 1);
 }
@@ -5034,6 +5062,8 @@ static void pn_module_block_read(PNModule* module,
   PN_FATAL("Unexpected end of stream.\n");
 }
 
+/* Executor */
+
 static int pn_string_list_count(char** p) {
   int result = 0;
   if (p) {
@@ -5128,10 +5158,660 @@ static void pn_memory_init_startinfo(PNMemory* memory,
   memory->startinfo_end = data_offset;
   memory->heap_start = pn_align_up_pointer(memory->startinfo_end, 16);
   memory->stack_end = memory->data + memory->size;
-
-  memory->heap_end = memory->heap_start;
-  memory->stack_start = memory->stack_end;
 }
+
+#define DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(ty, ctype)             \
+  static inline PNRuntimeValue pn_executor_value_##ty(ctype x) { \
+    PNRuntimeValue ret;                                          \
+    ret.ty = x;                                                  \
+    return ret;                                                  \
+  }
+
+DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(i8, int8_t)
+DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(u8, uint8_t)
+DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(i16, int16_t)
+DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(u16, uint16_t)
+DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(i32, int32_t)
+DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(u32, uint32_t)
+DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(i64, int64_t)
+DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(u64, uint64_t)
+DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(f32, float)
+DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(f64, double)
+
+#undef DEFINE_EXECUTOR_VALUE_CONSTRUCTOR
+
+static PNRuntimeValue pn_executor_get_value(PNExecutor* executor,
+                                            PNValueId value_id) {
+  PNRuntimeValue value;
+  value.u32 = 0;
+  return value;
+}
+
+static PNRuntimeValue pn_executor_get_value_from_frame(PNExecutor* executor,
+                                                       PNCallFrame* frame,
+                                                       PNValueId value_id) {
+  PNRuntimeValue value;
+  value.u32 = 0;
+  return value;
+}
+
+static void pn_executor_set_value(PNExecutor* executor,
+                                  PNValueId value_id,
+                                  PNRuntimeValue value) {
+}
+
+static void pn_executor_init_module_values(PNExecutor* executor) {
+  PNModule* module = executor->module;
+  executor->module_values = pn_allocator_alloc(
+      &executor->allocator, sizeof(PNRuntimeValue) * module->num_values,
+      sizeof(PNRuntimeValue));
+
+  PNValueId value_id;
+  for (value_id = 0; value_id < module->num_values; ++value_id) {
+    PNValue* value = &module->values[value_id];
+    switch (value->code) {
+      case PN_VALUE_CODE_FUNCTION:
+        executor->module_values[value_id].u32 =
+            pn_function_index_to_pointer(value->index);
+        break;
+
+      case PN_VALUE_CODE_GLOBAL_VAR: {
+        PNGlobalVar* global_var =
+            pn_module_get_global_var(module, value->index);
+        executor->module_values[value_id].u32 = global_var->offset;
+        break;
+      }
+
+      default:
+        PN_UNREACHABLE();
+        break;
+    }
+  }
+}
+
+static void pn_executor_push_function(PNExecutor* executor,
+                                      PNFunctionId function_id,
+                                      PNFunction* function) {
+  PNCallFrame* frame = pn_allocator_alloc(
+      &executor->allocator, sizeof(PNCallFrame), PN_DEFAULT_ALIGN);
+  PNCallFrame* prev_frame = executor->current_call_frame;
+
+  frame->location.function_id = function_id;
+  frame->location.bb_id = 0;
+  frame->location.last_bb_id = prev_frame->location.bb_id;
+  frame->location.instruction_id = 0;
+  frame->function_values = pn_allocator_alloc(
+      &executor->allocator, sizeof(PNRuntimeValue) * function->num_values,
+      sizeof(PNRuntimeValue));
+  frame->memory_stack_top = prev_frame->memory_stack_top;
+  frame->parent = prev_frame;
+  frame->mark = pn_allocator_mark(&executor->allocator);
+}
+
+static void pn_executor_init(PNExecutor* executor, PNModule* module) {
+  pn_allocator_init(&executor->allocator, PN_MIN_CHUNKSIZE, "executor");
+  executor->module = module;
+  executor->memory = module->memory;
+  executor->current_call_frame = &executor->sentinel_frame;
+  executor->heap_end = executor->memory->heap_start;
+  executor->sentinel_frame.location.function_id = PN_INVALID_FUNCTION_ID;
+  executor->sentinel_frame.location.bb_id = PN_INVALID_BB_ID;
+  executor->sentinel_frame.location.last_bb_id = PN_INVALID_BB_ID;
+  executor->sentinel_frame.location.instruction_id = 0;
+  executor->sentinel_frame.function_values = NULL;
+  executor->sentinel_frame.memory_stack_top = executor->memory->stack_end;
+  executor->sentinel_frame.parent = NULL;
+  executor->sentinel_frame.mark = pn_allocator_mark(&executor->allocator);
+
+  pn_executor_init_module_values(executor);
+}
+
+void pn_executor_execute_instruction(PNExecutor* executor) {
+  PNCallFrame* frame = executor->current_call_frame;
+  PNLocation* location = &frame->location;
+  PNModule* module = executor->module;
+  PNFunction* function = &module->functions[location->function_id];
+  PNBasicBlock* bb = &function->bbs[location->bb_id];
+  PNInstruction* inst = bb->instructions[location->instruction_id];
+
+  switch (inst->opcode) {
+    case PN_OPCODE_ALLOCA_INT32: {
+      PNInstructionAlloca* i = (PNInstructionAlloca*)inst;
+      PNRuntimeValue size = pn_executor_get_value(executor, i->size_id);
+      frame->memory_stack_top = pn_align_down_pointer(
+          frame->memory_stack_top - size.i32, i->alignment);
+      if (frame->memory_stack_top < executor->heap_end) {
+        PN_FATAL("Out of stack\n");
+        break;
+      }
+      PNRuntimeValue result;
+      result.u32 = frame->memory_stack_top - executor->memory->data;
+      pn_executor_set_value(executor, i->result_value_id, result);
+      location->instruction_id++;
+      break;
+    }
+
+#define OPCODE_BINOP(op, ty)                                               \
+  do {                                                                     \
+    PNInstructionBinop* i = (PNInstructionBinop*)inst;                     \
+    PNRuntimeValue value0 = pn_executor_get_value(executor, i->value0_id); \
+    PNRuntimeValue value1 = pn_executor_get_value(executor, i->value1_id); \
+    pn_executor_set_value(executor, i->result_value_id,                    \
+                          pn_executor_value_##ty(value0.ty op value1.ty)); \
+    location->instruction_id++;                                            \
+  } while (0) /* no semicolon */
+
+    case PN_OPCODE_BINOP_ADD_DOUBLE:  OPCODE_BINOP(+, f64); break;
+    case PN_OPCODE_BINOP_ADD_FLOAT:   OPCODE_BINOP(+, f32); break;
+    case PN_OPCODE_BINOP_ADD_INT8:    OPCODE_BINOP(+, u8); break;
+    case PN_OPCODE_BINOP_ADD_INT16:   OPCODE_BINOP(+, u16); break;
+    case PN_OPCODE_BINOP_ADD_INT32:   OPCODE_BINOP(+, u32); break;
+    case PN_OPCODE_BINOP_ADD_INT64:   OPCODE_BINOP(+, u64); break;
+    case PN_OPCODE_BINOP_AND_INT1:
+    case PN_OPCODE_BINOP_AND_INT8:    OPCODE_BINOP(&, u8); break;
+    case PN_OPCODE_BINOP_AND_INT16:   OPCODE_BINOP(&, u16); break;
+    case PN_OPCODE_BINOP_AND_INT32:   OPCODE_BINOP(&, u32); break;
+    case PN_OPCODE_BINOP_AND_INT64:   OPCODE_BINOP(&, u64); break;
+    case PN_OPCODE_BINOP_ASHR_INT8:   OPCODE_BINOP(>>, i8); break;
+    case PN_OPCODE_BINOP_ASHR_INT16:  OPCODE_BINOP(>>, i16); break;
+    case PN_OPCODE_BINOP_ASHR_INT32:  OPCODE_BINOP(>>, i32); break;
+    case PN_OPCODE_BINOP_ASHR_INT64:  OPCODE_BINOP(>>, i64); break;
+    case PN_OPCODE_BINOP_LSHR_INT8:   OPCODE_BINOP(>>, u8); break;
+    case PN_OPCODE_BINOP_LSHR_INT16:  OPCODE_BINOP(>>, u16); break;
+    case PN_OPCODE_BINOP_LSHR_INT32:  OPCODE_BINOP(>>, u32); break;
+    case PN_OPCODE_BINOP_LSHR_INT64:  OPCODE_BINOP(>>, u64); break;
+    case PN_OPCODE_BINOP_MUL_DOUBLE:  OPCODE_BINOP(*, f64); break;
+    case PN_OPCODE_BINOP_MUL_FLOAT:   OPCODE_BINOP(*, f32); break;
+    case PN_OPCODE_BINOP_MUL_INT8:    OPCODE_BINOP(*, u8); break;
+    case PN_OPCODE_BINOP_MUL_INT16:   OPCODE_BINOP(*, u16); break;
+    case PN_OPCODE_BINOP_MUL_INT32:   OPCODE_BINOP(*, u32); break;
+    case PN_OPCODE_BINOP_MUL_INT64:   OPCODE_BINOP(*, u64); break;
+    case PN_OPCODE_BINOP_OR_INT1:
+    case PN_OPCODE_BINOP_OR_INT8:     OPCODE_BINOP(|, u8); break;
+    case PN_OPCODE_BINOP_OR_INT16:    OPCODE_BINOP(|, u16); break;
+    case PN_OPCODE_BINOP_OR_INT32:    OPCODE_BINOP(|, u32); break;
+    case PN_OPCODE_BINOP_OR_INT64:    OPCODE_BINOP(|, u64); break;
+    case PN_OPCODE_BINOP_SDIV_DOUBLE: OPCODE_BINOP(/, f64); break;
+    case PN_OPCODE_BINOP_SDIV_FLOAT:  OPCODE_BINOP(/, f32); break;
+    case PN_OPCODE_BINOP_SDIV_INT32:  OPCODE_BINOP(/, i32); break;
+    case PN_OPCODE_BINOP_SDIV_INT64:  OPCODE_BINOP(/, i64); break;
+    case PN_OPCODE_BINOP_SHL_INT8:    OPCODE_BINOP(<<, u8); break;
+    case PN_OPCODE_BINOP_SHL_INT16:   OPCODE_BINOP(<<, u16); break;
+    case PN_OPCODE_BINOP_SHL_INT32:   OPCODE_BINOP(<<, u32); break;
+    case PN_OPCODE_BINOP_SHL_INT64:   OPCODE_BINOP(<<, u64); break;
+    case PN_OPCODE_BINOP_SREM_INT32:  OPCODE_BINOP(%, i32); break;
+    case PN_OPCODE_BINOP_SREM_INT64:  OPCODE_BINOP(%, i64); break;
+    case PN_OPCODE_BINOP_SUB_DOUBLE:  OPCODE_BINOP(-, f64); break;
+    case PN_OPCODE_BINOP_SUB_FLOAT:   OPCODE_BINOP(-, f32); break;
+    case PN_OPCODE_BINOP_SUB_INT8:    OPCODE_BINOP(-, u8); break;
+    case PN_OPCODE_BINOP_SUB_INT16:   OPCODE_BINOP(-, u16); break;
+    case PN_OPCODE_BINOP_SUB_INT32:   OPCODE_BINOP(-, u32); break;
+    case PN_OPCODE_BINOP_SUB_INT64:   OPCODE_BINOP(-, u64); break;
+    case PN_OPCODE_BINOP_UDIV_INT8:   OPCODE_BINOP(/, u8); break;
+    case PN_OPCODE_BINOP_UDIV_INT16:  OPCODE_BINOP(/, u16); break;
+    case PN_OPCODE_BINOP_UDIV_INT32:  OPCODE_BINOP(/, u32); break;
+    case PN_OPCODE_BINOP_UDIV_INT64:  OPCODE_BINOP(/, u64); break;
+    case PN_OPCODE_BINOP_UREM_INT8:   OPCODE_BINOP(%, u8); break;
+    case PN_OPCODE_BINOP_UREM_INT16:  OPCODE_BINOP(%, u16); break;
+    case PN_OPCODE_BINOP_UREM_INT32:  OPCODE_BINOP(%, u32); break;
+    case PN_OPCODE_BINOP_UREM_INT64:  OPCODE_BINOP(%, u64); break;
+    case PN_OPCODE_BINOP_XOR_INT1:
+    case PN_OPCODE_BINOP_XOR_INT8:    OPCODE_BINOP(^, u8); break;
+    case PN_OPCODE_BINOP_XOR_INT16:   OPCODE_BINOP(^, u16); break;
+    case PN_OPCODE_BINOP_XOR_INT32:   OPCODE_BINOP(^, u32); break;
+    case PN_OPCODE_BINOP_XOR_INT64:   OPCODE_BINOP(^, u64); break;
+
+#undef OPCODE_BINOP
+
+    case PN_OPCODE_BR: {
+      PNInstructionBr* i = (PNInstructionBr*)inst;
+      location->last_bb_id = location->bb_id;
+      location->bb_id = i->true_bb_id;
+      location->instruction_id = 0;
+      break;
+    }
+
+    case PN_OPCODE_BR_INT1: {
+      PNInstructionBr* i = (PNInstructionBr*)inst;
+      PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);
+      PNBasicBlockId new_bb_id = value.u32 ? i->true_bb_id : i->false_bb_id;
+      location->last_bb_id = location->bb_id;
+      location->bb_id = new_bb_id;
+      location->instruction_id = 0;
+      break;
+    }
+
+    case PN_OPCODE_CALL:
+    case PN_OPCODE_CALL_INDIRECT: {
+      PNInstructionCall* i = (PNInstructionCall*)inst;
+
+      PNFunctionId new_function_id;
+      if (i->is_indirect) {
+        PNRuntimeValue function_value =
+            pn_executor_get_value(executor, i->callee_id);
+        new_function_id = pn_function_pointer_to_index(function_value.u32);
+        assert(new_function_id < executor->module->num_functions);
+      } else {
+        PNValue* function_value =
+            pn_module_get_value(executor->module, i->callee_id);
+        assert(function_value->code == PN_VALUE_CODE_FUNCTION);
+        new_function_id = function_value->index;
+      }
+
+      PNFunction* new_function =
+          pn_module_get_function(executor->module, new_function_id);
+
+      pn_executor_push_function(executor, new_function_id, new_function);
+
+      uint32_t n;
+      for (n = 0; n < i->num_args; ++i) {
+        PNValueId value_id = executor->module->num_values + n;
+#ifndef NDEBUG
+        PNValue* value =
+            pn_function_get_value(executor->module, new_function, value_id);
+        assert(value->code == PN_VALUE_CODE_FUNCTION_ARG);
+#endif /* NDEBUG */
+        pn_executor_set_value(
+            executor, value_id,
+            pn_executor_get_value_from_frame(executor, frame, i->arg_ids[n]));
+      }
+
+      for (n = 0; n < function->num_constants; ++n) {
+        PNConstant* constant = pn_function_get_constant(function, n);
+        PNValueId value_id = executor->module->num_values + i->num_args + n;
+#ifndef NDEBUG
+        PNValue* value =
+            pn_function_get_value(executor->module, new_function, value_id);
+        assert(value->code == PN_VALUE_CODE_CONSTANT);
+#endif /* NDEBUG */
+        pn_executor_set_value(executor, value_id, constant->value);
+      }
+      break;
+    }
+
+    case PN_OPCODE_CAST_BITCAST_DOUBLE_INT64:
+    case PN_OPCODE_CAST_BITCAST_FLOAT_INT32:
+    case PN_OPCODE_CAST_BITCAST_INT32_FLOAT:
+    case PN_OPCODE_CAST_BITCAST_INT64_DOUBLE: {
+      PNInstructionCast* i = (PNInstructionCast*)inst;
+      PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);
+      pn_executor_set_value(executor, i->result_value_id, value);
+      location->instruction_id++;
+    }
+
+#define OPCODE_CAST(from, to)                                            \
+  do {                                                                   \
+    PNInstructionCast* i = (PNInstructionCast*)inst;                     \
+    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id); \
+    pn_executor_set_value(executor, i->result_value_id,                  \
+                          pn_executor_value_##to(value.from));           \
+    location->instruction_id++;                                          \
+  } while (0) /* no semicolon */
+
+#define OPCODE_CAST_SEXT1(size)                                          \
+  do {                                                                   \
+    PNInstructionCast* i = (PNInstructionCast*)inst;                     \
+    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id); \
+    pn_executor_set_value(                                               \
+        executor, i->result_value_id,                                    \
+        pn_executor_value_i##size(-(int##size##_t)(value.u8 & 1)));      \
+    location->instruction_id++;                                          \
+  } while (0) /* no semicolon */
+
+#define OPCODE_CAST_TRUNC1(size)                                         \
+  do {                                                                   \
+    PNInstructionCast* i = (PNInstructionCast*)inst;                     \
+    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id); \
+    pn_executor_set_value(executor, i->result_value_id,                  \
+                          pn_executor_value_u8(value.u##size & 1));      \
+    location->instruction_id++;                                          \
+  } while (0) /* no semicolon */
+
+#define OPCODE_CAST_ZEXT1(size)                                          \
+  do {                                                                   \
+    PNInstructionCast* i = (PNInstructionCast*)inst;                     \
+    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id); \
+    pn_executor_set_value(                                               \
+        executor, i->result_value_id,                                    \
+        pn_executor_value_u##size(~(uint##size##_t)(value.u8 & 1) + 1)); \
+    location->instruction_id++;                                          \
+  } while (0) /* no semicolon */
+
+    case PN_OPCODE_CAST_FPEXT_FLOAT_DOUBLE:   OPCODE_CAST(f32, f64); break;
+    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT8:   OPCODE_CAST(f64, i8); break;
+    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT16:  OPCODE_CAST(f64, i16); break;
+    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT32:  OPCODE_CAST(f64, i32); break;
+    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT64:  OPCODE_CAST(f64, i64); break;
+    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT8:    OPCODE_CAST(f32, i8); break;
+    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT16:   OPCODE_CAST(f32, i16); break;
+    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT32:   OPCODE_CAST(f32, i32); break;
+    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT64:   OPCODE_CAST(f32, i64); break;
+    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT8:   OPCODE_CAST(f64, u8); break;
+    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT16:  OPCODE_CAST(f64, u16); break;
+    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT32:  OPCODE_CAST(f64, u32); break;
+    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT64:  OPCODE_CAST(f64, u64); break;
+    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT8:    OPCODE_CAST(f32, u8); break;
+    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT16:   OPCODE_CAST(f32, u16); break;
+    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT32:   OPCODE_CAST(f32, u32); break;
+    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT64:   OPCODE_CAST(f32, u64); break;
+    case PN_OPCODE_CAST_FPTRUNC_DOUBLE_FLOAT: OPCODE_CAST(f64, f32); break;
+    case PN_OPCODE_CAST_SEXT_INT1_INT8:       OPCODE_CAST_SEXT1(8); break;
+    case PN_OPCODE_CAST_SEXT_INT1_INT16:      OPCODE_CAST_SEXT1(16); break;
+    case PN_OPCODE_CAST_SEXT_INT1_INT32:      OPCODE_CAST_SEXT1(32); break;
+    case PN_OPCODE_CAST_SEXT_INT1_INT64:      OPCODE_CAST_SEXT1(64); break;
+    case PN_OPCODE_CAST_SEXT_INT8_INT16:      OPCODE_CAST(i8, i16); break;
+    case PN_OPCODE_CAST_SEXT_INT8_INT32:      OPCODE_CAST(i8, i32); break;
+    case PN_OPCODE_CAST_SEXT_INT8_INT64:      OPCODE_CAST(i8, i64); break;
+    case PN_OPCODE_CAST_SEXT_INT16_INT32:     OPCODE_CAST(i16, i32); break;
+    case PN_OPCODE_CAST_SEXT_INT16_INT64:     OPCODE_CAST(i16, i64); break;
+    case PN_OPCODE_CAST_SEXT_INT32_INT64:     OPCODE_CAST(i32, i64); break;
+    case PN_OPCODE_CAST_SITOFP_INT8_DOUBLE:   OPCODE_CAST(i8, f64); break;
+    case PN_OPCODE_CAST_SITOFP_INT8_FLOAT:    OPCODE_CAST(i8, f32); break;
+    case PN_OPCODE_CAST_SITOFP_INT16_DOUBLE:  OPCODE_CAST(i16, f64); break;
+    case PN_OPCODE_CAST_SITOFP_INT16_FLOAT:   OPCODE_CAST(i16, f32); break;
+    case PN_OPCODE_CAST_SITOFP_INT32_DOUBLE:  OPCODE_CAST(i32, f64); break;
+    case PN_OPCODE_CAST_SITOFP_INT32_FLOAT:   OPCODE_CAST(i32, f32); break;
+    case PN_OPCODE_CAST_SITOFP_INT64_DOUBLE:  OPCODE_CAST(i64, f64); break;
+    case PN_OPCODE_CAST_SITOFP_INT64_FLOAT:   OPCODE_CAST(i64, f32); break;
+    case PN_OPCODE_CAST_TRUNC_INT8_INT1:      OPCODE_CAST_TRUNC1(8); break;
+    case PN_OPCODE_CAST_TRUNC_INT16_INT1:     OPCODE_CAST_TRUNC1(16); break;
+    case PN_OPCODE_CAST_TRUNC_INT16_INT8:     OPCODE_CAST(i16, i8); break;
+    case PN_OPCODE_CAST_TRUNC_INT32_INT1:     OPCODE_CAST_TRUNC1(32); break;
+    case PN_OPCODE_CAST_TRUNC_INT32_INT8:     OPCODE_CAST(i32, i8); break;
+    case PN_OPCODE_CAST_TRUNC_INT32_INT16:    OPCODE_CAST(i32, i16); break;
+    case PN_OPCODE_CAST_TRUNC_INT64_INT8:     OPCODE_CAST(i64, i8); break;
+    case PN_OPCODE_CAST_TRUNC_INT64_INT16:    OPCODE_CAST(i64, i16); break;
+    case PN_OPCODE_CAST_TRUNC_INT64_INT32:    OPCODE_CAST(i64, i32); break;
+    case PN_OPCODE_CAST_UITOFP_INT8_DOUBLE:   OPCODE_CAST(u8, f64); break;
+    case PN_OPCODE_CAST_UITOFP_INT8_FLOAT:    OPCODE_CAST(u8, f32); break;
+    case PN_OPCODE_CAST_UITOFP_INT16_DOUBLE:  OPCODE_CAST(u16, f64); break;
+    case PN_OPCODE_CAST_UITOFP_INT16_FLOAT:   OPCODE_CAST(u16, f32); break;
+    case PN_OPCODE_CAST_UITOFP_INT32_DOUBLE:  OPCODE_CAST(u32, f64); break;
+    case PN_OPCODE_CAST_UITOFP_INT32_FLOAT:   OPCODE_CAST(u32, f32); break;
+    case PN_OPCODE_CAST_UITOFP_INT64_DOUBLE:  OPCODE_CAST(u64, f64); break;
+    case PN_OPCODE_CAST_UITOFP_INT64_FLOAT:   OPCODE_CAST(u64, f32); break;
+    case PN_OPCODE_CAST_ZEXT_INT1_INT8:       OPCODE_CAST_ZEXT1(8); break;
+    case PN_OPCODE_CAST_ZEXT_INT1_INT16:      OPCODE_CAST_ZEXT1(16); break;
+    case PN_OPCODE_CAST_ZEXT_INT1_INT32:      OPCODE_CAST_ZEXT1(32); break;
+    case PN_OPCODE_CAST_ZEXT_INT1_INT64:      OPCODE_CAST_ZEXT1(64); break;
+    case PN_OPCODE_CAST_ZEXT_INT8_INT16:      OPCODE_CAST(u8, u16); break;
+    case PN_OPCODE_CAST_ZEXT_INT8_INT32:      OPCODE_CAST(u8, u32); break;
+    case PN_OPCODE_CAST_ZEXT_INT8_INT64:      OPCODE_CAST(u8, u64); break;
+    case PN_OPCODE_CAST_ZEXT_INT16_INT32:     OPCODE_CAST(u16, u32); break;
+    case PN_OPCODE_CAST_ZEXT_INT16_INT64:     OPCODE_CAST(u16, u64); break;
+    case PN_OPCODE_CAST_ZEXT_INT32_INT64:     OPCODE_CAST(u32, u64); break;
+
+#undef OPCODE_CAST
+#undef OPCODE_CAST_SEXT1
+#undef OPCODE_CAST_TRUNC1
+#undef OPCODE_CAST_ZEXT1
+
+#define OPCODE_CMP2(op, ty)                                                \
+  do {                                                                     \
+    PNInstructionBinop* i = (PNInstructionBinop*)inst;                     \
+    PNRuntimeValue value0 = pn_executor_get_value(executor, i->value0_id); \
+    PNRuntimeValue value1 = pn_executor_get_value(executor, i->value1_id); \
+    pn_executor_set_value(executor, i->result_value_id,                    \
+                          pn_executor_value_u8(value0.ty op value1.ty));   \
+    location->instruction_id++;                                            \
+  } while (0) /* no semicolon */
+
+#define OPCODE_CMP2_NOT(op, ty)                                             \
+  do {                                                                      \
+    PNInstructionBinop* i = (PNInstructionBinop*)inst;                      \
+    PNRuntimeValue value0 = pn_executor_get_value(executor, i->value0_id);  \
+    PNRuntimeValue value1 = pn_executor_get_value(executor, i->value1_id);  \
+    pn_executor_set_value(executor, i->result_value_id,                     \
+                          pn_executor_value_u8(!(value0.ty op value1.ty))); \
+    location->instruction_id++;                                             \
+  } while (0) /* no semicolon */
+
+#define OPCODE_CMP2_ORD(ty)                                                \
+  do {                                                                     \
+    PNInstructionBinop* i = (PNInstructionBinop*)inst;                     \
+    PNRuntimeValue value0 = pn_executor_get_value(executor, i->value0_id); \
+    PNRuntimeValue value1 = pn_executor_get_value(executor, i->value1_id); \
+    pn_executor_set_value(executor, i->result_value_id,                    \
+                          pn_executor_value_u8(value0.ty == value1.ty ||   \
+                                               value0.ty != value1.ty));   \
+    location->instruction_id++;                                            \
+  } while (0) /* no semicolon */
+
+#define OPCODE_CMP2_UNO(ty)                                                 \
+  do {                                                                      \
+    PNInstructionBinop* i = (PNInstructionBinop*)inst;                      \
+    PNRuntimeValue value0 = pn_executor_get_value(executor, i->value0_id);  \
+    PNRuntimeValue value1 = pn_executor_get_value(executor, i->value1_id);  \
+    pn_executor_set_value(executor, i->result_value_id,                     \
+                          pn_executor_value_u8(!(value0.ty == value1.ty ||  \
+                                                 value0.ty != value1.ty))); \
+    location->instruction_id++;                                             \
+  } while (0) /* no semicolon */
+
+    //        U L G E
+    // FALSE  0 0 0 0
+    // OEQ    0 0 0 1  A == B
+    // OGT    0 0 1 0  A > B
+    // OGE    0 0 1 1  A >= B
+    // OLT    0 1 0 0  A < B
+    // OLE    0 1 0 1  A <= B
+    // ONE    0 1 1 0  A != B
+    // ORD    0 1 1 1  A == B || A != B
+    // UNO    1 0 0 0  !(A == B || A != B)
+    // UEQ    1 0 0 1  !(A != B)
+    // UGT    1 0 1 0  !(A <= B)
+    // UGE    1 0 1 1  !(A < B)
+    // ULT    1 1 0 0  !(A >= B)
+    // ULE    1 1 0 1  !(A > B)
+    // UNE    1 1 1 0  !(A == B)
+    // TRUE   1 1 1 1
+
+    case PN_OPCODE_FCMP_OEQ_DOUBLE: OPCODE_CMP2(==, f64); break;
+    case PN_OPCODE_FCMP_OEQ_FLOAT:  OPCODE_CMP2(==, f32); break;
+    case PN_OPCODE_FCMP_OGE_DOUBLE: OPCODE_CMP2(>=, f64); break;
+    case PN_OPCODE_FCMP_OGE_FLOAT:  OPCODE_CMP2(>=, f32); break;
+    case PN_OPCODE_FCMP_OGT_DOUBLE: OPCODE_CMP2(>, f64); break;
+    case PN_OPCODE_FCMP_OGT_FLOAT:  OPCODE_CMP2(>, f32); break;
+    case PN_OPCODE_FCMP_OLE_DOUBLE: OPCODE_CMP2(<=, f64); break;
+    case PN_OPCODE_FCMP_OLE_FLOAT:  OPCODE_CMP2(<=, f32); break;
+    case PN_OPCODE_FCMP_OLT_DOUBLE: OPCODE_CMP2(<, f64); break;
+    case PN_OPCODE_FCMP_OLT_FLOAT:  OPCODE_CMP2(<, f32); break;
+    case PN_OPCODE_FCMP_ONE_DOUBLE: OPCODE_CMP2(!=, f64); break;
+    case PN_OPCODE_FCMP_ONE_FLOAT:  OPCODE_CMP2(!=, f32); break;
+    case PN_OPCODE_FCMP_ORD_DOUBLE: OPCODE_CMP2_ORD(f64); break;
+    case PN_OPCODE_FCMP_ORD_FLOAT:  OPCODE_CMP2_ORD(f32); break;
+    case PN_OPCODE_FCMP_UEQ_DOUBLE: OPCODE_CMP2_NOT(!=, f64); break;
+    case PN_OPCODE_FCMP_UEQ_FLOAT:  OPCODE_CMP2_NOT(!=, f32); break;
+    case PN_OPCODE_FCMP_UGE_DOUBLE: OPCODE_CMP2_NOT(<, f64); break;
+    case PN_OPCODE_FCMP_UGE_FLOAT:  OPCODE_CMP2_NOT(<, f32); break;
+    case PN_OPCODE_FCMP_UGT_DOUBLE: OPCODE_CMP2_NOT(<=, f64); break;
+    case PN_OPCODE_FCMP_UGT_FLOAT:  OPCODE_CMP2_NOT(<=, f32); break;
+    case PN_OPCODE_FCMP_ULE_DOUBLE: OPCODE_CMP2_NOT(>, f64); break;
+    case PN_OPCODE_FCMP_ULE_FLOAT:  OPCODE_CMP2_NOT(>, f32); break;
+    case PN_OPCODE_FCMP_ULT_DOUBLE: OPCODE_CMP2_NOT(>=, f64); break;
+    case PN_OPCODE_FCMP_ULT_FLOAT:  OPCODE_CMP2_NOT(>=, f32); break;
+    case PN_OPCODE_FCMP_UNE_DOUBLE: OPCODE_CMP2_NOT(==, f64); break;
+    case PN_OPCODE_FCMP_UNE_FLOAT:  OPCODE_CMP2_NOT(==, f32); break;
+    case PN_OPCODE_FCMP_UNO_DOUBLE: OPCODE_CMP2_UNO(f64); break;
+    case PN_OPCODE_FCMP_UNO_FLOAT:  OPCODE_CMP2_UNO(f32); break;
+
+    case PN_OPCODE_FORWARDTYPEREF:
+      location->instruction_id++;
+      break;
+
+    case PN_OPCODE_ICMP_EQ_INT8:   OPCODE_CMP2(==, u8); break;
+    case PN_OPCODE_ICMP_EQ_INT16:  OPCODE_CMP2(==, u16); break;
+    case PN_OPCODE_ICMP_EQ_INT32:  OPCODE_CMP2(==, u32); break;
+    case PN_OPCODE_ICMP_EQ_INT64:  OPCODE_CMP2(==, u64); break;
+    case PN_OPCODE_ICMP_NE_INT8:   OPCODE_CMP2(!=, u8); break;
+    case PN_OPCODE_ICMP_NE_INT16:  OPCODE_CMP2(!=, u16); break;
+    case PN_OPCODE_ICMP_NE_INT32:  OPCODE_CMP2(!=, u32); break;
+    case PN_OPCODE_ICMP_NE_INT64:  OPCODE_CMP2(!=, u64); break;
+    case PN_OPCODE_ICMP_SGE_INT8:  OPCODE_CMP2(>=, i8); break;
+    case PN_OPCODE_ICMP_SGE_INT16: OPCODE_CMP2(>=, i16); break;
+    case PN_OPCODE_ICMP_SGE_INT32: OPCODE_CMP2(>=, i32); break;
+    case PN_OPCODE_ICMP_SGE_INT64: OPCODE_CMP2(>=, i64); break;
+    case PN_OPCODE_ICMP_SGT_INT8:  OPCODE_CMP2(>, i8); break;
+    case PN_OPCODE_ICMP_SGT_INT16: OPCODE_CMP2(>, i16); break;
+    case PN_OPCODE_ICMP_SGT_INT32: OPCODE_CMP2(>, i32); break;
+    case PN_OPCODE_ICMP_SGT_INT64: OPCODE_CMP2(>, i64); break;
+    case PN_OPCODE_ICMP_SLE_INT8:  OPCODE_CMP2(<=, i8); break;
+    case PN_OPCODE_ICMP_SLE_INT16: OPCODE_CMP2(<=, i16); break;
+    case PN_OPCODE_ICMP_SLE_INT32: OPCODE_CMP2(<=, i32); break;
+    case PN_OPCODE_ICMP_SLE_INT64: OPCODE_CMP2(<=, i64); break;
+    case PN_OPCODE_ICMP_SLT_INT8:  OPCODE_CMP2(<, i8); break;
+    case PN_OPCODE_ICMP_SLT_INT16: OPCODE_CMP2(<, i16); break;
+    case PN_OPCODE_ICMP_SLT_INT32: OPCODE_CMP2(<, i32); break;
+    case PN_OPCODE_ICMP_SLT_INT64: OPCODE_CMP2(<, i64); break;
+    case PN_OPCODE_ICMP_UGE_INT8:  OPCODE_CMP2(>=, u8); break;
+    case PN_OPCODE_ICMP_UGE_INT16: OPCODE_CMP2(>=, u16); break;
+    case PN_OPCODE_ICMP_UGE_INT32: OPCODE_CMP2(>=, u32); break;
+    case PN_OPCODE_ICMP_UGE_INT64: OPCODE_CMP2(>=, u64); break;
+    case PN_OPCODE_ICMP_UGT_INT8:  OPCODE_CMP2(>, u8); break;
+    case PN_OPCODE_ICMP_UGT_INT16: OPCODE_CMP2(>, u16); break;
+    case PN_OPCODE_ICMP_UGT_INT32: OPCODE_CMP2(>, u32); break;
+    case PN_OPCODE_ICMP_UGT_INT64: OPCODE_CMP2(>, u64); break;
+    case PN_OPCODE_ICMP_ULE_INT8:  OPCODE_CMP2(<=, u8); break;
+    case PN_OPCODE_ICMP_ULE_INT16: OPCODE_CMP2(<=, u16); break;
+    case PN_OPCODE_ICMP_ULE_INT32: OPCODE_CMP2(<=, u32); break;
+    case PN_OPCODE_ICMP_ULE_INT64: OPCODE_CMP2(<=, u64); break;
+    case PN_OPCODE_ICMP_ULT_INT8:  OPCODE_CMP2(<, u8); break;
+    case PN_OPCODE_ICMP_ULT_INT16: OPCODE_CMP2(<, u16); break;
+    case PN_OPCODE_ICMP_ULT_INT32: OPCODE_CMP2(<, u32); break;
+    case PN_OPCODE_ICMP_ULT_INT64: OPCODE_CMP2(<, u64); break;
+
+#undef OPCODE_CMP2
+#undef OPCODE_CMP2_NOT
+#undef OPCODE_CMP2_ORD
+#undef OPCODE_CMP2_UNO
+
+#define OPCODE_LOAD(type, ty)                                           \
+  do {                                                                  \
+    PNInstructionLoad* i = (PNInstructionLoad*)inst;                    \
+    PNRuntimeValue src = pn_executor_get_value(executor, i->src_id);    \
+    pn_executor_set_value(executor, i->result_value_id,                 \
+                          pn_executor_value_##ty(pn_memory_read_##type( \
+                              executor->memory, src.u32)));             \
+    location->instruction_id++;                                         \
+  } while (0) /*no semicolon */
+
+    case PN_OPCODE_LOAD_DOUBLE: OPCODE_LOAD(double, f64); break;
+    case PN_OPCODE_LOAD_FLOAT: OPCODE_LOAD(float, f32); break;
+    case PN_OPCODE_LOAD_INT8: OPCODE_LOAD(uint8, u8); break;
+    case PN_OPCODE_LOAD_INT16: OPCODE_LOAD(uint16, u16); break;
+    case PN_OPCODE_LOAD_INT32: OPCODE_LOAD(uint32, u32); break;
+    case PN_OPCODE_LOAD_INT64: OPCODE_LOAD(uint64, u64); break;
+
+#undef OPCODE_LOAD
+
+    case PN_OPCODE_PHI: {
+      /* TODO(binji): optimize using phi assigns */
+      PNInstructionPhi* i = (PNInstructionPhi*)inst;
+      PNCallFrame* prev_frame = frame->parent;
+      uint32_t n;
+      for (n = 0; n < i->num_incoming; ++i) {
+        if (i->incoming[n].bb_id == location->last_bb_id) {
+          pn_executor_set_value(
+              executor, i->result_value_id,
+              pn_executor_get_value_from_frame(executor, prev_frame,
+                                               i->incoming[n].value_id));
+          break;
+        }
+      }
+      if (n == i->num_incoming) {
+        PN_UNREACHABLE();
+      }
+      location->instruction_id++;
+      break;
+    }
+
+    case PN_OPCODE_RET: {
+      location = &frame->parent->location;
+      pn_allocator_reset_to_mark(&executor->allocator, frame->parent->mark);
+      location->instruction_id++;
+      break;
+    }
+
+    case PN_OPCODE_RET_VALUE: {
+      PNInstructionRet* i = (PNInstructionRet*)inst;
+      PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);
+      location = &frame->parent->location;
+
+      PNFunction* new_function = &module->functions[location->function_id];
+      PNBasicBlock* new_bb = &new_function->bbs[location->bb_id];
+      PNInstructionCall* c =
+          (PNInstructionCall*)new_bb->instructions[location->instruction_id];
+      pn_executor_set_value(executor, c->result_value_id, value);
+      pn_allocator_reset_to_mark(&executor->allocator, frame->parent->mark);
+      location->instruction_id++;
+      break;
+    }
+
+#define OPCODE_STORE(type, ty)                                           \
+  do {                                                                   \
+    PNInstructionStore* i = (PNInstructionStore*)inst;                   \
+    PNRuntimeValue dest = pn_executor_get_value(executor, i->dest_id);   \
+    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id); \
+    pn_memory_write_##type(executor->memory, dest.u32, value.ty);        \
+    location->instruction_id++;                                          \
+  } while (0) /*no semicolon */
+
+    case PN_OPCODE_STORE_DOUBLE: OPCODE_STORE(double, f64); break;
+    case PN_OPCODE_STORE_FLOAT: OPCODE_STORE(float, f32); break;
+    case PN_OPCODE_STORE_INT8: OPCODE_STORE(uint8, u8); break;
+    case PN_OPCODE_STORE_INT16: OPCODE_STORE(uint16, u16); break;
+    case PN_OPCODE_STORE_INT32: OPCODE_STORE(uint32, u32); break;
+    case PN_OPCODE_STORE_INT64: OPCODE_STORE(uint64, u64); break;
+
+#undef OPCODE_STORE
+
+#define OPCODE_SWITCH(ty)                                                \
+  do {                                                                   \
+    PNInstructionSwitch* i = (PNInstructionSwitch*)inst;                 \
+    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id); \
+    PNBasicBlockId bb_id = i->default_bb_id;                             \
+    uint32_t c;                                                          \
+    for (c = 0; c < i->num_cases; ++c) {                                 \
+      PNSwitchCase* switch_case = &i->cases[c];                          \
+      if (value.ty == switch_case->value) {                              \
+        bb_id = switch_case->bb_id;                                      \
+        break;                                                           \
+      }                                                                  \
+    }                                                                    \
+    location->last_bb_id = location->bb_id;                              \
+    location->bb_id = bb_id;                                             \
+    location->instruction_id = 0;                                        \
+  } while (0) /* no semicolon */
+
+    case PN_OPCODE_SWITCH_INT1:
+    case PN_OPCODE_SWITCH_INT8: OPCODE_SWITCH(i8); break;
+    case PN_OPCODE_SWITCH_INT16: OPCODE_SWITCH(i16); break;
+    case PN_OPCODE_SWITCH_INT32: OPCODE_SWITCH(i32); break;
+    case PN_OPCODE_SWITCH_INT64: OPCODE_SWITCH(i64); break;
+
+#undef OPCODE_SWITCH
+
+    case PN_OPCODE_UNREACHABLE:
+      location->instruction_id++;
+      break;
+
+    case PN_OPCODE_VSELECT: {
+      PNInstructionVselect* i = (PNInstructionVselect*)inst;
+      PNRuntimeValue cond = pn_executor_get_value(executor, i->cond_id);
+      PNValueId value_id = (cond.u8 & 1) ? i->true_value_id : i->false_value_id;
+      PNRuntimeValue value = pn_executor_get_value(executor, value_id);
+      pn_executor_set_value(executor, i->result_value_id, value);
+      location->instruction_id++;
+      break;
+    }
+
+    default:
+      PN_FATAL("Invalid instruction code: %d\n", inst->code);
+      break;
+  }
+}
+
+/* Option parsing, environment variables */
 
 enum {
   PN_FLAG_VERBOSE,
