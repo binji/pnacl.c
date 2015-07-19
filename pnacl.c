@@ -119,7 +119,8 @@ PN_STATIC_ASSERT(sizeof(double) == sizeof(uint64_t));
   V(CALCULATE_PRED_BBS)           \
   V(CALCULATE_PHI_ASSIGNS)        \
   V(CALCULATE_LIVENESS)           \
-  V(FUNCTION_TRACE)
+  V(FUNCTION_TRACE)               \
+  V(EXECUTE)
 
 #define PN_TIMERS_ENUM(name) PN_TIMER_##name,
 enum { PN_FOREACH_TIMER(PN_TIMERS_ENUM) PN_NUM_TIMERS };
@@ -167,7 +168,8 @@ static PNBool g_pn_print_time;
   V(FUNCTION_BLOCK, "function-block")         \
   V(MODULE_BLOCK, "module-block")             \
   V(BASIC_BLOCKS, "basic-blocks")             \
-  V(INSTRUCTIONS, "instructions")
+  V(INSTRUCTIONS, "instructions")             \
+  V(EXECUTE, "execute")
 
 #define PN_TRACE_ENUM(name, flag) PN_TRACE_##name,
 enum { PN_FOREACH_TRACE(PN_TRACE_ENUM) PN_NUM_TRACE };
@@ -5183,22 +5185,22 @@ DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(f64, double)
 
 static PNRuntimeValue pn_executor_get_value(PNExecutor* executor,
                                             PNValueId value_id) {
-  PNRuntimeValue value;
-  value.u32 = 0;
-  return value;
+  value_id -= executor->module->num_values;
+  return executor->current_call_frame->function_values[value_id];
 }
 
 static PNRuntimeValue pn_executor_get_value_from_frame(PNExecutor* executor,
                                                        PNCallFrame* frame,
                                                        PNValueId value_id) {
-  PNRuntimeValue value;
-  value.u32 = 0;
-  return value;
+  value_id -= executor->module->num_values;
+  return frame->function_values[value_id];
 }
 
 static void pn_executor_set_value(PNExecutor* executor,
                                   PNValueId value_id,
                                   PNRuntimeValue value) {
+  value_id -= executor->module->num_values;
+  executor->current_call_frame->function_values[value_id] = value;
 }
 
 static void pn_executor_init_module_values(PNExecutor* executor) {
@@ -5247,6 +5249,20 @@ static void pn_executor_push_function(PNExecutor* executor,
   frame->memory_stack_top = prev_frame->memory_stack_top;
   frame->parent = prev_frame;
   frame->mark = pn_allocator_mark(&executor->allocator);
+
+  executor->current_call_frame = frame;
+
+  uint32_t n;
+  for (n = 0; n < function->num_constants; ++n) {
+    PNConstant* constant = pn_function_get_constant(function, n);
+    PNValueId value_id = executor->module->num_values + function->num_args + n;
+#ifndef NDEBUG
+    PNValue* value =
+        pn_function_get_value(executor->module, function, value_id);
+    assert(value->code == PN_VALUE_CODE_CONSTANT);
+#endif /* NDEBUG */
+    pn_executor_set_value(executor, value_id, constant->value);
+  }
 }
 
 static void pn_executor_init(PNExecutor* executor, PNModule* module) {
@@ -5265,6 +5281,20 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
   executor->sentinel_frame.mark = pn_allocator_mark(&executor->allocator);
 
   pn_executor_init_module_values(executor);
+
+  PN_CHECK(module->start_function_id != PN_INVALID_FUNCTION_ID);
+  PNFunction* start_function =
+      pn_module_get_function(module, module->start_function_id);
+
+  pn_executor_push_function(executor, module->start_function_id,
+                            start_function);
+
+  PN_CHECK(start_function->num_args == 1);
+
+  PNValueId value_id = executor->module->num_values;
+  PNRuntimeValue value;
+  value.u32 = executor->memory->startinfo_start - executor->memory->data;
+  pn_executor_set_value(executor, value_id, value);
 }
 
 void pn_executor_execute_instruction(PNExecutor* executor) {
@@ -5274,6 +5304,12 @@ void pn_executor_execute_instruction(PNExecutor* executor) {
   PNFunction* function = &module->functions[location->function_id];
   PNBasicBlock* bb = &function->bbs[location->bb_id];
   PNInstruction* inst = bb->instructions[location->instruction_id];
+
+#if PN_TRACING
+  if (PN_IS_TRACE(EXECUTE)) {
+    pn_instruction_trace(module, function, inst, PN_TRUE);
+  }
+#endif
 
   switch (inst->opcode) {
     case PN_OPCODE_ALLOCA_INT32: {
@@ -5405,11 +5441,11 @@ void pn_executor_execute_instruction(PNExecutor* executor) {
       pn_executor_push_function(executor, new_function_id, new_function);
 
       uint32_t n;
-      for (n = 0; n < i->num_args; ++i) {
+      for (n = 0; n < i->num_args; ++n) {
         PNValueId value_id = executor->module->num_values + n;
 #ifndef NDEBUG
         PNValue* value =
-            pn_function_get_value(executor->module, new_function, value_id);
+            pn_function_get_value(executor->module, function, value_id);
         assert(value->code == PN_VALUE_CODE_FUNCTION_ARG);
 #endif /* NDEBUG */
         pn_executor_set_value(
@@ -5417,16 +5453,6 @@ void pn_executor_execute_instruction(PNExecutor* executor) {
             pn_executor_get_value_from_frame(executor, frame, i->arg_ids[n]));
       }
 
-      for (n = 0; n < function->num_constants; ++n) {
-        PNConstant* constant = pn_function_get_constant(function, n);
-        PNValueId value_id = executor->module->num_values + i->num_args + n;
-#ifndef NDEBUG
-        PNValue* value =
-            pn_function_get_value(executor->module, new_function, value_id);
-        assert(value->code == PN_VALUE_CODE_CONSTANT);
-#endif /* NDEBUG */
-        pn_executor_set_value(executor, value_id, constant->value);
-      }
       break;
     }
 
@@ -5727,6 +5753,7 @@ void pn_executor_execute_instruction(PNExecutor* executor) {
     }
 
     case PN_OPCODE_RET: {
+      executor->current_call_frame = frame->parent;
       location = &frame->parent->location;
       pn_allocator_reset_to_mark(&executor->allocator, frame->parent->mark);
       location->instruction_id++;
@@ -5735,13 +5762,14 @@ void pn_executor_execute_instruction(PNExecutor* executor) {
 
     case PN_OPCODE_RET_VALUE: {
       PNInstructionRet* i = (PNInstructionRet*)inst;
-      PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);
+      executor->current_call_frame = frame->parent;
       location = &frame->parent->location;
 
       PNFunction* new_function = &module->functions[location->function_id];
       PNBasicBlock* new_bb = &new_function->bbs[location->bb_id];
       PNInstructionCall* c =
           (PNInstructionCall*)new_bb->instructions[location->instruction_id];
+      PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);
       pn_executor_set_value(executor, c->result_value_id, value);
       pn_allocator_reset_to_mark(&executor->allocator, frame->parent->mark);
       location->instruction_id++;
@@ -6263,11 +6291,16 @@ int main(int argc, char** argv, char** envp) {
   pn_module_block_read(&module, &context, &bs);
   PN_TRACE(MODULE_BLOCK, "done\n");
 
-  pn_memory_init_startinfo(&memory, g_pn_argv, g_pn_environ);
-
   if (g_pn_run) {
+    PN_BEGIN_TIME(EXECUTE);
+    pn_memory_init_startinfo(&memory, g_pn_argv, g_pn_environ);
+
     PNExecutor executor;
     pn_executor_init(&executor, &module);
+    while (executor.current_call_frame != &executor.sentinel_frame) {
+      pn_executor_execute_instruction(&executor);
+    }
+    PN_END_TIME(EXECUTE);
   }
 
   PN_END_TIME(TOTAL);
