@@ -417,7 +417,7 @@ typedef struct PNInstructionBinop {
   PNValueId result_value_id;
   PNValueId value0_id;
   PNValueId value1_id;
-  PNBinOp opcode;
+  PNBinOp binop_opcode;
   int32_t flags;
 } PNInstructionBinop;
 
@@ -425,7 +425,7 @@ typedef struct PNInstructionCast {
   PNInstruction base;
   PNValueId result_value_id;
   PNValueId value_id;
-  PNCast opcode;
+  PNCast cast_opcode;
   PNTypeId type_id;
 } PNInstructionCast;
 
@@ -489,7 +489,7 @@ typedef struct PNInstructionCmp2 {
   PNValueId result_value_id;
   PNValueId value0_id;
   PNValueId value1_id;
-  PNCmp2 opcode;
+  PNCmp2 cmp2_opcode;
 } PNInstructionCmp2;
 
 typedef struct PNInstructionVselect {
@@ -1540,7 +1540,7 @@ static void pn_instruction_trace(PNModule* module,
       PNInstructionBinop* i = (PNInstructionBinop*)inst;
       printf("  %s. binop op:%s(%d) %s %s (flags:%d)\n",
              pn_value_describe(module, function, i->result_value_id),
-             pn_binop_get_name(i->opcode), i->opcode,
+             pn_binop_get_name(i->binop_opcode), i->binop_opcode,
              pn_value_describe(module, function, i->value0_id),
              pn_value_describe(module, function, i->value1_id), i->flags);
       break;
@@ -1550,7 +1550,7 @@ static void pn_instruction_trace(PNModule* module,
       PNInstructionCast* i = (PNInstructionCast*)inst;
       printf("  %s. cast op:%s(%d) %s\n",
              pn_value_describe(module, function, i->result_value_id),
-             pn_cast_get_name(i->opcode), i->opcode,
+             pn_cast_get_name(i->cast_opcode), i->cast_opcode,
              pn_value_describe(module, function, i->value_id));
       break;
     }
@@ -1638,7 +1638,7 @@ static void pn_instruction_trace(PNModule* module,
       PNInstructionCmp2* i = (PNInstructionCmp2*)inst;
       printf("  %s. cmp2 op:%s(%d) %s %s\n",
              pn_value_describe(module, function, i->result_value_id),
-             pn_cmp2_get_name(i->opcode), i->opcode,
+             pn_cmp2_get_name(i->cmp2_opcode), i->cmp2_opcode,
              pn_value_describe(module, function, i->value0_id),
              pn_value_describe(module, function, i->value1_id));
       break;
@@ -3646,7 +3646,7 @@ static void pn_function_block_read(PNModule* module,
             inst->result_value_id = value_id;
             inst->value0_id = pn_record_read_uint32(&reader, "value 0");
             inst->value1_id = pn_record_read_uint32(&reader, "value 1");
-            inst->opcode = pn_record_read_int32(&reader, "opcode");
+            inst->binop_opcode = pn_record_read_int32(&reader, "opcode");
             inst->flags = 0;
 
             pn_context_fix_value_ids(context, rel_id, 2, &inst->value0_id,
@@ -3672,7 +3672,7 @@ static void pn_function_block_read(PNModule* module,
             inst->result_value_id = value_id;
             inst->value_id = pn_record_read_uint32(&reader, "value");
             inst->type_id = pn_record_read_uint32(&reader, "type_id");
-            inst->opcode = pn_record_read_int32(&reader, "opcode");
+            inst->cast_opcode = pn_record_read_int32(&reader, "opcode");
 
             value->type_id = inst->type_id;
 
@@ -3920,7 +3920,7 @@ static void pn_function_block_read(PNModule* module,
             inst->result_value_id = value_id;
             inst->value0_id = pn_record_read_uint32(&reader, "value 0");
             inst->value1_id = pn_record_read_uint32(&reader, "value 1");
-            inst->opcode = pn_record_read_int32(&reader, "opcode");
+            inst->cmp2_opcode = pn_record_read_int32(&reader, "opcode");
 
             pn_context_fix_value_ids(context, rel_id, 2, &inst->value0_id,
                                      &inst->value1_id);
