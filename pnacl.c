@@ -1351,7 +1351,6 @@ static uint64_t pn_bitstream_read_vbr_uint64(PNBitStream* bs, int num_bits) {
   }
 }
 
-
 static void pn_bitstream_seek_bit(PNBitStream* bs, uint32_t bit_offset) {
   bs->bit_offset = pn_align_down(bit_offset, 32);
   pn_bitstream_fill_curword(bs);
@@ -1906,8 +1905,7 @@ static void pn_instruction_trace(PNModule* module,
       if (i->is_indirect) {
         printf("indirect ");
       } else {
-        PNValue* function_value =
-            pn_module_get_value(module, i->callee_id);
+        PNValue* function_value = pn_module_get_value(module, i->callee_id);
         PNFunction* called_function =
             pn_module_get_function(module, function_value->index);
         name = called_function->name;
@@ -3285,7 +3283,7 @@ static PNBool pn_record_read_abbrev(PNRecordReader* reader,
 }
 
 static PNBool pn_record_read_abbrev_uint64(PNRecordReader* reader,
-                                    uint64_t* out_value) {
+                                           uint64_t* out_value) {
   assert(reader->entry - 4 < reader->abbrevs->num_abbrevs);
   PNBlockAbbrev* abbrev = &reader->abbrevs->abbrevs[reader->entry - 4];
   if (reader->op_index >= abbrev->num_ops) {
@@ -3374,7 +3372,6 @@ static PNBool pn_record_read_abbrev_uint64(PNRecordReader* reader,
       PN_FATAL("bad encoding: %d\n", op->encoding);
   }
 }
-
 
 static PNBool pn_record_read_code(PNRecordReader* reader, uint32_t* out_code) {
   if (reader->entry == PN_ENTRY_UNABBREV_RECORD) {
@@ -5039,7 +5036,9 @@ static int pn_string_list_count(char** p) {
   return result;
 }
 
-void pn_memory_init_startinfo(PNMemory* memory, char** argv, char** envp) {
+static void pn_memory_init_startinfo(PNMemory* memory,
+                                     char** argv,
+                                     char** envp) {
   void* memory_startinfo = memory->startinfo_start =
       pn_align_up_pointer(memory->globalvar_end, 4);
   /*
@@ -5493,8 +5492,8 @@ static uint32_t pn_max_num_bbs(PNModule* module) {
 }
 
 static const char* pn_human_readable_size_leaky(size_t size) {
-  const size_t gig = 1024*1024*1024;
-  const size_t meg = 1024*1024;
+  const size_t gig = 1024 * 1024 * 1024;
+  const size_t meg = 1024 * 1024;
   const size_t kilo = 1024;
   char buffer[100];
   if (size >= gig) {
