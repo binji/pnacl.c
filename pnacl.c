@@ -150,6 +150,7 @@ static const char* g_pn_filename;
 static char** g_pn_argv;
 static char** g_pn_environ;
 static uint32_t g_pn_memory_size = PN_DEFAULT_MEMORY_SIZE;
+static PNBool g_pn_print_named_functions;
 static PNBool g_pn_print_stats;
 static PNBool g_pn_run;
 
@@ -5998,6 +5999,7 @@ enum {
 #undef PN_TRACE_FLAGS
 #endif /* PN_TRACING */
   PN_FLAG_PRINT_ALL,
+  PN_FLAG_PRINT_NAMED_FUNCTIONS,
 #if PN_TIMERS
   PN_FLAG_PRINT_TIME,
 #endif /* PN_TIMERS */
@@ -6021,6 +6023,7 @@ static struct option long_options[] = {
 #undef PN_TRACE_FLAGS
 #endif /* PN_TRACING */
     {"print-all", no_argument, NULL, 'p'},
+    {"print-named-functions", no_argument, NULL, 0},
 #if PN_TIMERS
     {"print-time", no_argument, NULL, 0},
 #endif /* PN_TIMERS */
@@ -6169,6 +6172,10 @@ static void pn_options_parse(int argc, char** argv, char** env) {
 #undef PN_TRACE_OPTIONS
 
 #endif /* PN_TRACING */
+
+          case PN_FLAG_PRINT_NAMED_FUNCTIONS:
+            g_pn_print_named_functions = PN_TRUE;
+            break;
 
 #if PN_TIMERS
           case PN_FLAG_PRINT_TIME:
@@ -6458,6 +6465,17 @@ int main(int argc, char** argv, char** envp) {
     PN_FOREACH_TIMER(PN_PRINT_TIMER);
   }
 #endif /* PN_TIMERS */
+
+  if (g_pn_print_named_functions) {
+    printf("-----------------\n");
+    uint32_t i;
+    for (i = 0; i < module.num_functions; ++i) {
+      PNFunction* function = &module.functions[i];
+      if (function->name) {
+        printf("%s\n", function->name);
+      }
+    }
+  }
 
   if (g_pn_print_stats) {
     printf("-----------------\n");
