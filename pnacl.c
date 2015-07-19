@@ -181,7 +181,10 @@ PN_FOREACH_TRACE(PN_TRACE_DEFINE)
 #undef PN_TRACE_DEFINE
 #endif /* PN_TRACING */
 
-static const uint32_t PN_FUNCTION_ID_NACL_IRT_QUERY = 0x80000000;
+typedef enum PNBuiltinFunctions {
+  PN_BUILTIN_NACL_IRT_QUERY = 1,
+  PN_MAX_BUILTINS
+} PNBuiltinFunctions;
 
 typedef enum PNEntry {
   PN_ENTRY_END_BLOCK = 0,
@@ -564,6 +567,51 @@ typedef enum PNOpcode {
   PN_OPCODE_VSELECT,
 } PNOpcode;
 
+#define PN_FOREACH_INTRINSIC(V)                                   \
+  V(LLVM_BSWAP_I16, "llvm.bswap.i16")                             \
+  V(LLVM_BSWAP_I32, "llvm.bswap.i32")                             \
+  V(LLVM_BSWAP_I64, "llvm.bswap.i64")                             \
+  V(LLVM_CTLZ_I32, "llvm.ctlz.i32")                               \
+  V(LLVM_CTTZ_I32, "llvm.cttz.i32")                               \
+  V(LLVM_FABS_F32, "llvm.fabs.f32")                               \
+  V(LLVM_FABS_F64, "llvm.fabs.f64")                               \
+  V(LLVM_MEMCPY, "llvm.memcpy.p0i8.p0i8.i32")                     \
+  V(LLVM_MEMMOVE, "llvm.memmove.p0i8.p0i8.i32")                   \
+  V(LLVM_MEMSET, "llvm.memset.p0i8.i32")                          \
+  V(LLVM_NACL_ATOMIC_CMPXCHG_I8, "llvm.nacl.atomic.cmpxchg.i8")   \
+  V(LLVM_NACL_ATOMIC_CMPXCHG_I16, "llvm.nacl.atomic.cmpxchg.i16") \
+  V(LLVM_NACL_ATOMIC_CMPXCHG_I32, "llvm.nacl.atomic.cmpxchg.i32") \
+  V(LLVM_NACL_ATOMIC_CMPXCHG_I64, "llvm.nacl.atomic.cmpxchg.i64") \
+  V(LLVM_NACL_ATOMIC_LOAD_I8, "llvm.nacl.atomic.load.i8")         \
+  V(LLVM_NACL_ATOMIC_LOAD_I16, "llvm.nacl.atomic.load.i16")       \
+  V(LLVM_NACL_ATOMIC_LOAD_I32, "llvm.nacl.atomic.load.i32")       \
+  V(LLVM_NACL_ATOMIC_LOAD_I64, "llvm.nacl.atomic.load.i64")       \
+  V(LLVM_NACL_ATOMIC_RMW_I8, "llvm.nacl.atomic.rmw.i8")           \
+  V(LLVM_NACL_ATOMIC_RMW_I16, "llvm.nacl.atomic.rmw.i16")         \
+  V(LLVM_NACL_ATOMIC_RMW_I32, "llvm.nacl.atomic.rmw.i32")         \
+  V(LLVM_NACL_ATOMIC_RMW_I64, "llvm.nacl.atomic.rmw.i64")         \
+  V(LLVM_NACL_ATOMIC_STORE_I8, "llvm.nacl.atomic.store.i8")       \
+  V(LLVM_NACL_ATOMIC_STORE_I16, "llvm.nacl.atomic.store.i16")     \
+  V(LLVM_NACL_ATOMIC_STORE_I32, "llvm.nacl.atomic.store.i32")     \
+  V(LLVM_NACL_ATOMIC_STORE_I64, "llvm.nacl.atomic.store.i64")     \
+  V(LLVM_NACL_LONGJMP, "llvm.nacl.longjmp")                       \
+  V(LLVM_NACL_READ_TP, "llvm.nacl.read.tp")                       \
+  V(LLVM_NACL_SETJMP, "llvm.nacl.setjmp")                         \
+  V(LLVM_SQRT_F32, "llvm.sqrt.f32")                               \
+  V(LLVM_SQRT_F64, "llvm.sqrt.f64")                               \
+  V(LLVM_STACKRESTORE, "llvm.stackrestore")                       \
+  V(LLVM_STACKSAVE, "llvm.stacksave")                             \
+  V(LLVM_TRAP, "llvm.trap")                                       \
+  V(START, "_start")
+
+typedef enum PNIntrinsicId {
+  PN_INTRINSIC_NULL,
+#define PN_INTRINSIC_DEFINE(e, name) PN_INTRINSIC_##e,
+  PN_FOREACH_INTRINSIC(PN_INTRINSIC_DEFINE)
+#undef PN_INTRINSIC_DEFINE
+  PN_MAX_INTRINSICS,
+} PNIntrinsicId;
+
 typedef struct PNAllocatorChunk {
   struct PNAllocatorChunk* next;
   void* current;
@@ -827,6 +875,7 @@ typedef struct PNValue {
 typedef struct PNFunction {
   char* name;
   PNTypeId type_id;
+  PNIntrinsicId intrinsic_id;
   uint32_t num_args;
   uint32_t calling_convention;
   PNBool is_proto;
@@ -883,7 +932,7 @@ typedef struct PNModule {
   PNGlobalVar* global_vars;
   uint32_t num_values;
   PNValue* values;
-  PNFunctionId start_function_id;
+  PNFunctionId known_functions[PN_MAX_INTRINSICS];
 
   PNAllocator allocator;
   PNAllocator value_allocator;
@@ -1285,7 +1334,7 @@ static int64_t pn_decode_sign_rotated_value_int64(uint64_t value) {
 }
 
 static uint32_t pn_function_index_to_pointer(PNFunctionId function_id) {
-  return function_id << 2;
+  return (function_id + PN_MAX_BUILTINS) << 2;
 }
 
 static PNFunctionId pn_function_pointer_to_index(uint32_t fp) {
@@ -4158,6 +4207,9 @@ static void pn_value_symtab_block_read(PNModule* module,
               *p = 0;
             }
 
+            PN_TRACE(VALUE_SYMTAB_BLOCK, "  entry: id:%d name:\"%s\"\n",
+                     value_id, name);
+
             PNValue* value = pn_module_get_value(module, value_id);
             if (value->code == PN_VALUE_CODE_FUNCTION) {
               PNFunctionId function_id = value->index;
@@ -4165,15 +4217,21 @@ static void pn_value_symtab_block_read(PNModule* module,
                   pn_module_get_function(module, function_id);
               function->name = name;
 
-              if (strcmp(name, "_start") == 0) {
-                module->start_function_id = function_id;
-                PN_TRACE(VALUE_SYMTAB_BLOCK, "  start function id = %d\n",
-                         function_id);
-              }
+#define PN_INTRINSIC_CHECK(i_enum, i_name)                            \
+  if (strcmp(name, i_name) == 0) {                                    \
+    module->known_functions[PN_INTRINSIC_##i_enum] = function_id;     \
+    function->intrinsic_id = PN_INTRINSIC_##i_enum;                   \
+    PN_TRACE(VALUE_SYMTAB_BLOCK, "    intrinsic \"%s\" (%d)\n", i_name, \
+             PN_INTRINSIC_##i_enum);                                  \
+  } else
+
+              PN_FOREACH_INTRINSIC(PN_INTRINSIC_CHECK)
+              { /* Unknown function name */ }
+
+#undef PN_INTRINSIC_CHECK
+
             }
 
-            PN_TRACE(VALUE_SYMTAB_BLOCK, "  entry: id:%d name:\"%s\"\n",
-                     value_id, name);
             break;
           }
 
@@ -5166,7 +5224,7 @@ static void pn_memory_init_startinfo(PNMemory* memory,
   uint32_t* memory_auxv = memory_startinfo32 + 3 + argc + 1 + envc + 1;
   PN_TRACE(EXECUTE, "auxv = %" PRIuPTR "\n", (void*)memory_auxv - memory->data);
   memory_auxv[0] = 32; /* AT_SYSINFO */
-  memory_auxv[1] = PN_FUNCTION_ID_NACL_IRT_QUERY;
+  memory_auxv[1] = PN_BUILTIN_NACL_IRT_QUERY;
   memory_auxv[2] = 0; /* AT_NULL */
 
   memory->startinfo_end = data_offset;
@@ -5305,12 +5363,12 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
 
   pn_executor_init_module_values(executor);
 
-  PN_CHECK(module->start_function_id != PN_INVALID_FUNCTION_ID);
+  PNFunctionId start_function_id = module->known_functions[PN_INTRINSIC_START];
+  PN_CHECK(start_function_id != PN_INVALID_FUNCTION_ID);
   PNFunction* start_function =
-      pn_module_get_function(module, module->start_function_id);
+      pn_module_get_function(module, start_function_id);
 
-  pn_executor_push_function(executor, module->start_function_id,
-                            start_function);
+  pn_executor_push_function(executor, start_function_id, start_function);
 
   PN_CHECK(start_function->num_args == 1);
 
@@ -6427,7 +6485,6 @@ int main(int argc, char** argv, char** envp) {
   memory.data = pn_malloc(memory.size);
 
   PNModule module = {};
-  module.start_function_id = PN_INVALID_FUNCTION_ID;
   module.memory = &memory;
   pn_allocator_init(&module.allocator, PN_MIN_CHUNKSIZE, "module");
   pn_allocator_init(&module.value_allocator, PN_MIN_CHUNKSIZE, "value");
