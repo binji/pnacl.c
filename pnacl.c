@@ -5112,9 +5112,17 @@ static void pn_memory_init_startinfo(PNMemory* memory,
   memory_startinfo32[1] = envc;
   memory_startinfo32[2] = argc;
 
+  PN_TRACE(EXECUTE, "startinfo = %" PRIuPTR "\n",
+           memory_startinfo - memory->data);
+  PN_TRACE(EXECUTE, "envc = %" PRIuPTR " (%d)\n",
+           memory_startinfo + 4 - memory->data, envc);
+  PN_TRACE(EXECUTE, "argc = %" PRIuPTR " (%d)\n",
+           memory_startinfo + 8 - memory->data, argc);
+
   /* argv */
   int i = 0;
   uint32_t* memory_argv = memory_startinfo32 + 3;
+  PN_TRACE(EXECUTE, "argv = %" PRIuPTR "\n", (void*)memory_argv - memory->data);
   for (i = 0; i < argc; ++i) {
     char* arg = argv[i];
     size_t len = strlen(arg) + 1;
@@ -5126,7 +5134,8 @@ static void pn_memory_init_startinfo(PNMemory* memory,
   memory_startinfo32[3 + argc] = 0;
 
   /* envp */
-  uint32_t* memory_envp = memory_startinfo32 + 3 + argc;
+  uint32_t* memory_envp = memory_startinfo32 + 3 + argc + 1;
+  PN_TRACE(EXECUTE, "envp = %" PRIuPTR "\n", (void*)memory_envp - memory->data);
   for (i = 0; i < envc; ++i) {
     char* env = envp[i];
     size_t len = strlen(env) + 1;
@@ -5153,7 +5162,8 @@ static void pn_memory_init_startinfo(PNMemory* memory,
    *                                       void *table, size_t tablesize);
    */
 
-  uint32_t* memory_auxv = memory_startinfo32 + 3 + argc + envc;
+  uint32_t* memory_auxv = memory_startinfo32 + 3 + argc + 1 + envc + 1;
+  PN_TRACE(EXECUTE, "auxv = %" PRIuPTR "\n", (void*)memory_auxv - memory->data);
   memory_auxv[0] = 32; /* AT_SYSINFO */
   memory_auxv[1] = PN_FUNCTION_ID_NACL_IRT_QUERY;
   memory_auxv[2] = 0; /* AT_NULL */
@@ -6227,7 +6237,7 @@ static const char* pn_human_readable_size_leaky(size_t size) {
   } else if (size >= kilo) {
     snprintf(buffer, 100, "%.1fK", (size + kilo - 1) / (double)kilo);
   } else {
-    snprintf(buffer, 100, "%d", (int)size);
+    snprintf(buffer, 100, "%" PRIdPTR, size);
   }
   return pn_strdup(buffer);
 }
