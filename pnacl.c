@@ -150,6 +150,7 @@ typedef uint32_t PNGlobalVarId;
 typedef uint16_t PNInstructionId;
 typedef uint16_t PNBasicBlockId;
 typedef uint16_t PNAlignment;
+typedef uint32_t PNJmpBufId;
 
 typedef uint8_t pn_u8;
 typedef int8_t pn_i8;
@@ -1133,22 +1134,30 @@ typedef struct PNLocation {
 
 typedef struct PNCallFrame {
   PNLocation location;
-  PNRuntimeValue* function_values;
-  uint32_t memory_stack_top; /* Grows down */
-  struct PNCallFrame* parent;
   PNAllocatorMark mark;
+  PNRuntimeValue* function_values;
+  struct PNCallFrame* parent;
+  struct PNJmpBuf* jmpbuf_head;
+  uint32_t memory_stack_top; /* Grows down */
 } PNCallFrame;
+
+typedef struct PNJmpBuf {
+  PNJmpBufId id;
+  PNCallFrame frame;
+  struct PNJmpBuf* next;
+} PNJmpBuf;
 
 typedef struct PNExecutor {
   PNModule* module;
   PNMemory* memory;
   PNCallFrame* current_call_frame;
   PNRuntimeValue* module_values;
-  uint32_t heap_end; /* Grows up */
   PNBitSet mapped_pages;
-  uint32_t tls;
   PNCallFrame sentinel_frame;
   PNAllocator allocator;
+  PNJmpBufId next_jmpbuf_id;
+  uint32_t heap_end; /* Grows up */
+  uint32_t tls;
   int32_t exit_code;
   PNBool exiting;
 } PNExecutor;
@@ -5599,6 +5608,7 @@ static void pn_executor_push_function(PNExecutor* executor,
       sizeof(PNRuntimeValue));
   frame->memory_stack_top = prev_frame->memory_stack_top;
   frame->parent = prev_frame;
+  frame->jmpbuf_head = NULL;
   frame->mark = pn_allocator_mark(&executor->allocator);
 
   executor->current_call_frame = frame;
@@ -5622,7 +5632,6 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
   executor->memory = module->memory;
   executor->current_call_frame = &executor->sentinel_frame;
   executor->heap_end = executor->memory->heap_start;
-  executor->tls = 0;
   executor->sentinel_frame.location.function_id = PN_INVALID_FUNCTION_ID;
   executor->sentinel_frame.location.bb_id = PN_INVALID_BB_ID;
   executor->sentinel_frame.location.last_bb_id = PN_INVALID_BB_ID;
@@ -5631,6 +5640,7 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
   executor->sentinel_frame.memory_stack_top = executor->memory->stack_end;
   executor->sentinel_frame.parent = NULL;
   executor->sentinel_frame.mark = pn_allocator_mark(&executor->allocator);
+  executor->tls = 0;
   executor->exit_code = 0;
   executor->exiting = PN_FALSE;
 
@@ -7129,6 +7139,76 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 #undef OPCODE_INTRINSIC_RMW
 #undef OPCODE_INTRINSIC_EXCHANGE
 
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_LONGJMP: {
+      PNInstructionCall* i = (PNInstructionCall*)inst;
+      PN_CHECK(i->num_args == 2);
+      PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
+      uint32_t jmpbuf_p = pn_executor_get_value(executor, i->arg_ids[0]).u32;
+      PNRuntimeValue value = pn_executor_get_value(executor, i->arg_ids[1]);
+      PN_TRACE(INTRINSICS, "    llvm.nacl.longjmp(jmpbuf: %u, value: %u)\n",
+               jmpbuf_p, value.u32);
+      PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = %u\n", i->arg_ids[0], jmpbuf_p,
+               i->arg_ids[1], value.u32);
+
+      PNJmpBufId id = pn_memory_read_u32(executor->memory, jmpbuf_p);
+
+      /* Search the call stack for the matching jmpbuf id */
+      PNCallFrame* f = frame;
+      while (f != &executor->sentinel_frame) {
+        PNJmpBuf* buf = f->jmpbuf_head;
+        while (buf) {
+          if (buf->id == id) {
+            /* Found it */
+            executor->current_call_frame = f;
+            pn_allocator_reset_to_mark(&executor->allocator, f->mark);
+            /* Reset the frame to its original state */
+            *executor->current_call_frame = buf->frame;
+            location = &executor->current_call_frame->location;
+            PN_TRACE(EXECUTE, "function = %d  bb = %d\n", location->function_id,
+                     location->bb_id);
+            /* Set the return value */
+            PNFunction* new_function =
+                &module->functions[location->function_id];
+            PNBasicBlock* new_bb = &new_function->bbs[location->bb_id];
+            PNInstructionCall* c =
+                (PNInstructionCall*)
+                    new_bb->instructions[location->instruction_id];
+            pn_executor_set_value(executor, c->result_value_id, value);
+            pn_executor_value_trace(executor, function, i->arg_ids[1], value,
+                                    "    ", "\n");
+            location->instruction_id++;
+            goto longjmp_done;
+          }
+          buf = buf->next;
+        }
+        f = f->parent;
+      }
+      PN_FATAL("Invalid jmpbuf target: %d\n", id);
+longjmp_done:
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_SETJMP: {
+      PNInstructionCall* i = (PNInstructionCall*)inst;
+      PN_CHECK(i->num_args == 1);
+      PN_CHECK(i->result_value_id != PN_INVALID_VALUE_ID);
+      uint32_t jmpbuf_p = pn_executor_get_value(executor, i->arg_ids[0]).u32;
+      PNJmpBuf* buf = pn_allocator_alloc(&executor->allocator,
+                                          sizeof(PNJmpBuf), PN_DEFAULT_ALIGN);
+      buf->id = executor->next_jmpbuf_id++;
+      buf->frame = *frame;
+      buf->next = frame->jmpbuf_head;
+      frame->jmpbuf_head = buf;
+      pn_memory_write_u32(executor->memory, jmpbuf_p, buf->id);
+      PNRuntimeValue result = pn_executor_value_u32(0);
+      pn_executor_set_value(executor, i->result_value_id, result);
+      PN_TRACE(INTRINSICS, "    llvm.nacl.setjmp(jmpbuf: %u)\n", jmpbuf_p);
+      PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = %u\n", i->result_value_id,
+               result.u32, i->arg_ids[0], jmpbuf_p);
+      location->instruction_id++;
+      break;
+    }
+
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I32: {
       PNInstructionCall* i = (PNInstructionCall*)inst;
       PN_CHECK(i->num_args == 3);
@@ -7189,8 +7269,6 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I8)
     OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I16)
     OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I64)
-    OPCODE_INTRINSIC_STUB(LLVM_NACL_LONGJMP)
-    OPCODE_INTRINSIC_STUB(LLVM_NACL_SETJMP)
     OPCODE_INTRINSIC_STUB(LLVM_SQRT_F32)
     OPCODE_INTRINSIC_STUB(LLVM_SQRT_F64)
     OPCODE_INTRINSIC_STUB(LLVM_STACKRESTORE)
