@@ -1687,6 +1687,11 @@ static PNValue* pn_module_append_value(PNModule* module,
 }
 
 static void pn_memory_check(PNMemory* memory, uint32_t offset, uint32_t size) {
+  if (offset < PN_MEMORY_GUARD_SIZE) {
+    PN_FATAL("memory access out of bounds: %u < %u", offset,
+             PN_MEMORY_GUARD_SIZE);
+  }
+
   if (offset + size > memory->size) {
     PN_FATAL("memory-size is too small (%u < %u).\n", memory->size,
              offset + size);
