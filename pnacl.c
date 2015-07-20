@@ -6060,6 +6060,10 @@ static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNExecutor* executor,
   size_t size = pn_align_up(len, PN_PAGE_SIZE);
   void* end_pointer = result_pointer + size;
 
+  if (end_pointer > executor->current_call_frame->memory_stack_top) {
+    PN_FATAL("Out of heap\n");
+  }
+
   pn_memory_check_pointer(memory, result_pointer, size);
   executor->heap_end = end_pointer;
 
