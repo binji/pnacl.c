@@ -51,21 +51,21 @@ global var count: 23
   zerofill. num_bytes: 4, data_offset:1024
 %17. var. alignment:4 is_constant:0 offset:1028
   compound. num initializers: 8
-  writing reloc value. offset:1028 value:56 (0x38)
+  writing reloc value. offset:1028 value:152 (0x98)
   reloc. index: 12 addend: 0 data_offset:1028
-  writing reloc value. offset:1032 value:52 (0x34)
+  writing reloc value. offset:1032 value:148 (0x94)
   reloc. index: 11 addend: 0 data_offset:1032
-  writing reloc value. offset:1036 value:48 (0x30)
+  writing reloc value. offset:1036 value:144 (0x90)
   reloc. index: 10 addend: 0 data_offset:1036
-  writing reloc value. offset:1040 value:44 (0x2c)
+  writing reloc value. offset:1040 value:140 (0x8c)
   reloc. index: 9 addend: 0 data_offset:1040
-  writing reloc value. offset:1044 value:40 (0x28)
+  writing reloc value. offset:1044 value:136 (0x88)
   reloc. index: 8 addend: 0 data_offset:1044
-  writing reloc value. offset:1048 value:36 (0x24)
+  writing reloc value. offset:1048 value:132 (0x84)
   reloc. index: 7 addend: 0 data_offset:1048
-  writing reloc value. offset:1052 value:32 (0x20)
+  writing reloc value. offset:1052 value:128 (0x80)
   reloc. index: 6 addend: 0 data_offset:1052
-  writing reloc value. offset:1056 value:28 (0x1c)
+  writing reloc value. offset:1056 value:124 (0x7c)
   reloc. index: 5 addend: 0 data_offset:1056
 %18. var. alignment:4 is_constant:0 offset:1060
   zerofill. num_bytes: 4, data_offset:1060

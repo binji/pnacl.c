@@ -337,12 +337,36 @@ typedef enum PNBasicType {
   PN_BASIC_TYPE_DOUBLE,
 } PNBasicType;
 
-#define PN_FOREACH_BUILTIN(V) \
-  V(NACL_IRT_QUERY, "nacl_irt_query", 3)
+#define PN_FOREACH_BUILTIN(V)   \
+  V(NACL_IRT_QUERY)             \
+  V(NACL_IRT_BASIC_EXIT)        \
+  V(NACL_IRT_BASIC_GETTOD)      \
+  V(NACL_IRT_BASIC_CLOCK)       \
+  V(NACL_IRT_BASIC_NANOSLEEP)   \
+  V(NACL_IRT_BASIC_SCHED_YIELD) \
+  V(NACL_IRT_BASIC_SYSCONF)     \
+  V(NACL_IRT_FDIO_CLOSE)        \
+  V(NACL_IRT_FDIO_DUP)          \
+  V(NACL_IRT_FDIO_DUP2)         \
+  V(NACL_IRT_FDIO_READ)         \
+  V(NACL_IRT_FDIO_WRITE)        \
+  V(NACL_IRT_FDIO_SEEK)         \
+  V(NACL_IRT_FDIO_FSTAT)        \
+  V(NACL_IRT_FDIO_GETDENTS)     \
+  V(NACL_IRT_MEMORY_MMAP)       \
+  V(NACL_IRT_MEMORY_MUNMAP)     \
+  V(NACL_IRT_MEMORY_MPROTECT)   \
+  V(NACL_IRT_TLS_INIT)          \
+  V(NACL_IRT_TLS_GET)           \
+  V(NACL_IRT_THREAD_CREATE)     \
+  V(NACL_IRT_THREAD_EXIT)       \
+  V(NACL_IRT_THREAD_NICE)       \
+  V(NACL_IRT_FUTEX_WAIT_ABS)    \
+  V(NACL_IRT_FUTEX_WAKE)
 
 typedef enum PNBuiltinId {
   PN_BUILTIN_NULL,
-#define PN_BUILTIN(e, name, argc) PN_BUILTIN_##e,
+#define PN_BUILTIN(e) PN_BUILTIN_##e,
   PN_FOREACH_BUILTIN(PN_BUILTIN)
 #undef PN_BUILTIN
   PN_MAX_BUILTINS
@@ -5450,27 +5474,146 @@ static void pn_executor_value_trace(PNExecutor* executor,
 #endif
 }
 
-#define PN_BUILTIN_ARG(n)                                                \
+#define PN_TYPE_u8 uint8_t
+#define PN_TYPE_u16 uint16_t
+#define PN_TYPE_u32 uint32_t
+#define PN_TYPE_u64 uint64_t
+#define PN_TYPE_i8 int8_t
+#define PN_TYPE_i16 int16_t
+#define PN_TYPE_i32 int32_t
+#define PN_TYPE_i64 int64_t
+#define PN_TYPE_f32 float
+#define PN_TYPE_f64 double
+
+#define PN_BUILTIN_ARG(name, n, ty)                                      \
   PNRuntimeValue value##n = pn_executor_get_value(executor, arg_ids[n]); \
-  (void) value##n /* no semicolon */
+  PN_TYPE_##ty name = value##n.ty;                                       \
+  (void) name /* no semicolon */
 
 static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNExecutor* executor,
                                                 PNFunction* function,
                                                 uint32_t num_args,
                                                 PNValueId* arg_ids) {
   PN_CHECK(num_args == 3);
-  PN_BUILTIN_ARG(0);
-  PN_BUILTIN_ARG(1);
-  PN_BUILTIN_ARG(2);
-  PN_TRACE(EXECUTE, "    NACL_IRT_QUERY(%u, %u, %u)\n", value0.u32, value1.u32,
-           value2.u32);
+  PN_BUILTIN_ARG(name, 0, u32);
+  PN_BUILTIN_ARG(table, 1, u32);
+  PN_BUILTIN_ARG(table_size, 2, u32);
+  PN_TRACE(EXECUTE, "    NACL_IRT_QUERY(%u, %u, %u)\n", name, table,
+           table_size);
 
-  PNRuntimeValue ret;
-  ret.u32 = 0;
-  return ret;
+  PNMemory* memory = executor->memory;
+  pn_memory_check(memory, name, 1);
+
+  /* Find the end of the |name| string */
+  uint32_t end = name;
+  while (pn_memory_read_uint8(memory, end) != 0) {
+    end++;
+  }
+  PN_CHECK(end > name);
+
+#define PN_WRITE_BUILTIN(offset, name)                              \
+  pn_memory_write_uint32(memory, table + offset * sizeof(uint32_t), \
+                         pn_builtin_to_pointer(PN_BUILTIN_##name));
+
+  const char* iface_name = memory->data + name;
+  if (strcmp(iface_name, "nacl-irt-basic-0.1") == 0) {
+    PN_CHECK(table_size == 24);
+    PN_WRITE_BUILTIN(0, NACL_IRT_BASIC_EXIT);
+    PN_WRITE_BUILTIN(1, NACL_IRT_BASIC_GETTOD);
+    PN_WRITE_BUILTIN(2, NACL_IRT_BASIC_CLOCK);
+    PN_WRITE_BUILTIN(3, NACL_IRT_BASIC_NANOSLEEP);
+    PN_WRITE_BUILTIN(4, NACL_IRT_BASIC_SCHED_YIELD);
+    PN_WRITE_BUILTIN(5, NACL_IRT_BASIC_SYSCONF);
+    return pn_executor_value_u32(24);
+  } else if (strcmp(iface_name, "nacl-irt-fdio-0.1") == 0) {
+    PN_CHECK(table_size == 32);
+    PN_WRITE_BUILTIN(0, NACL_IRT_FDIO_CLOSE);
+    PN_WRITE_BUILTIN(1, NACL_IRT_FDIO_DUP);
+    PN_WRITE_BUILTIN(2, NACL_IRT_FDIO_DUP2);
+    PN_WRITE_BUILTIN(3, NACL_IRT_FDIO_READ);
+    PN_WRITE_BUILTIN(4, NACL_IRT_FDIO_WRITE);
+    PN_WRITE_BUILTIN(5, NACL_IRT_FDIO_SEEK);
+    PN_WRITE_BUILTIN(6, NACL_IRT_FDIO_FSTAT);
+    PN_WRITE_BUILTIN(7, NACL_IRT_FDIO_GETDENTS);
+    return pn_executor_value_u32(32);
+  } else if (strcmp(iface_name, "nacl-irt-memory-0.1") == 0) {
+    PN_CHECK(table_size == 12);
+    PN_WRITE_BUILTIN(0, NACL_IRT_MEMORY_MMAP);
+    PN_WRITE_BUILTIN(1, NACL_IRT_MEMORY_MUNMAP);
+    PN_WRITE_BUILTIN(2, NACL_IRT_MEMORY_MPROTECT);
+    return pn_executor_value_u32(12);
+  } else if (strcmp(iface_name, "nacl-irt-tls-0.1") == 0) {
+    PN_CHECK(table_size == 8);
+    PN_WRITE_BUILTIN(0, NACL_IRT_TLS_INIT);
+    PN_WRITE_BUILTIN(1, NACL_IRT_TLS_GET);
+    return pn_executor_value_u32(8);
+  } else if (strcmp(iface_name, "nacl-irt-thread-0.1") == 0) {
+    PN_CHECK(table_size == 12);
+    PN_WRITE_BUILTIN(0, NACL_IRT_THREAD_CREATE);
+    PN_WRITE_BUILTIN(1, NACL_IRT_THREAD_EXIT);
+    PN_WRITE_BUILTIN(2, NACL_IRT_THREAD_NICE);
+    return pn_executor_value_u32(12);
+  } else if (strcmp(iface_name, "nacl-irt-futex-0.1") == 0) {
+    PN_CHECK(table_size == 8);
+    PN_WRITE_BUILTIN(0, NACL_IRT_FUTEX_WAIT_ABS);
+    PN_WRITE_BUILTIN(1, NACL_IRT_FUTEX_WAKE);
+    return pn_executor_value_u32(8);
+  } else {
+    PN_TRACE(EXECUTE, "Unknown interface name: \"%s\".\n", iface_name);
+    return pn_executor_value_u32(0);
+  }
+
+#undef PN_WRITE_BUILTIN
 }
 
+#define PN_ENOSYS 38
+
+#define PN_BUILTIN_STUB(name)                                        \
+  static PNRuntimeValue pn_builtin_##name(                           \
+      PNExecutor* executor, PNFunction* function, uint32_t num_args, \
+      PNValueId* arg_ids) {                                          \
+    PN_TRACE(EXECUTE, "    " #name "(...)\n");                       \
+    return pn_executor_value_u32(PN_ENOSYS);                         \
+  }
+
+PN_BUILTIN_STUB(NACL_IRT_BASIC_EXIT)
+PN_BUILTIN_STUB(NACL_IRT_BASIC_GETTOD)
+PN_BUILTIN_STUB(NACL_IRT_BASIC_CLOCK)
+PN_BUILTIN_STUB(NACL_IRT_BASIC_NANOSLEEP)
+PN_BUILTIN_STUB(NACL_IRT_BASIC_SCHED_YIELD)
+PN_BUILTIN_STUB(NACL_IRT_BASIC_SYSCONF)
+PN_BUILTIN_STUB(NACL_IRT_FDIO_CLOSE)
+PN_BUILTIN_STUB(NACL_IRT_FDIO_DUP)
+PN_BUILTIN_STUB(NACL_IRT_FDIO_DUP2)
+PN_BUILTIN_STUB(NACL_IRT_FDIO_READ)
+PN_BUILTIN_STUB(NACL_IRT_FDIO_WRITE)
+PN_BUILTIN_STUB(NACL_IRT_FDIO_SEEK)
+PN_BUILTIN_STUB(NACL_IRT_FDIO_FSTAT)
+PN_BUILTIN_STUB(NACL_IRT_FDIO_GETDENTS)
+PN_BUILTIN_STUB(NACL_IRT_MEMORY_MMAP)
+PN_BUILTIN_STUB(NACL_IRT_MEMORY_MUNMAP)
+PN_BUILTIN_STUB(NACL_IRT_MEMORY_MPROTECT)
+PN_BUILTIN_STUB(NACL_IRT_TLS_INIT)
+PN_BUILTIN_STUB(NACL_IRT_TLS_GET)
+PN_BUILTIN_STUB(NACL_IRT_THREAD_CREATE)
+PN_BUILTIN_STUB(NACL_IRT_THREAD_EXIT)
+PN_BUILTIN_STUB(NACL_IRT_THREAD_NICE)
+PN_BUILTIN_STUB(NACL_IRT_FUTEX_WAIT_ABS)
+PN_BUILTIN_STUB(NACL_IRT_FUTEX_WAKE)
+
+#undef PN_BUILTIN_STUB
+
 #undef PN_BUILTIN_ARG
+#undef PN_TYPE_u8
+#undef PN_TYPE_u16
+#undef PN_TYPE_u32
+#undef PN_TYPE_u64
+#undef PN_TYPE_i8
+#undef PN_TYPE_i16
+#undef PN_TYPE_i32
+#undef PN_TYPE_i64
+#undef PN_TYPE_f32
+#undef PN_TYPE_f64
 
 static void pn_executor_execute_instruction(PNExecutor* executor) {
   PNCallFrame* frame = executor->current_call_frame;
@@ -5626,7 +5769,7 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
         if (callee_function_id < PN_MAX_BUILTINS) {
           /* Builtin function. Call it directly, don't set up a new frame */
           switch (callee_function_id) {
-#define PN_BUILTIN(e, name, argc)                                    \
+#define PN_BUILTIN(e)                                                \
   case PN_BUILTIN_##e: {                                             \
     PNRuntimeValue result =                                          \
         pn_builtin_##e(executor, function, i->num_args, i->arg_ids); \
