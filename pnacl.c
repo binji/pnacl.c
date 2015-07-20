@@ -6533,6 +6533,9 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 
     case PN_OPCODE_RET_VALUE: {
       PNInstructionRet* i = (PNInstructionRet*)inst;
+      PNRuntimeValue value =
+          pn_executor_get_value_from_frame(executor, frame, i->value_id);
+
       executor->current_call_frame = frame->parent;
       location = &frame->parent->location;
 
@@ -6540,20 +6543,27 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       PNBasicBlock* new_bb = &new_function->bbs[location->bb_id];
       PNInstructionCall* c =
           (PNInstructionCall*)new_bb->instructions[location->instruction_id];
-      PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);
       pn_executor_set_value(executor, c->result_value_id, value);
-      pn_allocator_reset_to_mark(&executor->allocator, frame->parent->mark);
 
 #if PN_TRACING
       if (PN_IS_TRACE(EXECUTE)) {
-        PNValue* ret_value =
-            pn_function_get_value(executor->module, new_function, i->value_id);
-        pn_executor_value_trace(executor, ret_value->type_id, i->value_id,
+        pn_executor_value_trace(executor, c->return_type_id, i->value_id, value,
+                                "    ", "\n");
+      }
+#endif
+
+      pn_allocator_reset_to_mark(&executor->allocator, frame->parent->mark);
+
+      PN_TRACE(EXECUTE, "function = %d  bb = %d\n", location->function_id,
+               location->bb_id);
+
+#if PN_TRACING
+      if (PN_IS_TRACE(EXECUTE)) {
+        pn_executor_value_trace(executor, c->return_type_id, c->result_value_id,
                                 value, "    ", "\n");
       }
 #endif
-      PN_TRACE(EXECUTE, "function = %d  bb = %d\n", location->function_id,
-               location->bb_id);
+
       location->instruction_id++;
       break;
     }
