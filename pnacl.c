@@ -1014,8 +1014,11 @@ typedef struct PNExecutor {
   PNCallFrame* current_call_frame;
   PNRuntimeValue* module_values;
   void* heap_end; /* Grows up */
+  uint32_t tls;
   PNCallFrame sentinel_frame;
   PNAllocator allocator;
+  int32_t exit_code;
+  PNBool exiting;
 } PNExecutor;
 
 #if PN_TIMERS
@@ -5411,6 +5414,7 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
   executor->memory = module->memory;
   executor->current_call_frame = &executor->sentinel_frame;
   executor->heap_end = executor->memory->heap_start;
+  executor->tls = 0;
   executor->sentinel_frame.location.function_id = PN_INVALID_FUNCTION_ID;
   executor->sentinel_frame.location.bb_id = PN_INVALID_BB_ID;
   executor->sentinel_frame.location.last_bb_id = PN_INVALID_BB_ID;
@@ -5419,6 +5423,8 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
   executor->sentinel_frame.memory_stack_top = executor->memory->stack_end;
   executor->sentinel_frame.parent = NULL;
   executor->sentinel_frame.mark = pn_allocator_mark(&executor->allocator);
+  executor->exit_code = 0;
+  executor->exiting = PN_FALSE;
 
   pn_executor_init_module_values(executor);
 
@@ -5570,6 +5576,18 @@ static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNExecutor* executor,
 #undef PN_WRITE_BUILTIN
 }
 
+static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_EXIT(PNExecutor* executor,
+                                                     PNFunction* function,
+                                                     uint32_t num_args,
+                                                     PNValueId* arg_ids) {
+  PN_CHECK(num_args == 1);
+  PN_BUILTIN_ARG(exit_code, 0, i32);
+  executor->exit_code = exit_code;
+  executor->exiting = PN_TRUE;
+  PN_TRACE(EXECUTE, "Setting exit code = %d\n", exit_code);
+  return pn_executor_value_u32(0);
+}
+
 static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNExecutor* executor,
                                                       PNFunction* function,
                                                       uint32_t num_args,
@@ -5603,6 +5621,18 @@ static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNExecutor* executor,
   return pn_executor_value_u32(0);
 }
 
+static PNRuntimeValue pn_builtin_NACL_IRT_TLS_INIT(PNExecutor* executor,
+                                                   PNFunction* function,
+                                                   uint32_t num_args,
+                                                   PNValueId* arg_ids) {
+  PN_CHECK(num_args == 1);
+  PN_BUILTIN_ARG(thread_ptr_p, 0, u32);
+  /* How big is TLS? */
+  pn_memory_check(executor->memory, thread_ptr_p, 1);
+  executor->tls = thread_ptr_p;
+  return pn_executor_value_u32(0);
+}
+
 #define PN_BUILTIN_STUB(name)                                        \
   static PNRuntimeValue pn_builtin_##name(                           \
       PNExecutor* executor, PNFunction* function, uint32_t num_args, \
@@ -5611,7 +5641,6 @@ static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNExecutor* executor,
     return pn_executor_value_u32(PN_ENOSYS);                         \
   }
 
-PN_BUILTIN_STUB(NACL_IRT_BASIC_EXIT)
 PN_BUILTIN_STUB(NACL_IRT_BASIC_GETTOD)
 PN_BUILTIN_STUB(NACL_IRT_BASIC_CLOCK)
 PN_BUILTIN_STUB(NACL_IRT_BASIC_NANOSLEEP)
@@ -5627,7 +5656,6 @@ PN_BUILTIN_STUB(NACL_IRT_FDIO_FSTAT)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_GETDENTS)
 PN_BUILTIN_STUB(NACL_IRT_MEMORY_MUNMAP)
 PN_BUILTIN_STUB(NACL_IRT_MEMORY_MPROTECT)
-PN_BUILTIN_STUB(NACL_IRT_TLS_INIT)
 PN_BUILTIN_STUB(NACL_IRT_TLS_GET)
 PN_BUILTIN_STUB(NACL_IRT_THREAD_CREATE)
 PN_BUILTIN_STUB(NACL_IRT_THREAD_EXIT)
@@ -5807,7 +5835,9 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
   case PN_BUILTIN_##e: {                                             \
     PNRuntimeValue result =                                          \
         pn_builtin_##e(executor, function, i->num_args, i->arg_ids); \
-    pn_executor_set_value(executor, i->result_value_id, result);     \
+    if (i->result_value_id != PN_INVALID_VALUE_ID) {                 \
+      pn_executor_set_value(executor, i->result_value_id, result);   \
+    }                                                                \
     break;                                                           \
   }
             PN_FOREACH_BUILTIN(PN_BUILTIN)
@@ -6161,7 +6191,7 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       PNInstructionCall* i = (PNInstructionCall*)inst;
       PN_CHECK(i->num_args == 0);
       PN_CHECK(i->result_value_id != PN_INVALID_VALUE_ID);
-      PNRuntimeValue result = pn_executor_value_u32(0);
+      PNRuntimeValue result = pn_executor_value_u32(executor->tls);
       pn_executor_set_value(executor, i->result_value_id, result);
       PN_TRACE(EXECUTE, "    %%%d = %u\n", i->result_value_id, result.u32);
       location->instruction_id++;
@@ -6797,10 +6827,15 @@ int main(int argc, char** argv, char** envp) {
 
     PNExecutor executor;
     pn_executor_init(&executor, &module);
-    while (executor.current_call_frame != &executor.sentinel_frame) {
+    while (executor.current_call_frame != &executor.sentinel_frame &&
+           !executor.exiting) {
       pn_executor_execute_instruction(&executor);
     }
     PN_END_TIME(EXECUTE);
+
+    if (g_pn_verbose) {
+      printf("Exit code: %d\n", executor.exit_code);
+    }
   }
 
   PN_END_TIME(TOTAL);
