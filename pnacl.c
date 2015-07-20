@@ -5803,6 +5803,30 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_CLOSE(PNExecutor* executor,
   return pn_executor_value_u32(0);
 }
 
+static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_READ(PNExecutor* executor,
+                                                     PNFunction* function,
+                                                     uint32_t num_args,
+                                                     PNValueId* arg_ids) {
+  PN_CHECK(num_args == 4);
+  PN_BUILTIN_ARG(fd, 0, u32);
+  PN_BUILTIN_ARG(buf_p, 1, u32);
+  PN_BUILTIN_ARG(count, 2, u32);
+  PN_BUILTIN_ARG(nread_p, 3, u32);
+  PN_TRACE(IRT, "    NACL_IRT_FDIO_READ(%u, %u, %u, %u)\n", fd, buf_p, count,
+           nread_p);
+  if (fd != 0) {
+    return pn_executor_value_u32(PN_EINVAL);
+  }
+
+  pn_memory_check(executor->memory, buf_p, count);
+  void* buf_pointer = executor->memory->data + buf_p;
+  ssize_t nread = read(fd, buf_pointer, count);
+  pn_memory_write_u32(executor->memory, nread_p, (int32_t)nread);
+  PN_TRACE(IRT, "      returning %d\n", (int32_t)nread);
+  return pn_executor_value_u32(0);
+}
+
+
 static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_WRITE(PNExecutor* executor,
                                                      PNFunction* function,
                                                      uint32_t num_args,
@@ -5821,8 +5845,8 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_WRITE(PNExecutor* executor,
   pn_memory_check(executor->memory, buf_p, count);
   void* buf_pointer = executor->memory->data + buf_p;
   ssize_t nwrote = write(fd, buf_pointer, count);
-  pn_memory_write_u32(executor->memory, nwrote_p, (int)nwrote);
-  PN_TRACE(IRT, "      returning %d\n", (int)nwrote);
+  pn_memory_write_u32(executor->memory, nwrote_p, (int32_t)nwrote);
+  PN_TRACE(IRT, "      returning %d\n", (int32_t)nwrote);
   return pn_executor_value_u32(0);
 }
 
@@ -5946,6 +5970,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_READLINK(
   void* buf = executor->memory->data + buf_p;
   ssize_t nread = readlink(path, buf, count);
   pn_memory_write_u32(executor->memory, nread_p, (int32_t)nread);
+  PN_TRACE(IRT, "      returning %d\n", (int32_t)nread);
   return pn_executor_value_u32(0);
 }
 
@@ -6100,7 +6125,6 @@ PN_BUILTIN_STUB(NACL_IRT_BASIC_NANOSLEEP)
 PN_BUILTIN_STUB(NACL_IRT_BASIC_SCHED_YIELD)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_DUP)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_DUP2)
-PN_BUILTIN_STUB(NACL_IRT_FDIO_READ)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_SEEK)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_GETDENTS)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_FCHDIR)
