@@ -5378,10 +5378,10 @@ static void pn_memory_init_startinfo(PNMemory* memory,
     memory_argv[i] = data_offset - memory->data;
     data_offset += len;
   }
-  memory_startinfo32[3 + argc] = 0;
+  memory_argv[argc] = 0;
 
   /* envp */
-  uint32_t* memory_envp = memory_startinfo32 + 3 + argc + 1;
+  uint32_t* memory_envp = memory_argv + argc + 1;
   PN_TRACE(EXECUTE, "envp = %" PRIuPTR "\n", (void*)memory_envp - memory->data);
   for (i = 0; i < envc; ++i) {
     char* env = envp[i];
@@ -5391,7 +5391,7 @@ static void pn_memory_init_startinfo(PNMemory* memory,
     memory_envp[i] = data_offset - memory->data;
     data_offset += len;
   }
-  memory_startinfo32[3 + envc] = 0;
+  memory_envp[envc] = 0;
 
   /*
    * The expected auxv structure is key/value pairs.
@@ -5409,7 +5409,7 @@ static void pn_memory_init_startinfo(PNMemory* memory,
    *                                       void *table, size_t tablesize);
    */
 
-  uint32_t* memory_auxv = memory_startinfo32 + 3 + argc + 1 + envc + 1;
+  uint32_t* memory_auxv = memory_envp + envc + 1;
   PN_TRACE(EXECUTE, "auxv = %" PRIuPTR "\n", (void*)memory_auxv - memory->data);
   memory_auxv[0] = 32; /* AT_SYSINFO */
   memory_auxv[1] = pn_builtin_to_pointer(PN_BUILTIN_NACL_IRT_QUERY);
@@ -6237,8 +6237,8 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     PNRuntimeValue result =                                               \
         pn_executor_value_i##size(-(int##size##_t)(value.u8 & 1));        \
     pn_executor_set_value(executor, i->result_value_id, result);          \
-    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " FORMAT_i##size "\n",       \
-             i->result_value_id, result.u8, i->value_id, result.i##size); \
+    PN_TRACE(EXECUTE, "    %%%d = " FORMAT_i##size "  %%%d = %u\n",       \
+             i->result_value_id, result.i##size, i->value_id, result.u8); \
     location->instruction_id++;                                           \
   } while (0) /* no semicolon */
 
@@ -6246,7 +6246,8 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
   do {                                                                    \
     PNInstructionCast* i = (PNInstructionCast*)inst;                      \
     PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);  \
-    PNRuntimeValue result = pn_executor_value_u8(value.u##size & 1);      \
+    PNRuntimeValue result =                                               \
+        pn_executor_value_u8(~(uint8_t)(value.u##size & 1) + 1);          \
     pn_executor_set_value(executor, i->result_value_id, result);          \
     PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " FORMAT_u##size "\n",       \
              i->result_value_id, result.u8, i->value_id, result.u##size); \
@@ -6258,10 +6259,10 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     PNInstructionCast* i = (PNInstructionCast*)inst;                      \
     PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);  \
     PNRuntimeValue result =                                               \
-        pn_executor_value_u##size(~(uint##size##_t)(value.u8 & 1) + 1);   \
+        pn_executor_value_u##size((uint##size##_t)(value.u8 & 1));        \
     pn_executor_set_value(executor, i->result_value_id, result);          \
-    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " FORMAT_u##size "\n",       \
-             i->result_value_id, result.u8, i->value_id, result.u##size); \
+    PN_TRACE(EXECUTE, "    %%%d = " FORMAT_u##size "  %%%d = %u\n",       \
+             i->result_value_id, result.u##size, i->value_id, result.u8); \
     location->instruction_id++;                                           \
   } while (0) /* no semicolon */
 
