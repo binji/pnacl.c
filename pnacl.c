@@ -4579,7 +4579,7 @@ static void pn_constants_block_read(PNModule* module,
 
                 switch (cur_basic_type) {
                   case PN_BASIC_TYPE_INT1:
-                    constant->value.i8 = -(data & 1);
+                    constant->value.i8 = data & 1;
                     break;
                   case PN_BASIC_TYPE_INT8:
                     constant->value.i8 = data;
