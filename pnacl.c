@@ -5747,6 +5747,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_TLS_INIT(PNExecutor* executor,
                                                    PNValueId* arg_ids) {
   PN_CHECK(num_args == 1);
   PN_BUILTIN_ARG(thread_ptr_p, 0, u32);
+  PN_TRACE(IRT, "    NACL_IRT_TLS_INIT(%u)\n", thread_ptr_p);
   /* How big is TLS? */
   pn_memory_check(executor->memory, thread_ptr_p, 1);
   executor->tls = thread_ptr_p;
@@ -6297,14 +6298,62 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 
       pn_memory_check(executor->memory, dst_p, len);
       pn_memory_check(executor->memory, src_p, len);
-
       void* dst_pointer = executor->memory->data + dst_p;
       void* src_pointer = executor->memory->data + src_p;
       memcpy(dst_pointer, src_pointer, len);
-
       location->instruction_id++;
       break;
     }
+
+    case PN_OPCODE_INTRINSIC_LLVM_MEMSET: {
+      PNInstructionCall* i = (PNInstructionCall*)inst;
+      PN_CHECK(i->num_args == 5);
+      PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
+      uint32_t dst_p = pn_executor_get_value(executor, i->arg_ids[0]).u32;
+      uint8_t value = pn_executor_get_value(executor, i->arg_ids[1]).u8;
+      uint32_t len = pn_executor_get_value(executor, i->arg_ids[2]).u32;
+      uint32_t align = pn_executor_get_value(executor, i->arg_ids[3]).u32;
+      uint8_t is_volatile = pn_executor_get_value(executor, i->arg_ids[4]).u8;
+      PN_TRACE(EXECUTE,
+               "    %%%d = %u  %%%d = %u  %%%d = %u  %%%d = %u  %%%d = %u\n",
+               i->arg_ids[0], dst_p, i->arg_ids[1], value, i->arg_ids[2], len,
+               i->arg_ids[3], align, i->arg_ids[4], is_volatile);
+      (void)align;
+      (void)is_volatile;
+
+      pn_memory_check(executor->memory, dst_p, len);
+      void* dst_pointer = executor->memory->data + dst_p;
+      memset(dst_pointer, value, len);
+      location->instruction_id++;
+      break;
+    }
+
+
+    case PN_OPCODE_INTRINSIC_LLVM_MEMMOVE: {
+      PNInstructionCall* i = (PNInstructionCall*)inst;
+      PN_CHECK(i->num_args == 5);
+      PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
+      uint32_t dst_p = pn_executor_get_value(executor, i->arg_ids[0]).u32;
+      uint32_t src_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;
+      uint32_t len = pn_executor_get_value(executor, i->arg_ids[2]).u32;
+      uint32_t align = pn_executor_get_value(executor, i->arg_ids[3]).u32;
+      uint8_t is_volatile = pn_executor_get_value(executor, i->arg_ids[4]).u8;
+      PN_TRACE(EXECUTE,
+               "    %%%d = %u  %%%d = %u  %%%d = %u  %%%d = %u  %%%d = %u\n",
+               i->arg_ids[0], dst_p, i->arg_ids[1], src_p, i->arg_ids[2], len,
+               i->arg_ids[3], align, i->arg_ids[4], is_volatile);
+      (void)align;
+      (void)is_volatile;
+
+      pn_memory_check(executor->memory, dst_p, len);
+      pn_memory_check(executor->memory, src_p, len);
+      void* dst_pointer = executor->memory->data + dst_p;
+      void* src_pointer = executor->memory->data + src_p;
+      memmove(dst_pointer, src_pointer, len);
+      location->instruction_id++;
+      break;
+    }
+
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I32: {
       PNInstructionCall* i = (PNInstructionCall*)inst;
