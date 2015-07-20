@@ -148,6 +148,17 @@ typedef uint16_t PNInstructionId;
 typedef uint16_t PNBasicBlockId;
 typedef uint16_t PNAlignment;
 
+typedef uint8_t pn_u8;
+typedef int8_t pn_i8;
+typedef uint16_t pn_u16;
+typedef int16_t pn_i16;
+typedef uint32_t pn_u32;
+typedef int32_t pn_i32;
+typedef uint64_t pn_u64;
+typedef int64_t pn_i64;
+typedef float pn_f32;
+typedef double pn_f64;
+
 static int g_pn_verbose;
 static const char* g_pn_filename;
 static char** g_pn_argv;
@@ -1688,63 +1699,63 @@ static void pn_memory_check_pointer(PNMemory* memory, void* p, uint32_t size) {
 
 #if PN_UNALIGNED_MEMORY_ACCESS
 
-#define DEFINE_MEMORY_READ(type, ctype)                                   \
-  static ctype pn_memory_read_##type(PNMemory* memory, uint32_t offset) { \
-    pn_memory_check(memory, offset, sizeof(ctype));                       \
-    ctype* m = (ctype*)(memory->data + offset);                           \
-    return *m;                                                            \
+#define DEFINE_MEMORY_READ(ty, ctype)                                   \
+  static ctype pn_memory_read_##ty(PNMemory* memory, uint32_t offset) { \
+    pn_memory_check(memory, offset, sizeof(ctype));                     \
+    ctype* m = (ctype*)(memory->data + offset);                         \
+    return *m;                                                          \
   }
 
-#define DEFINE_MEMORY_WRITE(type, ctype)                                \
-  static void pn_memory_write_##type(PNMemory* memory, uint32_t offset, \
-                                     ctype value) {                     \
-    pn_memory_check(memory, offset, sizeof(value));                     \
-    ctype* m = (ctype*)(memory->data + offset);                         \
-    *m = value;                                                         \
+#define DEFINE_MEMORY_WRITE(ty, ctype)                                \
+  static void pn_memory_write_##ty(PNMemory* memory, uint32_t offset, \
+                                   ctype value) {                     \
+    pn_memory_check(memory, offset, sizeof(value));                   \
+    ctype* m = (ctype*)(memory->data + offset);                       \
+    *m = value;                                                       \
   }
 
 #else
 
-#define DEFINE_MEMORY_READ(type, ctype)                                   \
-  static ctype pn_memory_read_##type(PNMemory* memory, uint32_t offset) { \
-    pn_memory_check(memory, offset, sizeof(ctype));                       \
-    ctype* m = (ctype*)(memory->data + offset);                           \
-    ctype ret;                                                            \
-    memcpy(&ret, m, sizeof(type));                                        \
-    return ret;                                                           \
+#define DEFINE_MEMORY_READ(ty, ctype)                                   \
+  static ctype pn_memory_read_##ty(PNMemory* memory, uint32_t offset) { \
+    pn_memory_check(memory, offset, sizeof(ctype));                     \
+    ctype* m = (ctype*)(memory->data + offset);                         \
+    ctype ret;                                                          \
+    memcpy(&ret, m, sizeof(ty));                                        \
+    return ret;                                                         \
   }
 
-#define DEFINE_MEMORY_WRITE(type, ctype)                                \
-  static void pn_memory_write_##type(PNMemory* memory, uint32_t offset, \
-                                     ctype value) {                     \
-    pn_memory_check(memory, offset, sizeof(value));                     \
-    ctype* m = (ctype*)(memory->data + offset);                         \
-    memcpy(memory32, &value, sizeof(value));                            \
+#define DEFINE_MEMORY_WRITE(ty, ctype)                                \
+  static void pn_memory_write_##ty(PNMemory* memory, uint32_t offset, \
+                                   ctype value) {                     \
+    pn_memory_check(memory, offset, sizeof(value));                   \
+    ctype* m = (ctype*)(memory->data + offset);                       \
+    memcpy(memory32, &value, sizeof(value));                          \
   }
 
 #endif
 
-DEFINE_MEMORY_READ(int8, int8_t)
-DEFINE_MEMORY_READ(uint8, uint8_t)
-DEFINE_MEMORY_READ(int16, int16_t)
-DEFINE_MEMORY_READ(uint16, uint16_t)
-DEFINE_MEMORY_READ(int32, int32_t)
-DEFINE_MEMORY_READ(uint32, uint32_t)
-DEFINE_MEMORY_READ(int64, int64_t)
-DEFINE_MEMORY_READ(uint64, uint64_t)
-DEFINE_MEMORY_READ(float, float)
-DEFINE_MEMORY_READ(double, double)
+DEFINE_MEMORY_READ(i8, int8_t)
+DEFINE_MEMORY_READ(u8, uint8_t)
+DEFINE_MEMORY_READ(i16, int16_t)
+DEFINE_MEMORY_READ(u16, uint16_t)
+DEFINE_MEMORY_READ(i32, int32_t)
+DEFINE_MEMORY_READ(u32, uint32_t)
+DEFINE_MEMORY_READ(i64, int64_t)
+DEFINE_MEMORY_READ(u64, uint64_t)
+DEFINE_MEMORY_READ(f32, float)
+DEFINE_MEMORY_READ(f64, double)
 
-DEFINE_MEMORY_WRITE(int8, int8_t)
-DEFINE_MEMORY_WRITE(uint8, uint8_t)
-DEFINE_MEMORY_WRITE(int16, int16_t)
-DEFINE_MEMORY_WRITE(uint16, uint16_t)
-DEFINE_MEMORY_WRITE(int32, int32_t)
-DEFINE_MEMORY_WRITE(uint32, uint32_t)
-DEFINE_MEMORY_WRITE(int64, int64_t)
-DEFINE_MEMORY_WRITE(uint64, uint64_t)
-DEFINE_MEMORY_WRITE(float, float)
-DEFINE_MEMORY_WRITE(double, double)
+DEFINE_MEMORY_WRITE(i8, int8_t)
+DEFINE_MEMORY_WRITE(u8, uint8_t)
+DEFINE_MEMORY_WRITE(i16, int16_t)
+DEFINE_MEMORY_WRITE(u16, uint16_t)
+DEFINE_MEMORY_WRITE(i32, int32_t)
+DEFINE_MEMORY_WRITE(u32, uint32_t)
+DEFINE_MEMORY_WRITE(i64, int64_t)
+DEFINE_MEMORY_WRITE(u64, uint64_t)
+DEFINE_MEMORY_WRITE(f32, float)
+DEFINE_MEMORY_WRITE(f64, double)
 
 #undef DEFINE_MEMORY_READ
 #undef DEFINE_MEMORY_WRITE
@@ -4113,7 +4124,7 @@ static void pn_globalvar_write_reloc(PNModule* module,
   PN_TRACE(GLOBALVAR_BLOCK,
            "  writing reloc value. offset:%u value:%d (0x%x)\n", offset,
            reloc_value, reloc_value);
-  pn_memory_write_uint32(module->memory, offset, reloc_value);
+  pn_memory_write_u32(module->memory, offset, reloc_value);
 }
 
 static void pn_globalvar_block_read(PNModule* module,
@@ -5586,20 +5597,9 @@ static void pn_executor_value_trace(PNExecutor* executor,
 #endif
 }
 
-#define PN_TYPE_u8 uint8_t
-#define PN_TYPE_u16 uint16_t
-#define PN_TYPE_u32 uint32_t
-#define PN_TYPE_u64 uint64_t
-#define PN_TYPE_i8 int8_t
-#define PN_TYPE_i16 int16_t
-#define PN_TYPE_i32 int32_t
-#define PN_TYPE_i64 int64_t
-#define PN_TYPE_f32 float
-#define PN_TYPE_f64 double
-
 #define PN_BUILTIN_ARG(name, n, ty)                                      \
   PNRuntimeValue value##n = pn_executor_get_value(executor, arg_ids[n]); \
-  PN_TYPE_##ty name = value##n.ty;                                       \
+  pn_##ty name = value##n.ty;                                            \
   (void) name /* no semicolon */
 
 #define PN_EINVAL 22
@@ -5620,14 +5620,14 @@ static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNExecutor* executor,
 
   /* Find the end of the |name_p| string */
   uint32_t end_p = name_p;
-  while (pn_memory_read_uint8(memory, end_p) != 0) {
+  while (pn_memory_read_u8(memory, end_p) != 0) {
     end_p++;
   }
   PN_CHECK(end_p > name_p);
 
-#define PN_WRITE_BUILTIN(offset, name)                              \
-  pn_memory_write_uint32(memory, table + offset * sizeof(uint32_t), \
-                         pn_builtin_to_pointer(PN_BUILTIN_##name));
+#define PN_WRITE_BUILTIN(offset, name)                           \
+  pn_memory_write_u32(memory, table + offset * sizeof(uint32_t), \
+                      pn_builtin_to_pointer(PN_BUILTIN_##name));
 
   const char* iface_name = memory->data + name_p;
   if (strcmp(iface_name, "nacl-irt-basic-0.1") == 0) {
@@ -5702,7 +5702,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_SYSCONF(PNExecutor* executor,
   PN_TRACE(IRT, "    NACL_IRT_BASIC_SYSCONF(%u, %u)\n", name, value_p);
   switch (name) {
     case 2: /* _SC_PAGESIZE */
-      pn_memory_write_uint32(executor->memory, value_p, PN_PAGE_SIZE);
+      pn_memory_write_u32(executor->memory, value_p, PN_PAGE_SIZE);
       break;
     default:
       return pn_executor_value_u32(PN_EINVAL);
@@ -5742,7 +5742,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_WRITE(PNExecutor* executor,
   pn_memory_check(executor->memory, buf_p, count);
   void* buf_pointer = executor->memory->data + buf_p;
   ssize_t nwrote = write(fd, buf_pointer, count);
-  pn_memory_write_uint32(executor->memory, nwrote_p, (int)nwrote);
+  pn_memory_write_u32(executor->memory, nwrote_p, (int)nwrote);
   return pn_executor_value_u32(0);
 }
 
@@ -5786,22 +5786,22 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_FSTAT(PNExecutor* executor,
   * 96 8 int64_t   st_ctimensec;
   * 104 total
   */
-  pn_memory_write_uint64(executor->memory, stat_p + 0, buf.st_dev);
-  pn_memory_write_uint64(executor->memory, stat_p + 8, buf.st_ino);
-  pn_memory_write_uint32(executor->memory, stat_p + 16, buf.st_mode);
-  pn_memory_write_uint32(executor->memory, stat_p + 20, buf.st_nlink);
-  pn_memory_write_uint32(executor->memory, stat_p + 24, buf.st_uid);
-  pn_memory_write_uint32(executor->memory, stat_p + 28, buf.st_gid);
-  pn_memory_write_uint64(executor->memory, stat_p + 32, buf.st_rdev);
-  pn_memory_write_uint64(executor->memory, stat_p + 40, buf.st_size);
-  pn_memory_write_uint32(executor->memory, stat_p + 48, buf.st_blksize);
-  pn_memory_write_uint32(executor->memory, stat_p + 52, buf.st_blocks);
-  pn_memory_write_uint64(executor->memory, stat_p + 56, buf.st_atime);
-  pn_memory_write_uint64(executor->memory, stat_p + 64, buf.st_atim.tv_nsec);
-  pn_memory_write_uint64(executor->memory, stat_p + 72, buf.st_mtime);
-  pn_memory_write_uint64(executor->memory, stat_p + 80, buf.st_mtim.tv_nsec);
-  pn_memory_write_uint64(executor->memory, stat_p + 88, buf.st_ctime);
-  pn_memory_write_uint64(executor->memory, stat_p + 96, buf.st_ctim.tv_nsec);
+  pn_memory_write_u64(executor->memory, stat_p + 0, buf.st_dev);
+  pn_memory_write_u64(executor->memory, stat_p + 8, buf.st_ino);
+  pn_memory_write_u32(executor->memory, stat_p + 16, buf.st_mode);
+  pn_memory_write_u32(executor->memory, stat_p + 20, buf.st_nlink);
+  pn_memory_write_u32(executor->memory, stat_p + 24, buf.st_uid);
+  pn_memory_write_u32(executor->memory, stat_p + 28, buf.st_gid);
+  pn_memory_write_u64(executor->memory, stat_p + 32, buf.st_rdev);
+  pn_memory_write_u64(executor->memory, stat_p + 40, buf.st_size);
+  pn_memory_write_u32(executor->memory, stat_p + 48, buf.st_blksize);
+  pn_memory_write_u32(executor->memory, stat_p + 52, buf.st_blocks);
+  pn_memory_write_u64(executor->memory, stat_p + 56, buf.st_atime);
+  pn_memory_write_u64(executor->memory, stat_p + 64, buf.st_atim.tv_nsec);
+  pn_memory_write_u64(executor->memory, stat_p + 72, buf.st_mtime);
+  pn_memory_write_u64(executor->memory, stat_p + 80, buf.st_mtim.tv_nsec);
+  pn_memory_write_u64(executor->memory, stat_p + 88, buf.st_ctime);
+  pn_memory_write_u64(executor->memory, stat_p + 96, buf.st_ctim.tv_nsec);
 
   return pn_executor_value_u32(0);
 }
@@ -5835,7 +5835,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNExecutor* executor,
   executor->heap_end = end_pointer;
 
   uint32_t result_address = result_pointer - memory->data;
-  pn_memory_write_uint32(memory, addr_pp, result_address);
+  pn_memory_write_u32(memory, addr_pp, result_address);
   return pn_executor_value_u32(0);
 }
 
@@ -5881,16 +5881,6 @@ PN_BUILTIN_STUB(NACL_IRT_FUTEX_WAKE)
 #undef PN_BUILTIN_STUB
 
 #undef PN_BUILTIN_ARG
-#undef PN_TYPE_u8
-#undef PN_TYPE_u16
-#undef PN_TYPE_u32
-#undef PN_TYPE_u64
-#undef PN_TYPE_i8
-#undef PN_TYPE_i16
-#undef PN_TYPE_i32
-#undef PN_TYPE_i64
-#undef PN_TYPE_f32
-#undef PN_TYPE_f64
 
 static void pn_executor_execute_instruction(PNExecutor* executor) {
   PNCallFrame* frame = executor->current_call_frame;
@@ -6455,7 +6445,7 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       PN_CHECK(i->num_args == 2);
       uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[0]).u32;
       uint32_t flags = pn_executor_get_value(executor, i->arg_ids[1]).u32;
-      uint32_t value = pn_memory_read_uint32(executor->memory, addr_p);
+      uint32_t value = pn_memory_read_u32(executor->memory, addr_p);
       PNRuntimeValue result = pn_executor_value_u32(value);
       pn_executor_set_value(executor, i->result_value_id, result);
       PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = %u  %%%d = %u\n",
@@ -6466,18 +6456,18 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       break;
     }
 
-#define OPCODE_INTRINSIC_RMW(opval, op, ctype, type, ty)                    \
+#define OPCODE_INTRINSIC_RMW(opval, op, ty)                                 \
   do {                                                                      \
     PNInstructionCall* i = (PNInstructionCall*)inst;                        \
     PN_CHECK(i->num_args == 4);                                             \
     PN_CHECK(pn_executor_get_value(executor, i->arg_ids[0]).u32 == opval);  \
     uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;   \
-    ctype value = pn_executor_get_value(executor, i->arg_ids[2]).ty;        \
+    pn_##ty value = pn_executor_get_value(executor, i->arg_ids[2]).ty;      \
     uint32_t memory_order =                                                 \
         pn_executor_get_value(executor, i->arg_ids[3]).u32;                 \
-    ctype old_value = pn_memory_read_##type(executor->memory, addr_p);      \
-    ctype new_value = old_value op value;                                   \
-    pn_memory_write_##type(executor->memory, addr_p, new_value);            \
+    pn_##ty old_value = pn_memory_read_##ty(executor->memory, addr_p);      \
+    pn_##ty new_value = old_value op value;                                 \
+    pn_memory_write_##ty(executor->memory, addr_p, new_value);              \
     PNRuntimeValue result = pn_executor_value_u32(old_value);               \
     pn_executor_set_value(executor, i->result_value_id, result);            \
     PN_TRACE(EXECUTE, "    %%%d = " FORMAT_##ty                             \
@@ -6490,82 +6480,82 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
   } while (0) /* no semicolon */
 
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8:
-    OPCODE_INTRINSIC_RMW(1, +, uint8_t, uint8, u8);
+    OPCODE_INTRINSIC_RMW(1, +, u8);
     break;
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I16:
-    OPCODE_INTRINSIC_RMW(1, +, uint16_t, uint16, u16);
+    OPCODE_INTRINSIC_RMW(1, +, u16);
     break;
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I32:
-    OPCODE_INTRINSIC_RMW(1, +, uint32_t, uint32, u32);
+    OPCODE_INTRINSIC_RMW(1, +, u32);
     break;
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I64:
-    OPCODE_INTRINSIC_RMW(1, +, uint64_t, uint64, u64);
+    OPCODE_INTRINSIC_RMW(1, +, u64);
     break;
 
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I8:
-    OPCODE_INTRINSIC_RMW(2, -, uint8_t, uint8, u8);
+    OPCODE_INTRINSIC_RMW(2, -, u8);
     break;
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I16:
-    OPCODE_INTRINSIC_RMW(2, -, uint16_t, uint16, u16);
+    OPCODE_INTRINSIC_RMW(2, -, u16);
     break;
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I32:
-    OPCODE_INTRINSIC_RMW(2, -, uint32_t, uint32, u32);
+    OPCODE_INTRINSIC_RMW(2, -, u32);
     break;
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I64:
-    OPCODE_INTRINSIC_RMW(2, -, uint64_t, uint64, u64);
+    OPCODE_INTRINSIC_RMW(2, -, u64);
     break;
 
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I8:
-    OPCODE_INTRINSIC_RMW(3, &, uint8_t, uint8, u8);
+    OPCODE_INTRINSIC_RMW(3, &, u8);
     break;
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I16:
-    OPCODE_INTRINSIC_RMW(3, &, uint16_t, uint16, u16);
+    OPCODE_INTRINSIC_RMW(3, &, u16);
     break;
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I32:
-    OPCODE_INTRINSIC_RMW(3, &, uint32_t, uint32, u32);
+    OPCODE_INTRINSIC_RMW(3, &, u32);
     break;
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I64:
-    OPCODE_INTRINSIC_RMW(3, &, uint64_t, uint64, u64);
+    OPCODE_INTRINSIC_RMW(3, &, u64);
     break;
 
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I8:
-    OPCODE_INTRINSIC_RMW(4, |, uint8_t, uint8, u8);
+    OPCODE_INTRINSIC_RMW(4, |, u8);
     break;
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I16:
-    OPCODE_INTRINSIC_RMW(4, |, uint16_t, uint16, u16);
+    OPCODE_INTRINSIC_RMW(4, |, u16);
     break;
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I32:
-    OPCODE_INTRINSIC_RMW(4, |, uint32_t, uint32, u32);
+    OPCODE_INTRINSIC_RMW(4, |, u32);
     break;
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I64:
-    OPCODE_INTRINSIC_RMW(4, |, uint64_t, uint64, u64);
+    OPCODE_INTRINSIC_RMW(4, |, u64);
     break;
 
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I8:
-    OPCODE_INTRINSIC_RMW(5, ^, uint8_t, uint8, u8);
+    OPCODE_INTRINSIC_RMW(5, ^, u8);
     break;
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I16:
-    OPCODE_INTRINSIC_RMW(5, ^, uint16_t, uint16, u16);
+    OPCODE_INTRINSIC_RMW(5, ^, u16);
     break;
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I32:
-    OPCODE_INTRINSIC_RMW(5, ^, uint32_t, uint32, u32);
+    OPCODE_INTRINSIC_RMW(5, ^, u32);
     break;
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I64:
-    OPCODE_INTRINSIC_RMW(5, ^, uint64_t, uint64, u64);
+    OPCODE_INTRINSIC_RMW(5, ^, u64);
     break;
 
-#define OPCODE_INTRINSIC_EXCHANGE(opval, ctype, type, ty)                   \
+#define OPCODE_INTRINSIC_EXCHANGE(opval, ty)                                \
   do {                                                                      \
     PNInstructionCall* i = (PNInstructionCall*)inst;                        \
     PN_CHECK(i->num_args == 4);                                             \
     PN_CHECK(pn_executor_get_value(executor, i->arg_ids[0]).u32 == opval);  \
     uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;   \
-    ctype value = pn_executor_get_value(executor, i->arg_ids[2]).ty;        \
+    pn_##ty value = pn_executor_get_value(executor, i->arg_ids[2]).ty;      \
     uint32_t memory_order =                                                 \
         pn_executor_get_value(executor, i->arg_ids[3]).u32;                 \
-    ctype old_value = pn_memory_read_##type(executor->memory, addr_p);      \
-    ctype new_value = value;                                                \
-    pn_memory_write_##type(executor->memory, addr_p, new_value);            \
+    pn_##ty old_value = pn_memory_read_##ty(executor->memory, addr_p);      \
+    pn_##ty new_value = value;                                              \
+    pn_memory_write_##ty(executor->memory, addr_p, new_value);              \
     PNRuntimeValue result = pn_executor_value_u32(old_value);               \
     pn_executor_set_value(executor, i->result_value_id, result);            \
     PN_TRACE(EXECUTE, "    %%%d = " FORMAT_##ty                             \
@@ -6578,16 +6568,16 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
   } while (0) /* no semicolon */
 
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I8:
-    OPCODE_INTRINSIC_EXCHANGE(6, uint8_t, uint8, u8);
+    OPCODE_INTRINSIC_EXCHANGE(6, u8);
     break;
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I16:
-    OPCODE_INTRINSIC_EXCHANGE(6, uint16_t, uint16, u16);
+    OPCODE_INTRINSIC_EXCHANGE(6, u16);
     break;
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I32:
-    OPCODE_INTRINSIC_EXCHANGE(6, uint32_t, uint32, u32);
+    OPCODE_INTRINSIC_EXCHANGE(6, u32);
     break;
   case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I64:
-    OPCODE_INTRINSIC_EXCHANGE(6, uint64_t, uint64, u64);
+    OPCODE_INTRINSIC_EXCHANGE(6, u64);
     break;
 
 #undef OPCODE_INTRINSIC_RMW
@@ -6600,7 +6590,7 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       uint32_t value = pn_executor_get_value(executor, i->arg_ids[0]).u32;
       uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;
       uint32_t flags = pn_executor_get_value(executor, i->arg_ids[2]).u32;
-      pn_memory_write_uint32(executor->memory, addr_p, value);
+      pn_memory_write_u32(executor->memory, addr_p, value);
       PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = %u  %%%d = %u\n", i->arg_ids[0],
                value, i->arg_ids[1], addr_p, i->arg_ids[2], flags);
       (void)flags;
@@ -6619,24 +6609,24 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       break;
     }
 
-#define OPCODE_LOAD(type, ty)                                        \
+#define OPCODE_LOAD(ty)                                              \
   do {                                                               \
     PNInstructionLoad* i = (PNInstructionLoad*)inst;                 \
     PNRuntimeValue src = pn_executor_get_value(executor, i->src_id); \
     PNRuntimeValue result = pn_executor_value_##ty(                  \
-        pn_memory_read_##type(executor->memory, src.u32));           \
+        pn_memory_read_##ty(executor->memory, src.u32));             \
     pn_executor_set_value(executor, i->result_value_id, result);     \
     PN_TRACE(EXECUTE, "    %%%d = " FORMAT_##ty "  %%%d = %u\n",     \
              i->result_value_id, result.ty, i->src_id, src.u32);     \
     location->instruction_id++;                                      \
   } while (0) /*no semicolon */
 
-    case PN_OPCODE_LOAD_DOUBLE: OPCODE_LOAD(double, f64); break;
-    case PN_OPCODE_LOAD_FLOAT: OPCODE_LOAD(float, f32); break;
-    case PN_OPCODE_LOAD_INT8: OPCODE_LOAD(uint8, u8); break;
-    case PN_OPCODE_LOAD_INT16: OPCODE_LOAD(uint16, u16); break;
-    case PN_OPCODE_LOAD_INT32: OPCODE_LOAD(uint32, u32); break;
-    case PN_OPCODE_LOAD_INT64: OPCODE_LOAD(uint64, u64); break;
+    case PN_OPCODE_LOAD_DOUBLE: OPCODE_LOAD(f64); break;
+    case PN_OPCODE_LOAD_FLOAT: OPCODE_LOAD(f32); break;
+    case PN_OPCODE_LOAD_INT8: OPCODE_LOAD(u8); break;
+    case PN_OPCODE_LOAD_INT16: OPCODE_LOAD(u16); break;
+    case PN_OPCODE_LOAD_INT32: OPCODE_LOAD(u32); break;
+    case PN_OPCODE_LOAD_INT64: OPCODE_LOAD(u64); break;
 
 #undef OPCODE_LOAD
 
@@ -6712,23 +6702,23 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       break;
     }
 
-#define OPCODE_STORE(type, ty)                                               \
+#define OPCODE_STORE(ty)                                                     \
   do {                                                                       \
     PNInstructionStore* i = (PNInstructionStore*)inst;                       \
     PNRuntimeValue dest = pn_executor_get_value(executor, i->dest_id);       \
     PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);     \
     PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " FORMAT_##ty "\n", i->dest_id, \
              dest.u32, i->value_id, value.ty);                               \
-    pn_memory_write_##type(executor->memory, dest.u32, value.ty);            \
+    pn_memory_write_##ty(executor->memory, dest.u32, value.ty);              \
     location->instruction_id++;                                              \
   } while (0) /*no semicolon */
 
-    case PN_OPCODE_STORE_DOUBLE: OPCODE_STORE(double, f64); break;
-    case PN_OPCODE_STORE_FLOAT: OPCODE_STORE(float, f32); break;
-    case PN_OPCODE_STORE_INT8: OPCODE_STORE(uint8, u8); break;
-    case PN_OPCODE_STORE_INT16: OPCODE_STORE(uint16, u16); break;
-    case PN_OPCODE_STORE_INT32: OPCODE_STORE(uint32, u32); break;
-    case PN_OPCODE_STORE_INT64: OPCODE_STORE(uint64, u64); break;
+    case PN_OPCODE_STORE_DOUBLE: OPCODE_STORE(f64); break;
+    case PN_OPCODE_STORE_FLOAT: OPCODE_STORE(f32); break;
+    case PN_OPCODE_STORE_INT8: OPCODE_STORE(u8); break;
+    case PN_OPCODE_STORE_INT16: OPCODE_STORE(u16); break;
+    case PN_OPCODE_STORE_INT32: OPCODE_STORE(u32); break;
+    case PN_OPCODE_STORE_INT64: OPCODE_STORE(u64); break;
 
 #undef OPCODE_STORE
 
