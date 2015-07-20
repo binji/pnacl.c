@@ -186,7 +186,8 @@ static PNBool g_pn_print_time;
   V(BASIC_BLOCKS, "basic-blocks")             \
   V(INSTRUCTIONS, "instructions")             \
   V(EXECUTE, "execute")                       \
-  V(IRT, "irt")
+  V(IRT, "irt")                               \
+  V(INTRINSICS, "intrinsics")
 
 #define PN_TRACE_ENUM(name, flag) PN_TRACE_##name,
 enum { PN_FOREACH_TRACE(PN_TRACE_ENUM) PN_NUM_TRACE };
@@ -369,6 +370,12 @@ typedef enum PNBasicType {
   V(NACL_IRT_FDIO_SEEK)         \
   V(NACL_IRT_FDIO_FSTAT)        \
   V(NACL_IRT_FDIO_GETDENTS)     \
+  V(NACL_IRT_FDIO_FCHDIR)       \
+  V(NACL_IRT_FDIO_FCHMOD)       \
+  V(NACL_IRT_FDIO_FSYNC)        \
+  V(NACL_IRT_FDIO_FDATASYNC)    \
+  V(NACL_IRT_FDIO_FTRUNCATE)    \
+  V(NACL_IRT_FDIO_ISATTY)       \
   V(NACL_IRT_MEMORY_MMAP)       \
   V(NACL_IRT_MEMORY_MUNMAP)     \
   V(NACL_IRT_MEMORY_MPROTECT)   \
@@ -5618,6 +5625,7 @@ static void pn_executor_value_trace(PNExecutor* executor,
   pn_##ty name = value##n.ty;                                            \
   (void) name /* no semicolon */
 
+#define PN_EAGAIN 11
 #define PN_EINVAL 22
 #define PN_ENOSYS 38
 
@@ -5629,7 +5637,6 @@ static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNExecutor* executor,
   PN_BUILTIN_ARG(name_p, 0, u32);
   PN_BUILTIN_ARG(table, 1, u32);
   PN_BUILTIN_ARG(table_size, 2, u32);
-  PN_TRACE(IRT, "    NACL_IRT_QUERY(%u, %u, %u)\n", name_p, table, table_size);
 
   PNMemory* memory = executor->memory;
   pn_memory_check(memory, name_p, 1);
@@ -5646,6 +5653,9 @@ static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNExecutor* executor,
                       pn_builtin_to_pointer(PN_BUILTIN_##name));
 
   const char* iface_name = memory->data + name_p;
+  PN_TRACE(IRT, "    NACL_IRT_QUERY(%u (%s), %u, %u)\n", name_p, iface_name,
+           table, table_size);
+
   if (strcmp(iface_name, "nacl-irt-basic-0.1") == 0) {
     PN_CHECK(table_size == 24);
     PN_WRITE_BUILTIN(0, NACL_IRT_BASIC_EXIT);
@@ -5655,6 +5665,23 @@ static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNExecutor* executor,
     PN_WRITE_BUILTIN(4, NACL_IRT_BASIC_SCHED_YIELD);
     PN_WRITE_BUILTIN(5, NACL_IRT_BASIC_SYSCONF);
     return pn_executor_value_u32(24);
+  } else if (strcmp(iface_name, "nacl-irt-dev-fdio-0.3") == 0) {
+    PN_CHECK(table_size == 56);
+    PN_WRITE_BUILTIN(0, NACL_IRT_FDIO_CLOSE);
+    PN_WRITE_BUILTIN(1, NACL_IRT_FDIO_DUP);
+    PN_WRITE_BUILTIN(2, NACL_IRT_FDIO_DUP2);
+    PN_WRITE_BUILTIN(3, NACL_IRT_FDIO_READ);
+    PN_WRITE_BUILTIN(4, NACL_IRT_FDIO_WRITE);
+    PN_WRITE_BUILTIN(5, NACL_IRT_FDIO_SEEK);
+    PN_WRITE_BUILTIN(6, NACL_IRT_FDIO_FSTAT);
+    PN_WRITE_BUILTIN(7, NACL_IRT_FDIO_GETDENTS);
+    PN_WRITE_BUILTIN(8, NACL_IRT_FDIO_FCHDIR);
+    PN_WRITE_BUILTIN(9, NACL_IRT_FDIO_FCHMOD);
+    PN_WRITE_BUILTIN(10, NACL_IRT_FDIO_FSYNC);
+    PN_WRITE_BUILTIN(11, NACL_IRT_FDIO_FDATASYNC);
+    PN_WRITE_BUILTIN(12, NACL_IRT_FDIO_FTRUNCATE);
+    PN_WRITE_BUILTIN(13, NACL_IRT_FDIO_ISATTY);
+    return pn_executor_value_u32(56);
   } else if (strcmp(iface_name, "nacl-irt-fdio-0.1") == 0) {
     PN_CHECK(table_size == 32);
     PN_WRITE_BUILTIN(0, NACL_IRT_FDIO_CLOSE);
@@ -5719,6 +5746,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_SYSCONF(PNExecutor* executor,
   switch (name) {
     case 2: /* _SC_PAGESIZE */
       pn_memory_write_u32(executor->memory, value_p, PN_PAGE_SIZE);
+      PN_TRACE(IRT, "      SC_PAGESIZE => %u\n", PN_PAGE_SIZE);
       break;
     default:
       return pn_executor_value_u32(PN_EINVAL);
@@ -5759,6 +5787,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_WRITE(PNExecutor* executor,
   void* buf_pointer = executor->memory->data + buf_p;
   ssize_t nwrote = write(fd, buf_pointer, count);
   pn_memory_write_u32(executor->memory, nwrote_p, (int)nwrote);
+  PN_TRACE(IRT, "      returning %d\n", (int)nwrote);
   return pn_executor_value_u32(0);
 }
 
@@ -5822,6 +5851,27 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_FSTAT(PNExecutor* executor,
   return pn_executor_value_u32(0);
 }
 
+static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_ISATTY(PNExecutor* executor,
+                                                      PNFunction* function,
+                                                      uint32_t num_args,
+                                                      PNValueId* arg_ids) {
+  PN_CHECK(num_args == 2);
+  PN_BUILTIN_ARG(fd, 0, u32);
+  PN_BUILTIN_ARG(result_p, 1, u32);
+  PN_TRACE(IRT, "    NACL_IRT_FDIO_ISATTY(%u, %u)\n", fd, result_p);
+
+  if (fd > 2) {
+    /* TODO(binji): better handling of errno */
+    PN_TRACE(IRT, "      fd > 2, returning EINVAL\n");
+    return pn_executor_value_u32(PN_EINVAL);
+  }
+
+  int32_t result = isatty(fd);
+  pn_memory_write_i32(executor->memory, result_p, result);
+  PN_TRACE(IRT, "      returning %d\n", result);
+  return pn_executor_value_u32(0);
+}
+
 static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNExecutor* executor,
                                                       PNFunction* function,
                                                       uint32_t num_args,
@@ -5837,6 +5887,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNExecutor* executor,
            addr_pp, len, prot, flags, fd, off);
 
   if ((flags & 0x20) != 0x20) { /* MAP_ANONYMOUS */
+    PN_TRACE(IRT, "      not anonymous, returning EINVAL\n");
     return pn_executor_value_u32(PN_EINVAL);
   }
 
@@ -5852,6 +5903,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNExecutor* executor,
 
   uint32_t result_address = result_pointer - memory->data;
   pn_memory_write_u32(memory, addr_pp, result_address);
+  PN_TRACE(IRT, "      returning %u\n", result_address);
   return pn_executor_value_u32(0);
 }
 
@@ -5865,6 +5917,51 @@ static PNRuntimeValue pn_builtin_NACL_IRT_TLS_INIT(PNExecutor* executor,
   /* How big is TLS? */
   pn_memory_check(executor->memory, thread_ptr_p, 1);
   executor->tls = thread_ptr_p;
+  return pn_executor_value_u32(0);
+}
+
+static PNRuntimeValue pn_builtin_NACL_IRT_FUTEX_WAIT_ABS(PNExecutor* executor,
+                                                         PNFunction* function,
+                                                         uint32_t num_args,
+                                                         PNValueId* arg_ids) {
+  /* (Doc From irt.h)
+  If |*addr| still contains |value|, futex_wait_abs() waits to be woken up by a
+  futex_wake(addr,...) call from another thread; otherwise, it immediately
+  returns EAGAIN (which is the same as EWOULDBLOCK).  If woken by another
+  thread, it returns 0.  If |abstime| is non-NULL and the time specified by
+  |*abstime| passes, this returns ETIMEDOUT.
+  */
+  PN_CHECK(num_args == 3);
+  PN_BUILTIN_ARG(addr_p, 0, u32);
+  PN_BUILTIN_ARG(value, 1, u32);
+  PN_BUILTIN_ARG(abstime_p, 2, u32);
+  PN_TRACE(IRT, "    NACL_IRT_WAIT_ABS(%u, %u, %u)\n", addr_p, value,
+           abstime_p);
+  uint32_t read = pn_memory_read_u32(executor->memory, addr_p);
+  if (read != value) {
+    return pn_executor_value_u32(PN_EAGAIN);
+  }
+
+  /* Pretend we are woken up by another thread */
+  return pn_executor_value_u32(0);
+}
+
+static PNRuntimeValue pn_builtin_NACL_IRT_FUTEX_WAKE(PNExecutor* executor,
+                                                     PNFunction* function,
+                                                     uint32_t num_args,
+                                                     PNValueId* arg_ids) {
+  /*
+  (Doc From irt.h)
+  futex_wake() wakes up threads that are waiting on |addr| using futex_wait().
+  |nwake| is the maximum number of threads that will be woken up.  The number
+  of threads that were woken is returned in |*count|.
+  */
+  PN_CHECK(num_args == 3);
+  PN_BUILTIN_ARG(addr_p, 0, u32);
+  PN_BUILTIN_ARG(nwake, 1, u32);
+  PN_BUILTIN_ARG(count_p, 2, u32);
+  PN_TRACE(IRT, "    NACL_IRT_WAKE(%u, %u, %u)\n", addr_p, nwake, count_p);
+  pn_memory_write_u32(executor->memory, count_p, 0);
   return pn_executor_value_u32(0);
 }
 
@@ -5885,14 +5982,17 @@ PN_BUILTIN_STUB(NACL_IRT_FDIO_DUP2)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_READ)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_SEEK)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_GETDENTS)
+PN_BUILTIN_STUB(NACL_IRT_FDIO_FCHDIR)
+PN_BUILTIN_STUB(NACL_IRT_FDIO_FCHMOD)
+PN_BUILTIN_STUB(NACL_IRT_FDIO_FSYNC)
+PN_BUILTIN_STUB(NACL_IRT_FDIO_FDATASYNC)
+PN_BUILTIN_STUB(NACL_IRT_FDIO_FTRUNCATE)
 PN_BUILTIN_STUB(NACL_IRT_MEMORY_MUNMAP)
 PN_BUILTIN_STUB(NACL_IRT_MEMORY_MPROTECT)
 PN_BUILTIN_STUB(NACL_IRT_TLS_GET)
 PN_BUILTIN_STUB(NACL_IRT_THREAD_CREATE)
 PN_BUILTIN_STUB(NACL_IRT_THREAD_EXIT)
 PN_BUILTIN_STUB(NACL_IRT_THREAD_NICE)
-PN_BUILTIN_STUB(NACL_IRT_FUTEX_WAIT_ABS)
-PN_BUILTIN_STUB(NACL_IRT_FUTEX_WAKE)
 
 #undef PN_BUILTIN_STUB
 
@@ -6398,6 +6498,10 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       uint32_t len = pn_executor_get_value(executor, i->arg_ids[2]).u32;
       uint32_t align = pn_executor_get_value(executor, i->arg_ids[3]).u32;
       uint8_t is_volatile = pn_executor_get_value(executor, i->arg_ids[4]).u8;
+      PN_TRACE(INTRINSICS,
+               "    llvm.memcpy(dst_p:%u, src_p:%u, len:%u, align:%u, "
+               "is_volatile:%u)\n",
+               dst_p, src_p, len, align, is_volatile);
       PN_TRACE(EXECUTE,
                "    %%%d = %u  %%%d = %u  %%%d = %u  %%%d = %u  %%%d = %u\n",
                i->arg_ids[0], dst_p, i->arg_ids[1], src_p, i->arg_ids[2], len,
@@ -6425,6 +6529,10 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       uint32_t len = pn_executor_get_value(executor, i->arg_ids[2]).u32;
       uint32_t align = pn_executor_get_value(executor, i->arg_ids[3]).u32;
       uint8_t is_volatile = pn_executor_get_value(executor, i->arg_ids[4]).u8;
+      PN_TRACE(INTRINSICS,
+               "    llvm.memset(dst_p:%u, value:%u, len:%u, align:%u, "
+               "is_volatile:%u)\n",
+               dst_p, value, len, align, is_volatile);
       PN_TRACE(EXECUTE,
                "    %%%d = %u  %%%d = %u  %%%d = %u  %%%d = %u  %%%d = %u\n",
                i->arg_ids[0], dst_p, i->arg_ids[1], value, i->arg_ids[2], len,
@@ -6450,6 +6558,10 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       uint32_t len = pn_executor_get_value(executor, i->arg_ids[2]).u32;
       uint32_t align = pn_executor_get_value(executor, i->arg_ids[3]).u32;
       uint8_t is_volatile = pn_executor_get_value(executor, i->arg_ids[4]).u8;
+      PN_TRACE(INTRINSICS,
+               "    llvm.memmove(dst_p:%u, src_p:%u, len:%u, align:%u, "
+               "is_volatile:%u)\n",
+               dst_p, src_p, len, align, is_volatile);
       PN_TRACE(EXECUTE,
                "    %%%d = %u  %%%d = %u  %%%d = %u  %%%d = %u  %%%d = %u\n",
                i->arg_ids[0], dst_p, i->arg_ids[1], src_p, i->arg_ids[2], len,
@@ -6485,6 +6597,10 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       pn_memory_write_##ty(executor->memory, addr_p, desired);               \
     }                                                                        \
     pn_executor_set_value(executor, i->result_value_id, result);             \
+    PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.cmpxchg." #ty                 \
+                         "(addr_p:%u, expected:" FORMAT_##ty                 \
+             ", desired:" FORMAT_##ty ", ...)\n",                            \
+             addr_p, expected, desired);                                     \
     PN_TRACE(EXECUTE,                                                        \
              "    %%%d = " FORMAT_##ty "  %%%d = %u  %%%d = " FORMAT_##ty    \
              "  %%%d = " FORMAT_##ty " %%%d = %u  %%%d = %u\n",              \
@@ -6497,16 +6613,16 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
   } while (0) /* no semicolon */
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I8:
-      OPCODE_INTRINSIC_CMPXCHG(i8);
+      OPCODE_INTRINSIC_CMPXCHG(u8);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I16:
-      OPCODE_INTRINSIC_CMPXCHG(i16);
+      OPCODE_INTRINSIC_CMPXCHG(u16);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I32:
-      OPCODE_INTRINSIC_CMPXCHG(i32);
+      OPCODE_INTRINSIC_CMPXCHG(u32);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I64:
-      OPCODE_INTRINSIC_CMPXCHG(i64);
+      OPCODE_INTRINSIC_CMPXCHG(u64);
       break;
 
 #undef OPCODE_INTRINSIC_CMPXCHG
@@ -6520,6 +6636,9 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     pn_##ty value = pn_memory_read_##ty(executor->memory, addr_p);          \
     PNRuntimeValue result = pn_executor_value_##ty(value);                  \
     pn_executor_set_value(executor, i->result_value_id, result);            \
+    PN_TRACE(INTRINSICS,                                                    \
+             "    llvm.nacl.atomic.load." #ty "(addr_p:%u, flags:%u)\n",    \
+             addr_p, flags);                                                \
     PN_TRACE(EXECUTE, "    %%%d = " FORMAT_##ty "  %%%d = %u  %%%d = %u\n", \
              i->result_value_id, result.ty, i->arg_ids[0], addr_p,          \
              i->arg_ids[1], flags);                                         \
@@ -6556,6 +6675,9 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     pn_memory_write_##ty(executor->memory, addr_p, new_value);              \
     PNRuntimeValue result = pn_executor_value_u32(old_value);               \
     pn_executor_set_value(executor, i->result_value_id, result);            \
+    PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.rmw." #ty                    \
+                         "(op: %s, addr_p:%u, value: " FORMAT_##ty ")\n",   \
+             #op, addr_p, value);                                           \
     PN_TRACE(EXECUTE, "    %%%d = " FORMAT_##ty                             \
              "  %%%d = %u  %%%d = %u  %%%d = " FORMAT_##ty "  %%%d = %u\n", \
              i->result_value_id, result.ty, i->arg_ids[0], opval,           \
@@ -6644,6 +6766,9 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     pn_memory_write_##ty(executor->memory, addr_p, new_value);              \
     PNRuntimeValue result = pn_executor_value_u32(old_value);               \
     pn_executor_set_value(executor, i->result_value_id, result);            \
+    PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.exchange." #ty               \
+                         "(addr_p:%u, value: " FORMAT_##ty ")\n",           \
+             addr_p, value);                                                \
     PN_TRACE(EXECUTE, "    %%%d = " FORMAT_##ty                             \
              "  %%%d = %u  %%%d = %u  %%%d = " FORMAT_##ty "  %%%d = %u\n", \
              i->result_value_id, result.ty, i->arg_ids[0], opval,           \
@@ -6677,6 +6802,10 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;
       uint32_t flags = pn_executor_get_value(executor, i->arg_ids[2]).u32;
       pn_memory_write_u32(executor->memory, addr_p, value);
+      PN_TRACE(
+          INTRINSICS,
+          "    llvm.nacl.atomic.store.u32(value: %u, addr_p:%u, flags: %u)\n",
+          value, addr_p, flags);
       PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = %u  %%%d = %u\n", i->arg_ids[0],
                value, i->arg_ids[1], addr_p, i->arg_ids[2], flags);
       (void)flags;
@@ -6690,10 +6819,48 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       PN_CHECK(i->result_value_id != PN_INVALID_VALUE_ID);
       PNRuntimeValue result = pn_executor_value_u32(executor->tls);
       pn_executor_set_value(executor, i->result_value_id, result);
+      PN_TRACE(INTRINSICS, "    llvm.nacl.read.tp()\n");
       PN_TRACE(EXECUTE, "    %%%d = %u\n", i->result_value_id, result.u32);
       location->instruction_id++;
       break;
     }
+
+    case PN_OPCODE_INTRINSIC_LLVM_TRAP: {
+      PNInstructionCall* i = (PNInstructionCall*)inst;
+      PN_CHECK(i->num_args == 0);
+      PN_TRACE(INTRINSICS, "    llvm.trap()\n");
+      executor->exit_code = -1;
+      executor->exiting = PN_TRUE;
+      break;
+    }
+
+#define OPCODE_INTRINSIC_STUB(name)                   \
+  case PN_OPCODE_INTRINSIC_##name: {                  \
+    PN_FATAL("Unimplemented intrinsic: %s\n", #name); \
+    break;                                            \
+  }
+
+    OPCODE_INTRINSIC_STUB(LLVM_BSWAP_I16)
+    OPCODE_INTRINSIC_STUB(LLVM_BSWAP_I32)
+    OPCODE_INTRINSIC_STUB(LLVM_BSWAP_I64)
+    OPCODE_INTRINSIC_STUB(LLVM_CTLZ_I32)
+    OPCODE_INTRINSIC_STUB(LLVM_CTTZ_I32)
+    OPCODE_INTRINSIC_STUB(LLVM_FABS_F32)
+    OPCODE_INTRINSIC_STUB(LLVM_FABS_F64)
+    OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_RMW_I8)
+    OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_RMW_I16)
+    OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_RMW_I32)
+    OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_RMW_I64)
+    OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I8)
+    OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I16)
+    OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I64)
+    OPCODE_INTRINSIC_STUB(LLVM_NACL_LONGJMP)
+    OPCODE_INTRINSIC_STUB(LLVM_NACL_SETJMP)
+    OPCODE_INTRINSIC_STUB(LLVM_SQRT_F32)
+    OPCODE_INTRINSIC_STUB(LLVM_SQRT_F64)
+    OPCODE_INTRINSIC_STUB(LLVM_STACKRESTORE)
+    OPCODE_INTRINSIC_STUB(LLVM_STACKSAVE)
+    OPCODE_INTRINSIC_STUB(START)
 
 #define OPCODE_LOAD(ty)                                              \
   do {                                                               \
@@ -6850,7 +7017,7 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     }
 
     default:
-      PN_FATAL("Invalid instruction code: %d\n", inst->code);
+      PN_FATAL("Invalid opcode: %d\n", inst->opcode);
       break;
   }
 
@@ -7159,6 +7326,7 @@ static void pn_options_parse(int argc, char** argv, char** env) {
 
   if (g_pn_trace_EXECUTE) {
     g_pn_trace_IRT = PN_TRUE;
+    g_pn_trace_INTRINSICS = PN_TRUE;
   }
 #endif /* PN_TRACING */
 
