@@ -5684,9 +5684,27 @@ static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_EXIT(PNExecutor* executor,
                                                      PNValueId* arg_ids) {
   PN_CHECK(num_args == 1);
   PN_BUILTIN_ARG(exit_code, 0, i32);
+  PN_TRACE(IRT, "    NACL_IRT_BASIC_EXIT(%d)\n", exit_code);
   executor->exit_code = exit_code;
   executor->exiting = PN_TRUE;
-  PN_TRACE(EXECUTE, "Setting exit code = %d\n", exit_code);
+  return pn_executor_value_u32(0);
+}
+
+static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_SYSCONF(PNExecutor* executor,
+                                                        PNFunction* function,
+                                                        uint32_t num_args,
+                                                        PNValueId* arg_ids) {
+  PN_CHECK(num_args == 2);
+  PN_BUILTIN_ARG(name, 0, u32);
+  PN_BUILTIN_ARG(value_p, 1, u32);
+  PN_TRACE(IRT, "    NACL_IRT_BASIC_SYSCONF(%u, %u)\n", name, value_p);
+  switch (name) {
+    case 2: /* _SC_PAGESIZE */
+      pn_memory_write_uint32(executor->memory, value_p, PN_PAGE_SIZE);
+      break;
+    default:
+      return pn_executor_value_u32(PN_EINVAL);
+  }
   return pn_executor_value_u32(0);
 }
 
@@ -5747,7 +5765,6 @@ PN_BUILTIN_STUB(NACL_IRT_BASIC_GETTOD)
 PN_BUILTIN_STUB(NACL_IRT_BASIC_CLOCK)
 PN_BUILTIN_STUB(NACL_IRT_BASIC_NANOSLEEP)
 PN_BUILTIN_STUB(NACL_IRT_BASIC_SCHED_YIELD)
-PN_BUILTIN_STUB(NACL_IRT_BASIC_SYSCONF)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_CLOSE)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_DUP)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_DUP2)
