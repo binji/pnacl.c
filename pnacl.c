@@ -187,7 +187,8 @@ static PNBool g_pn_print_time;
   V(INSTRUCTIONS, "instructions")             \
   V(EXECUTE, "execute")                       \
   V(IRT, "irt")                               \
-  V(INTRINSICS, "intrinsics")
+  V(INTRINSICS, "intrinsics")                 \
+  V(MEMORY, "memory")
 
 #define PN_TRACE_ENUM(name, flag) PN_TRACE_##name,
 enum { PN_FOREACH_TRACE(PN_TRACE_ENUM) PN_NUM_TRACE };
@@ -1729,21 +1730,36 @@ static void pn_memory_check_pointer(PNMemory* memory, void* p, uint32_t size) {
   pn_memory_check(memory, p - memory->data, size);
 }
 
+#define PN_FORMAT_f64 "%f"
+#define PN_FORMAT_f32 "%f"
+#define PN_FORMAT_u8 "%u"
+#define PN_FORMAT_u16 "%u"
+#define PN_FORMAT_u32 "%u"
+#define PN_FORMAT_u64 "%" PRIu64
+#define PN_FORMAT_i8 "%d"
+#define PN_FORMAT_i16 "%d"
+#define PN_FORMAT_i32 "%d"
+#define PN_FORMAT_i64 "%" PRId64
+
 #if PN_UNALIGNED_MEMORY_ACCESS
 
 #define DEFINE_MEMORY_READ(ty, ctype)                                   \
   static ctype pn_memory_read_##ty(PNMemory* memory, uint32_t offset) { \
     pn_memory_check(memory, offset, sizeof(ctype));                     \
     ctype* m = (ctype*)(memory->data + offset);                         \
+    PN_TRACE(MEMORY, "     read." #ty " [%8u] >= " PN_FORMAT_##ty "\n", \
+             offset, *m);                                               \
     return *m;                                                          \
   }
 
-#define DEFINE_MEMORY_WRITE(ty, ctype)                                \
-  static void pn_memory_write_##ty(PNMemory* memory, uint32_t offset, \
-                                   ctype value) {                     \
-    pn_memory_check(memory, offset, sizeof(value));                   \
-    ctype* m = (ctype*)(memory->data + offset);                       \
-    *m = value;                                                       \
+#define DEFINE_MEMORY_WRITE(ty, ctype)                                  \
+  static void pn_memory_write_##ty(PNMemory* memory, uint32_t offset,   \
+                                   ctype value) {                       \
+    pn_memory_check(memory, offset, sizeof(value));                     \
+    ctype* m = (ctype*)(memory->data + offset);                         \
+    *m = value;                                                         \
+    PN_TRACE(MEMORY, "    write." #ty " [%8u] <= " PN_FORMAT_##ty "\n", \
+             offset, value);                                            \
   }
 
 #else
@@ -6170,17 +6186,6 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
   }
 #endif
 
-#define FORMAT_f64 "%f"
-#define FORMAT_f32 "%f"
-#define FORMAT_u8 "%u"
-#define FORMAT_u16 "%u"
-#define FORMAT_u32 "%u"
-#define FORMAT_u64 "%" PRIu64
-#define FORMAT_i8 "%d"
-#define FORMAT_i16 "%d"
-#define FORMAT_i32 "%d"
-#define FORMAT_i64 "%" PRId64
-
   switch (inst->opcode) {
     case PN_OPCODE_ALLOCA_INT32: {
       PNInstructionAlloca* i = (PNInstructionAlloca*)inst;
@@ -6200,18 +6205,18 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       break;
     }
 
-#define OPCODE_BINOP(op, ty)                                                \
-  do {                                                                      \
-    PNInstructionBinop* i = (PNInstructionBinop*)inst;                      \
-    PNRuntimeValue value0 = pn_executor_get_value(executor, i->value0_id);  \
-    PNRuntimeValue value1 = pn_executor_get_value(executor, i->value1_id);  \
-    PNRuntimeValue result = pn_executor_value_##ty(value0.ty op value1.ty); \
-    pn_executor_set_value(executor, i->result_value_id, result);            \
-    PN_TRACE(EXECUTE, "    %%%d = " FORMAT_##ty "  %%%d = " FORMAT_##ty     \
-             "  %%%d = " FORMAT_##ty "\n",                                  \
-             i->result_value_id, result.ty, i->value0_id, value0.ty,        \
-             i->value1_id, value1.ty);                                      \
-    location->instruction_id++;                                             \
+#define OPCODE_BINOP(op, ty)                                                  \
+  do {                                                                        \
+    PNInstructionBinop* i = (PNInstructionBinop*)inst;                        \
+    PNRuntimeValue value0 = pn_executor_get_value(executor, i->value0_id);    \
+    PNRuntimeValue value1 = pn_executor_get_value(executor, i->value1_id);    \
+    PNRuntimeValue result = pn_executor_value_##ty(value0.ty op value1.ty);   \
+    pn_executor_set_value(executor, i->result_value_id, result);              \
+    PN_TRACE(EXECUTE, "    %%%d = " PN_FORMAT_##ty "  %%%d = " PN_FORMAT_##ty \
+             "  %%%d = " PN_FORMAT_##ty "\n",                                 \
+             i->result_value_id, result.ty, i->value0_id, value0.ty,          \
+             i->value1_id, value1.ty);                                        \
+    location->instruction_id++;                                               \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_BINOP_ADD_DOUBLE:  OPCODE_BINOP(+, f64); break;
@@ -6376,16 +6381,16 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       break;
     }
 
-#define OPCODE_CAST(from, to)                                            \
-  do {                                                                   \
-    PNInstructionCast* i = (PNInstructionCast*)inst;                     \
-    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id); \
-    PNRuntimeValue result = pn_executor_value_##to(value.from);          \
-    pn_executor_set_value(executor, i->result_value_id, result);         \
-    PN_TRACE(EXECUTE,                                                    \
-             "    %%%d = " FORMAT_##to "  %%%d = " FORMAT_##from "\n",   \
-             i->result_value_id, result.to, i->value_id, result.from);   \
-    location->instruction_id++;                                          \
+#define OPCODE_CAST(from, to)                                                \
+  do {                                                                       \
+    PNInstructionCast* i = (PNInstructionCast*)inst;                         \
+    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);     \
+    PNRuntimeValue result = pn_executor_value_##to(value.from);              \
+    pn_executor_set_value(executor, i->result_value_id, result);             \
+    PN_TRACE(EXECUTE,                                                        \
+             "    %%%d = " PN_FORMAT_##to "  %%%d = " PN_FORMAT_##from "\n", \
+             i->result_value_id, result.to, i->value_id, result.from);       \
+    location->instruction_id++;                                              \
   } while (0) /* no semicolon */
 
 #define OPCODE_CAST_SEXT1(size)                                           \
@@ -6395,7 +6400,7 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     PNRuntimeValue result =                                               \
         pn_executor_value_i##size(-(int##size##_t)(value.u8 & 1));        \
     pn_executor_set_value(executor, i->result_value_id, result);          \
-    PN_TRACE(EXECUTE, "    %%%d = " FORMAT_i##size "  %%%d = %u\n",       \
+    PN_TRACE(EXECUTE, "    %%%d = " PN_FORMAT_i##size "  %%%d = %u\n",    \
              i->result_value_id, result.i##size, i->value_id, result.u8); \
     location->instruction_id++;                                           \
   } while (0) /* no semicolon */
@@ -6404,10 +6409,9 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
   do {                                                                    \
     PNInstructionCast* i = (PNInstructionCast*)inst;                      \
     PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);  \
-    PNRuntimeValue result =                                               \
-        pn_executor_value_u8(~(uint8_t)(value.u##size & 1) + 1);          \
+    PNRuntimeValue result = pn_executor_value_u8(value.u##size & 1);      \
     pn_executor_set_value(executor, i->result_value_id, result);          \
-    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " FORMAT_u##size "\n",       \
+    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " PN_FORMAT_u##size "\n",    \
              i->result_value_id, result.u8, i->value_id, result.u##size); \
     location->instruction_id++;                                           \
   } while (0) /* no semicolon */
@@ -6419,7 +6423,7 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     PNRuntimeValue result =                                               \
         pn_executor_value_u##size((uint##size##_t)(value.u8 & 1));        \
     pn_executor_set_value(executor, i->result_value_id, result);          \
-    PN_TRACE(EXECUTE, "    %%%d = " FORMAT_u##size "  %%%d = %u\n",       \
+    PN_TRACE(EXECUTE, "    %%%d = " PN_FORMAT_u##size "  %%%d = %u\n",    \
              i->result_value_id, result.u##size, i->value_id, result.u8); \
     location->instruction_id++;                                           \
   } while (0) /* no semicolon */
@@ -6500,8 +6504,8 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     PNRuntimeValue value1 = pn_executor_get_value(executor, i->value1_id); \
     PNRuntimeValue result = pn_executor_value_u8(value0.ty op value1.ty);  \
     pn_executor_set_value(executor, i->result_value_id, result);           \
-    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " FORMAT_##ty                 \
-             "  %%%d = " FORMAT_##ty "\n",                                 \
+    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " PN_FORMAT_##ty              \
+             "  %%%d = " PN_FORMAT_##ty "\n",                              \
              i->result_value_id, result.u8, i->value0_id, value0.ty,       \
              i->value1_id, value1.ty);                                     \
     location->instruction_id++;                                            \
@@ -6514,8 +6518,8 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     PNRuntimeValue value1 = pn_executor_get_value(executor, i->value1_id);   \
     PNRuntimeValue result = pn_executor_value_u8(!(value0.ty op value1.ty)); \
     pn_executor_set_value(executor, i->result_value_id, result);             \
-    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " FORMAT_##ty                   \
-             "  %%%d = " FORMAT_##ty "\n",                                   \
+    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " PN_FORMAT_##ty                \
+             "  %%%d = " PN_FORMAT_##ty "\n",                                \
              i->result_value_id, result.u8, i->value0_id, value0.ty,         \
              i->value1_id, value1.ty);                                       \
     location->instruction_id++;                                              \
@@ -6529,8 +6533,8 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     PNRuntimeValue result = pn_executor_value_u8(value0.ty == value1.ty || \
                                                  value0.ty != value1.ty);  \
     pn_executor_set_value(executor, i->result_value_id, result);           \
-    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " FORMAT_##ty                 \
-             "  %%%d = " FORMAT_##ty "\n",                                 \
+    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " PN_FORMAT_##ty              \
+             "  %%%d = " PN_FORMAT_##ty "\n",                              \
              i->result_value_id, result.u8, i->value0_id, value0.ty,       \
              i->value1_id, value1.ty);                                     \
     location->instruction_id++;                                            \
@@ -6544,8 +6548,8 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     PNRuntimeValue result = pn_executor_value_u8(                          \
         !(value0.ty == value1.ty || value0.ty != value1.ty));              \
     pn_executor_set_value(executor, i->result_value_id, result);           \
-    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " FORMAT_##ty                 \
-             "  %%%d = " FORMAT_##ty "\n",                                 \
+    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " PN_FORMAT_##ty              \
+             "  %%%d = " PN_FORMAT_##ty "\n",                              \
              i->result_value_id, result.u8, i->value0_id, value0.ty,       \
              i->value1_id, value1.ty);                                     \
     location->instruction_id++;                                            \
@@ -6739,36 +6743,36 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       break;
     }
 
-#define OPCODE_INTRINSIC_CMPXCHG(ty)                                         \
-  do {                                                                       \
-    PNInstructionCall* i = (PNInstructionCall*)inst;                         \
-    PN_CHECK(i->num_args == 5);                                              \
-    uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[0]).u32;    \
-    pn_##ty expected = pn_executor_get_value(executor, i->arg_ids[1]).ty;    \
-    pn_##ty desired = pn_executor_get_value(executor, i->arg_ids[2]).ty;     \
-    uint32_t memory_order_success =                                          \
-        pn_executor_get_value(executor, i->arg_ids[3]).u32;                  \
-    uint32_t memory_order_failure =                                          \
-        pn_executor_get_value(executor, i->arg_ids[4]).u32;                  \
-    pn_##ty read = pn_memory_read_##ty(executor->memory, addr_p);            \
-    PNRuntimeValue result = pn_executor_value_##ty(read);                    \
-    if (read == expected) {                                                  \
-      pn_memory_write_##ty(executor->memory, addr_p, desired);               \
-    }                                                                        \
-    pn_executor_set_value(executor, i->result_value_id, result);             \
-    PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.cmpxchg." #ty                 \
-                         "(addr_p:%u, expected:" FORMAT_##ty                 \
-             ", desired:" FORMAT_##ty ", ...)\n",                            \
-             addr_p, expected, desired);                                     \
-    PN_TRACE(EXECUTE,                                                        \
-             "    %%%d = " FORMAT_##ty "  %%%d = %u  %%%d = " FORMAT_##ty    \
-             "  %%%d = " FORMAT_##ty " %%%d = %u  %%%d = %u\n",              \
-             i->result_value_id, result.ty, i->arg_ids[0], addr_p,           \
-             i->arg_ids[1], expected, i->arg_ids[2], desired, i->arg_ids[3], \
-             memory_order_success, i->arg_ids[4], memory_order_failure);     \
-    (void) memory_order_success;                                             \
-    (void) memory_order_failure;                                             \
-    location->instruction_id++;                                              \
+#define OPCODE_INTRINSIC_CMPXCHG(ty)                                          \
+  do {                                                                        \
+    PNInstructionCall* i = (PNInstructionCall*)inst;                          \
+    PN_CHECK(i->num_args == 5);                                               \
+    uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[0]).u32;     \
+    pn_##ty expected = pn_executor_get_value(executor, i->arg_ids[1]).ty;     \
+    pn_##ty desired = pn_executor_get_value(executor, i->arg_ids[2]).ty;      \
+    uint32_t memory_order_success =                                           \
+        pn_executor_get_value(executor, i->arg_ids[3]).u32;                   \
+    uint32_t memory_order_failure =                                           \
+        pn_executor_get_value(executor, i->arg_ids[4]).u32;                   \
+    pn_##ty read = pn_memory_read_##ty(executor->memory, addr_p);             \
+    PNRuntimeValue result = pn_executor_value_##ty(read);                     \
+    if (read == expected) {                                                   \
+      pn_memory_write_##ty(executor->memory, addr_p, desired);                \
+    }                                                                         \
+    pn_executor_set_value(executor, i->result_value_id, result);              \
+    PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.cmpxchg." #ty                  \
+                         "(addr_p:%u, expected:" PN_FORMAT_##ty               \
+             ", desired:" PN_FORMAT_##ty ", ...)\n",                          \
+             addr_p, expected, desired);                                      \
+    PN_TRACE(EXECUTE, "    %%%d = " PN_FORMAT_##ty                            \
+             "  %%%d = %u  %%%d = " PN_FORMAT_##ty "  %%%d = " PN_FORMAT_##ty \
+             " %%%d = %u  %%%d = %u\n",                                       \
+             i->result_value_id, result.ty, i->arg_ids[0], addr_p,            \
+             i->arg_ids[1], expected, i->arg_ids[2], desired, i->arg_ids[3],  \
+             memory_order_success, i->arg_ids[4], memory_order_failure);      \
+    (void) memory_order_success;                                              \
+    (void) memory_order_failure;                                              \
+    location->instruction_id++;                                               \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I8:
@@ -6786,23 +6790,23 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 
 #undef OPCODE_INTRINSIC_CMPXCHG
 
-#define OPCODE_INTRINSIC_LOAD(ty)                                           \
-  do {                                                                      \
-    PNInstructionCall* i = (PNInstructionCall*)inst;                        \
-    PN_CHECK(i->num_args == 2);                                             \
-    uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[0]).u32;   \
-    uint32_t flags = pn_executor_get_value(executor, i->arg_ids[1]).u32;    \
-    pn_##ty value = pn_memory_read_##ty(executor->memory, addr_p);          \
-    PNRuntimeValue result = pn_executor_value_##ty(value);                  \
-    pn_executor_set_value(executor, i->result_value_id, result);            \
-    PN_TRACE(INTRINSICS,                                                    \
-             "    llvm.nacl.atomic.load." #ty "(addr_p:%u, flags:%u)\n",    \
-             addr_p, flags);                                                \
-    PN_TRACE(EXECUTE, "    %%%d = " FORMAT_##ty "  %%%d = %u  %%%d = %u\n", \
-             i->result_value_id, result.ty, i->arg_ids[0], addr_p,          \
-             i->arg_ids[1], flags);                                         \
-    (void) flags;                                                           \
-    location->instruction_id++;                                             \
+#define OPCODE_INTRINSIC_LOAD(ty)                                              \
+  do {                                                                         \
+    PNInstructionCall* i = (PNInstructionCall*)inst;                           \
+    PN_CHECK(i->num_args == 2);                                                \
+    uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[0]).u32;      \
+    uint32_t flags = pn_executor_get_value(executor, i->arg_ids[1]).u32;       \
+    pn_##ty value = pn_memory_read_##ty(executor->memory, addr_p);             \
+    PNRuntimeValue result = pn_executor_value_##ty(value);                     \
+    pn_executor_set_value(executor, i->result_value_id, result);               \
+    PN_TRACE(INTRINSICS,                                                       \
+             "    llvm.nacl.atomic.load." #ty "(addr_p:%u, flags:%u)\n",       \
+             addr_p, flags);                                                   \
+    PN_TRACE(EXECUTE, "    %%%d = " PN_FORMAT_##ty "  %%%d = %u  %%%d = %u\n", \
+             i->result_value_id, result.ty, i->arg_ids[0], addr_p,             \
+             i->arg_ids[1], flags);                                            \
+    (void) flags;                                                              \
+    location->instruction_id++;                                                \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I8:
@@ -6820,30 +6824,30 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 
 #undef OPCODE_INTRINSIC_LOAD
 
-#define OPCODE_INTRINSIC_RMW(opval, op, ty)                                 \
-  do {                                                                      \
-    PNInstructionCall* i = (PNInstructionCall*)inst;                        \
-    PN_CHECK(i->num_args == 4);                                             \
-    PN_CHECK(pn_executor_get_value(executor, i->arg_ids[0]).u32 == opval);  \
-    uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;   \
-    pn_##ty value = pn_executor_get_value(executor, i->arg_ids[2]).ty;      \
-    uint32_t memory_order =                                                 \
-        pn_executor_get_value(executor, i->arg_ids[3]).u32;                 \
-    pn_##ty old_value = pn_memory_read_##ty(executor->memory, addr_p);      \
-    pn_##ty new_value = old_value op value;                                 \
-    pn_memory_write_##ty(executor->memory, addr_p, new_value);              \
-    PNRuntimeValue result = pn_executor_value_u32(old_value);               \
-    pn_executor_set_value(executor, i->result_value_id, result);            \
-    PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.rmw." #ty                    \
-                         "(op: %s, addr_p:%u, value: " FORMAT_##ty ")\n",   \
-             #op, addr_p, value);                                           \
-    PN_TRACE(EXECUTE, "    %%%d = " FORMAT_##ty                             \
-             "  %%%d = %u  %%%d = %u  %%%d = " FORMAT_##ty "  %%%d = %u\n", \
-             i->result_value_id, result.ty, i->arg_ids[0], opval,           \
-             i->arg_ids[1], addr_p, i->arg_ids[2], value, i->arg_ids[3],    \
-             memory_order);                                                 \
-    (void) memory_order;                                                    \
-    location->instruction_id++;                                             \
+#define OPCODE_INTRINSIC_RMW(opval, op, ty)                                    \
+  do {                                                                         \
+    PNInstructionCall* i = (PNInstructionCall*)inst;                           \
+    PN_CHECK(i->num_args == 4);                                                \
+    PN_CHECK(pn_executor_get_value(executor, i->arg_ids[0]).u32 == opval);     \
+    uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;      \
+    pn_##ty value = pn_executor_get_value(executor, i->arg_ids[2]).ty;         \
+    uint32_t memory_order =                                                    \
+        pn_executor_get_value(executor, i->arg_ids[3]).u32;                    \
+    pn_##ty old_value = pn_memory_read_##ty(executor->memory, addr_p);         \
+    pn_##ty new_value = old_value op value;                                    \
+    pn_memory_write_##ty(executor->memory, addr_p, new_value);                 \
+    PNRuntimeValue result = pn_executor_value_u32(old_value);                  \
+    pn_executor_set_value(executor, i->result_value_id, result);               \
+    PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.rmw." #ty                       \
+                         "(op: %s, addr_p:%u, value: " PN_FORMAT_##ty ")\n",   \
+             #op, addr_p, value);                                              \
+    PN_TRACE(EXECUTE, "    %%%d = " PN_FORMAT_##ty                             \
+             "  %%%d = %u  %%%d = %u  %%%d = " PN_FORMAT_##ty "  %%%d = %u\n", \
+             i->result_value_id, result.ty, i->arg_ids[0], opval,              \
+             i->arg_ids[1], addr_p, i->arg_ids[2], value, i->arg_ids[3],       \
+             memory_order);                                                    \
+    (void) memory_order;                                                       \
+    location->instruction_id++;                                                \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8:
@@ -6911,30 +6915,30 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       OPCODE_INTRINSIC_RMW(5, ^, u64);
       break;
 
-#define OPCODE_INTRINSIC_EXCHANGE(opval, ty)                                \
-  do {                                                                      \
-    PNInstructionCall* i = (PNInstructionCall*)inst;                        \
-    PN_CHECK(i->num_args == 4);                                             \
-    PN_CHECK(pn_executor_get_value(executor, i->arg_ids[0]).u32 == opval);  \
-    uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;   \
-    pn_##ty value = pn_executor_get_value(executor, i->arg_ids[2]).ty;      \
-    uint32_t memory_order =                                                 \
-        pn_executor_get_value(executor, i->arg_ids[3]).u32;                 \
-    pn_##ty old_value = pn_memory_read_##ty(executor->memory, addr_p);      \
-    pn_##ty new_value = value;                                              \
-    pn_memory_write_##ty(executor->memory, addr_p, new_value);              \
-    PNRuntimeValue result = pn_executor_value_u32(old_value);               \
-    pn_executor_set_value(executor, i->result_value_id, result);            \
-    PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.exchange." #ty               \
-                         "(addr_p:%u, value: " FORMAT_##ty ")\n",           \
-             addr_p, value);                                                \
-    PN_TRACE(EXECUTE, "    %%%d = " FORMAT_##ty                             \
-             "  %%%d = %u  %%%d = %u  %%%d = " FORMAT_##ty "  %%%d = %u\n", \
-             i->result_value_id, result.ty, i->arg_ids[0], opval,           \
-             i->arg_ids[1], addr_p, i->arg_ids[2], value, i->arg_ids[3],    \
-             memory_order);                                                 \
-    (void) memory_order;                                                    \
-    location->instruction_id++;                                             \
+#define OPCODE_INTRINSIC_EXCHANGE(opval, ty)                                   \
+  do {                                                                         \
+    PNInstructionCall* i = (PNInstructionCall*)inst;                           \
+    PN_CHECK(i->num_args == 4);                                                \
+    PN_CHECK(pn_executor_get_value(executor, i->arg_ids[0]).u32 == opval);     \
+    uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;      \
+    pn_##ty value = pn_executor_get_value(executor, i->arg_ids[2]).ty;         \
+    uint32_t memory_order =                                                    \
+        pn_executor_get_value(executor, i->arg_ids[3]).u32;                    \
+    pn_##ty old_value = pn_memory_read_##ty(executor->memory, addr_p);         \
+    pn_##ty new_value = value;                                                 \
+    pn_memory_write_##ty(executor->memory, addr_p, new_value);                 \
+    PNRuntimeValue result = pn_executor_value_u32(old_value);                  \
+    pn_executor_set_value(executor, i->result_value_id, result);               \
+    PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.exchange." #ty                  \
+                         "(addr_p:%u, value: " PN_FORMAT_##ty ")\n",           \
+             addr_p, value);                                                   \
+    PN_TRACE(EXECUTE, "    %%%d = " PN_FORMAT_##ty                             \
+             "  %%%d = %u  %%%d = %u  %%%d = " PN_FORMAT_##ty "  %%%d = %u\n", \
+             i->result_value_id, result.ty, i->arg_ids[0], opval,              \
+             i->arg_ids[1], addr_p, i->arg_ids[2], value, i->arg_ids[3],       \
+             memory_order);                                                    \
+    (void) memory_order;                                                       \
+    location->instruction_id++;                                                \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I8:
@@ -7028,7 +7032,7 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     PNRuntimeValue result = pn_executor_value_##ty(                  \
         pn_memory_read_##ty(executor->memory, src.u32));             \
     pn_executor_set_value(executor, i->result_value_id, result);     \
-    PN_TRACE(EXECUTE, "    %%%d = " FORMAT_##ty "  %%%d = %u\n",     \
+    PN_TRACE(EXECUTE, "    %%%d = " PN_FORMAT_##ty "  %%%d = %u\n",  \
              i->result_value_id, result.ty, i->src_id, src.u32);     \
     location->instruction_id++;                                      \
   } while (0) /*no semicolon */
@@ -7108,15 +7112,15 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       break;
     }
 
-#define OPCODE_STORE(ty)                                                     \
-  do {                                                                       \
-    PNInstructionStore* i = (PNInstructionStore*)inst;                       \
-    PNRuntimeValue dest = pn_executor_get_value(executor, i->dest_id);       \
-    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);     \
-    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " FORMAT_##ty "\n", i->dest_id, \
-             dest.u32, i->value_id, value.ty);                               \
-    pn_memory_write_##ty(executor->memory, dest.u32, value.ty);              \
-    location->instruction_id++;                                              \
+#define OPCODE_STORE(ty)                                                 \
+  do {                                                                   \
+    PNInstructionStore* i = (PNInstructionStore*)inst;                   \
+    PNRuntimeValue dest = pn_executor_get_value(executor, i->dest_id);   \
+    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id); \
+    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " PN_FORMAT_##ty "\n",      \
+             i->dest_id, dest.u32, i->value_id, value.ty);               \
+    pn_memory_write_##ty(executor->memory, dest.u32, value.ty);          \
+    location->instruction_id++;                                          \
   } while (0) /*no semicolon */
 
     case PN_OPCODE_STORE_DOUBLE: OPCODE_STORE(f64); break;
@@ -7128,24 +7132,25 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 
 #undef OPCODE_STORE
 
-#define OPCODE_SWITCH(ty)                                                     \
-  do {                                                                        \
-    PNInstructionSwitch* i = (PNInstructionSwitch*)inst;                      \
-    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);      \
-    PNBasicBlockId bb_id = i->default_bb_id;                                  \
-    uint32_t c;                                                               \
-    for (c = 0; c < i->num_cases; ++c) {                                      \
-      PNSwitchCase* switch_case = &i->cases[c];                               \
-      if (value.ty == switch_case->value) {                                   \
-        bb_id = switch_case->bb_id;                                           \
-        break;                                                                \
-      }                                                                       \
-    }                                                                         \
-    location->last_bb_id = location->bb_id;                                   \
-    location->bb_id = bb_id;                                                  \
-    location->instruction_id = 0;                                             \
-    PN_TRACE(EXECUTE, "    %%%d = " FORMAT_##ty "\n", i->value_id, value.ty); \
-    PN_TRACE(EXECUTE, "bb = %d\n", bb_id);                                    \
+#define OPCODE_SWITCH(ty)                                                \
+  do {                                                                   \
+    PNInstructionSwitch* i = (PNInstructionSwitch*)inst;                 \
+    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id); \
+    PNBasicBlockId bb_id = i->default_bb_id;                             \
+    uint32_t c;                                                          \
+    for (c = 0; c < i->num_cases; ++c) {                                 \
+      PNSwitchCase* switch_case = &i->cases[c];                          \
+      if (value.ty == switch_case->value) {                              \
+        bb_id = switch_case->bb_id;                                      \
+        break;                                                           \
+      }                                                                  \
+    }                                                                    \
+    location->last_bb_id = location->bb_id;                              \
+    location->bb_id = bb_id;                                             \
+    location->instruction_id = 0;                                        \
+    PN_TRACE(EXECUTE, "    %%%d = " PN_FORMAT_##ty "\n", i->value_id,    \
+             value.ty);                                                  \
+    PN_TRACE(EXECUTE, "bb = %d\n", bb_id);                               \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_SWITCH_INT1:
@@ -7179,17 +7184,6 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       PN_FATAL("Invalid opcode: %d\n", inst->opcode);
       break;
   }
-
-#undef FORMAT_f64
-#undef FORMAT_f32
-#undef FORMAT_u8
-#undef FORMAT_u16
-#undef FORMAT_u32
-#undef FORMAT_u64
-#undef FORMAT_i8
-#undef FORMAT_i16
-#undef FORMAT_i32
-#undef FORMAT_i64
 }
 
 /* Option parsing, environment variables */
