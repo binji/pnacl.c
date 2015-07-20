@@ -6449,6 +6449,21 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 #undef OPCODE_INTRINSIC_RMW
 #undef OPCODE_INTRINSIC_EXCHANGE
 
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I32: {
+      PNInstructionCall* i = (PNInstructionCall*)inst;
+      PN_CHECK(i->num_args == 3);
+      PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
+      uint32_t value = pn_executor_get_value(executor, i->arg_ids[0]).u32;
+      uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;
+      uint32_t flags = pn_executor_get_value(executor, i->arg_ids[2]).u32;
+      pn_memory_write_uint32(executor->memory, addr_p, value);
+      PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = %u  %%%d = %u\n", i->arg_ids[0],
+               value, i->arg_ids[1], addr_p, i->arg_ids[2], flags);
+      (void)flags;
+      location->instruction_id++;
+      break;
+    }
+
     case PN_OPCODE_INTRINSIC_LLVM_NACL_READ_TP: {
       PNInstructionCall* i = (PNInstructionCall*)inst;
       PN_CHECK(i->num_args == 0);
