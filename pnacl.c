@@ -6687,24 +6687,33 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 
     case PN_OPCODE_RET_VALUE: {
       PNInstructionRet* i = (PNInstructionRet*)inst;
-      PNRuntimeValue value =
-          pn_executor_get_value_from_frame(executor, frame, i->value_id);
+      PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);
 
       executor->current_call_frame = frame->parent;
       location = &frame->parent->location;
 
-      PNFunction* new_function = &module->functions[location->function_id];
-      PNBasicBlock* new_bb = &new_function->bbs[location->bb_id];
-      PNInstructionCall* c =
-          (PNInstructionCall*)new_bb->instructions[location->instruction_id];
-      pn_executor_set_value(executor, c->result_value_id, value);
-      pn_executor_value_trace(executor, function, i->value_id, value, "    ",
-                              "\n");
-      pn_allocator_reset_to_mark(&executor->allocator, frame->parent->mark);
-      PN_TRACE(EXECUTE, "function = %d  bb = %d\n", location->function_id,
-               location->bb_id);
-      pn_executor_value_trace(executor, new_function, c->result_value_id, value,
-                              "    ", "\n");
+      if (location->function_id != PN_INVALID_FUNCTION_ID) {
+        PNFunction* new_function = &module->functions[location->function_id];
+        PNBasicBlock* new_bb = &new_function->bbs[location->bb_id];
+        PNInstructionCall* c =
+            (PNInstructionCall*)new_bb->instructions[location->instruction_id];
+        pn_executor_set_value(executor, c->result_value_id, value);
+        pn_executor_value_trace(executor, function, i->value_id, value, "    ",
+                                "\n");
+        pn_allocator_reset_to_mark(&executor->allocator, frame->parent->mark);
+        PN_TRACE(EXECUTE, "function = %d  bb = %d\n", location->function_id,
+                 location->bb_id);
+        pn_executor_value_trace(executor, new_function, c->result_value_id,
+                                value, "    ", "\n");
+      } else {
+        /* Returning a value from _start; let's consider that the exit code */
+        executor->exit_code = value.i32;
+        pn_executor_value_trace(executor, function, i->value_id, value, "    ",
+                                "\n");
+        PN_TRACE(EXECUTE, "function = %d  bb = %d\n", location->function_id,
+                 location->bb_id);
+      }
+
       location->instruction_id++;
       break;
     }
