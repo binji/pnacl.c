@@ -738,6 +738,48 @@ typedef enum PNIntrinsicId {
   PN_MAX_INTRINSICS,
 } PNIntrinsicId;
 
+#define PN_FOREACH_ERRNO(V)                 \
+  V(EPERM, 1, "Operation not permitted")    \
+  V(ENOENT, 2, "No such file or directory") \
+  V(ESRCH, 3, "No such process")            \
+  V(EINTR, 4, "Interrupted system call")    \
+  V(EIO, 5, "I/O error")                    \
+  V(ENXIO, 6, "No such device or address")  \
+  V(E2BIG, 7, "Argument list too long")     \
+  V(ENOEXEC, 8, "Exec format error")        \
+  V(EBADF, 9, "Bad file number")            \
+  V(ECHILD, 10, "No child processes")       \
+  V(EAGAIN, 11, "Try again")                \
+  V(ENOMEM, 12, "Out of memory")            \
+  V(EACCES, 13, "Permission denied")        \
+  V(EFAULT, 14, "Bad address")              \
+  V(EBUSY, 16, "Device or resource busy")   \
+  V(EEXIST, 17, "File exists")              \
+  V(EXDEV, 18, "Cross-device link")         \
+  V(ENODEV, 19, "No such device")           \
+  V(ENOTDIR, 20, "Not a directory")         \
+  V(EISDIR, 21, "Is a directory")           \
+  V(EINVAL, 22, "Invalid argument")         \
+  V(ENFILE, 23, "File table overflow")      \
+  V(EMFILE, 24, "Too many open files")      \
+  V(ENOTTY, 25, "Not a typewriter")         \
+  V(EFBIG, 27, "File too large")            \
+  V(ENOSPC, 28, "No space left on device")  \
+  V(ESPIPE, 29, "Illegal seek")             \
+  V(EROFS, 30, "Read-only file system")     \
+  V(EMLINK, 31, "Too many links")           \
+  V(EPIPE, 32, "Broken pipe")               \
+  V(ENAMETOOLONG, 36, "File name too long") \
+  V(ENOSYS, 38, "Function not implemented") \
+  V(EDQUOT, 122, "Quota exceeded")          \
+  V(ETIMEDOUT, 110, "Connection timed out")
+
+typedef enum PNErrno {
+#define PN_ERRNO(name, id, str) PN_##name = id,
+  PN_FOREACH_ERRNO(PN_ERRNO)
+#undef PN_ERRNO
+} PNErrno;
+
 typedef struct PNAllocatorChunk {
   struct PNAllocatorChunk* next;
   void* current;
@@ -5675,10 +5717,16 @@ static void pn_executor_value_trace(PNExecutor* executor,
   pn_##ty name = value##n.ty;                                            \
   (void) name /* no semicolon */
 
-#define PN_EAGAIN 11
-#define PN_EINVAL 22
-#define PN_ENOSYS 38
-#define PN_ETIMEDOUT 110
+static PNErrno pn_from_errno(int e) {
+  switch (e) {
+#define PN_ERRNO(name, id, str) case name: return PN_##name;
+  PN_FOREACH_ERRNO(PN_ERRNO)
+#undef PN_ERRNO
+    default:
+      PN_FATAL("Unknown errno: %d\n", e);
+      return PN_ENOSYS;
+  }
+}
 
 static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNExecutor* executor,
                                                 PNFunction* function,
@@ -5855,6 +5903,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_CLOSE(PNExecutor* executor,
   PN_BUILTIN_ARG(fd, 0, u32);
   PN_TRACE(IRT, "    NACL_IRT_FDIO_CLOSE(%u)\n", fd);
   if (fd > 2) {
+    PN_TRACE(IRT, "      fd > 2, errno = EINVAL\n");
     return pn_executor_value_u32(PN_EINVAL);
   }
   /* Lie and say we closed the fd */
@@ -5873,6 +5922,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_READ(PNExecutor* executor,
   PN_TRACE(IRT, "    NACL_IRT_FDIO_READ(%u, %u, %u, %u)\n", fd, buf_p, count,
            nread_p);
   if (fd != 0) {
+    PN_TRACE(IRT, "      fd != 0, errno = EINVAL\n");
     return pn_executor_value_u32(PN_EINVAL);
   }
 
@@ -5897,6 +5947,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_WRITE(PNExecutor* executor,
   PN_TRACE(IRT, "    NACL_IRT_FDIO_WRITE(%u, %u, %u, %u)\n", fd, buf_p, count,
            nwrote_p);
   if (fd != 1 && fd != 2) {
+    PN_TRACE(IRT, "      fd != 1 && fd != 2, errno = EINVAL\n");
     return pn_executor_value_u32(PN_EINVAL);
   }
 
@@ -5917,6 +5968,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_FSTAT(PNExecutor* executor,
   PN_BUILTIN_ARG(stat_p, 1, u32);
   PN_TRACE(IRT, "    NACL_IRT_FDIO_FSTAT(%u, %u)\n", fd, stat_p);
   if (fd > 2) {
+    PN_TRACE(IRT, "      fd > 2, errno = EINVAL\n");
     return pn_executor_value_u32(PN_EINVAL);
   }
 
@@ -5924,8 +5976,9 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_FSTAT(PNExecutor* executor,
   struct stat buf;
   int result = fstat(fd, &buf);
   if (result != 0) {
-    /* TODO(binji): better handling of errno */
-    return pn_executor_value_u32(PN_EINVAL);
+    PNErrno err = pn_from_errno(errno);
+    PN_TRACE(IRT, "      errno = %d\n", err);
+    return pn_executor_value_u32(err);
   }
 
   /*
@@ -5978,14 +6031,13 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_ISATTY(PNExecutor* executor,
   PN_TRACE(IRT, "    NACL_IRT_FDIO_ISATTY(%u, %u)\n", fd, result_p);
 
   if (fd > 2) {
-    /* TODO(binji): better handling of errno */
-    PN_TRACE(IRT, "      fd > 2, returning EINVAL\n");
+    PN_TRACE(IRT, "      fd > 2, errno = EINVAL\n");
     return pn_executor_value_u32(PN_EINVAL);
   }
 
   int32_t result = isatty(fd);
   pn_memory_write_i32(executor->memory, result_p, result);
-  PN_TRACE(IRT, "      returning %d\n", result);
+  PN_TRACE(IRT, "      returning %d, errno = 0\n", result);
   return pn_executor_value_u32(0);
 }
 
@@ -6000,9 +6052,10 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_GETCWD(PNExecutor* executor,
 
   pn_memory_check(executor->memory, pathname_p, len);
   void* pathname = executor->memory->data + pathname_p;
-  getcwd(pathname, len);
-  PN_TRACE(IRT, "      returning %s\n", pathname);
-  return pn_executor_value_u32(0);
+  void* result = getcwd(pathname, len);
+  PNErrno err = result ? 0 : pn_from_errno(errno);
+  PN_TRACE(IRT, "      returning %s, errno = %d\n", pathname, err);
+  return pn_executor_value_u32(err);
 }
 
 static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_READLINK(
@@ -6028,8 +6081,9 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_READLINK(
   void* buf = executor->memory->data + buf_p;
   ssize_t nread = readlink(path, buf, count);
   pn_memory_write_u32(executor->memory, nread_p, (int32_t)nread);
-  PN_TRACE(IRT, "      returning %d\n", (int32_t)nread);
-  return pn_executor_value_u32(0);
+  PNErrno err = nread >= 0 ? 0 : pn_from_errno(errno);
+  PN_TRACE(IRT, "      nread = %d, errno = %d\n", (int32_t)nread, err);
+  return pn_executor_value_u32(err);
 }
 
 static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_STAT(PNExecutor* executor,
@@ -6052,8 +6106,9 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_STAT(PNExecutor* executor,
   struct stat buf;
   int result = stat(pathname, &buf);
   if (result != 0) {
-    /* TODO(binji): better handling of errno */
-    return pn_executor_value_u32(PN_EINVAL);
+    PNErrno err = pn_from_errno(errno);
+    PN_TRACE(IRT, "      errno = %d\n", err);
+    return pn_executor_value_u32(err);
   }
 
   pn_memory_write_u64(executor->memory, stat_p + 0, buf.st_dev);
@@ -6091,7 +6146,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNExecutor* executor,
            addr_pp, len, prot, flags, fd, off);
 
   if ((flags & 0x20) != 0x20) { /* MAP_ANONYMOUS */
-    PN_TRACE(IRT, "      not anonymous, returning EINVAL\n");
+    PN_TRACE(IRT, "      not anonymous, errno = EINVAL\n");
     return pn_executor_value_u32(PN_EINVAL);
   }
 
@@ -6145,7 +6200,7 @@ found:
                   PN_TRUE);
   }
   pn_memory_write_u32(memory, addr_pp, result);
-  PN_TRACE(IRT, "      returning %u\n", result);
+  PN_TRACE(IRT, "      returning %u, errno = 0\n", result);
   return pn_executor_value_u32(0);
 }
 
@@ -6178,7 +6233,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MUNMAP(PNExecutor* executor,
   }
 
   PN_TRACE(IRT, "    NACL_IRT_MEMORY_MUNMAP(%u, %u)\n", addr_p, len);
-  return pn_executor_value_u32(PN_ENOSYS);
+  return pn_executor_value_u32(0);
 }
 
 static PNRuntimeValue pn_builtin_NACL_IRT_TLS_INIT(PNExecutor* executor,
@@ -6218,11 +6273,11 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FUTEX_WAIT_ABS(PNExecutor* executor,
 
   if (abstime_p != 0) {
     /* Pretend we timed out */
-    PN_TRACE(IRT, "      returning ETIMEDOUT (%d)\n", PN_ETIMEDOUT);
+    PN_TRACE(IRT, "      errno = ETIMEDOUT (%d)\n", PN_ETIMEDOUT);
     return pn_executor_value_u32(PN_ETIMEDOUT);
   } else {
     /* Pretend we are woken up by another thread */
-    PN_TRACE(IRT, "      returning 0\n");
+    PN_TRACE(IRT, "      errno = 0\n");
     return pn_executor_value_u32(0);
   }
 }
