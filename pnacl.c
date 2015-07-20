@@ -5500,26 +5500,26 @@ static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNExecutor* executor,
                                                 uint32_t num_args,
                                                 PNValueId* arg_ids) {
   PN_CHECK(num_args == 3);
-  PN_BUILTIN_ARG(name, 0, u32);
+  PN_BUILTIN_ARG(name_p, 0, u32);
   PN_BUILTIN_ARG(table, 1, u32);
   PN_BUILTIN_ARG(table_size, 2, u32);
-  PN_TRACE(IRT, "    NACL_IRT_QUERY(%u, %u, %u)\n", name, table, table_size);
+  PN_TRACE(IRT, "    NACL_IRT_QUERY(%u, %u, %u)\n", name_p, table, table_size);
 
   PNMemory* memory = executor->memory;
-  pn_memory_check(memory, name, 1);
+  pn_memory_check(memory, name_p, 1);
 
-  /* Find the end of the |name| string */
-  uint32_t end = name;
-  while (pn_memory_read_uint8(memory, end) != 0) {
-    end++;
+  /* Find the end of the |name_p| string */
+  uint32_t end_p = name_p;
+  while (pn_memory_read_uint8(memory, end_p) != 0) {
+    end_p++;
   }
-  PN_CHECK(end > name);
+  PN_CHECK(end_p > name_p);
 
 #define PN_WRITE_BUILTIN(offset, name)                              \
   pn_memory_write_uint32(memory, table + offset * sizeof(uint32_t), \
                          pn_builtin_to_pointer(PN_BUILTIN_##name));
 
-  const char* iface_name = memory->data + name;
+  const char* iface_name = memory->data + name_p;
   if (strcmp(iface_name, "nacl-irt-basic-0.1") == 0) {
     PN_CHECK(table_size == 24);
     PN_WRITE_BUILTIN(0, NACL_IRT_BASIC_EXIT);
@@ -5575,14 +5575,14 @@ static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNExecutor* executor,
                                                       uint32_t num_args,
                                                       PNValueId* arg_ids) {
   PN_CHECK(num_args == 6);
-  PN_BUILTIN_ARG(addr, 0, u32);
+  PN_BUILTIN_ARG(addr_pp, 0, u32);
   PN_BUILTIN_ARG(len, 1, u32);
   PN_BUILTIN_ARG(prot, 2, u32);
   PN_BUILTIN_ARG(flags, 3, u32);
   PN_BUILTIN_ARG(fd, 4, i32);
   PN_BUILTIN_ARG(off, 5, u64);
   PN_TRACE(IRT, "    NACL_IRT_MEMORY_MMAP(%u, %u, %u, %u, %d, %" PRId64 ")\n",
-           addr, len, prot, flags, fd, off);
+           addr_pp, len, prot, flags, fd, off);
 
   if ((flags & 0x20) != 0x20) { /* MAP_ANONYMOUS */
     return pn_executor_value_u32(PN_EINVAL);
@@ -5599,7 +5599,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNExecutor* executor,
   executor->heap_end = end_pointer;
 
   uint32_t result_address = result_pointer - memory->data;
-  pn_memory_write_uint32(memory, addr, result_address);
+  pn_memory_write_uint32(memory, addr_pp, result_address);
   return pn_executor_value_u32(0);
 }
 
@@ -6129,6 +6129,33 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 #undef OPCODE_CMP2_NOT
 #undef OPCODE_CMP2_ORD
 #undef OPCODE_CMP2_UNO
+
+    case PN_OPCODE_INTRINSIC_LLVM_MEMCPY: {
+      PNInstructionCall* i = (PNInstructionCall*)inst;
+      PN_CHECK(i->num_args == 5);
+      PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
+      uint32_t dst_p = pn_executor_get_value(executor, i->arg_ids[0]).u32;
+      uint32_t src_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;
+      uint32_t len = pn_executor_get_value(executor, i->arg_ids[2]).u32;
+      uint32_t align = pn_executor_get_value(executor, i->arg_ids[3]).u32;
+      uint8_t is_volatile = pn_executor_get_value(executor, i->arg_ids[4]).u8;
+      PN_TRACE(EXECUTE,
+               "    %%%d = %u  %%%d = %u  %%%d = %u  %%%d = %u  %%%d = %u\n",
+               i->arg_ids[0], dst_p, i->arg_ids[1], src_p, i->arg_ids[2], len,
+               i->arg_ids[3], align, i->arg_ids[4], is_volatile);
+      (void)align;
+      (void)is_volatile;
+
+      pn_memory_check(executor->memory, dst_p, len);
+      pn_memory_check(executor->memory, src_p, len);
+
+      void* dst_pointer = executor->memory->data + dst_p;
+      void* src_pointer = executor->memory->data + src_p;
+      memcpy(dst_pointer, src_pointer, len);
+
+      location->instruction_id++;
+      break;
+    }
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_READ_TP: {
       PNInstructionCall* i = (PNInstructionCall*)inst;
