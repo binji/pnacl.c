@@ -7437,9 +7437,24 @@ static void pn_options_parse(int argc, char** argv, char** env) {
         char* endptr;
         errno = 0;
         long int size = strtol(optarg, &endptr, 10);
-        if (errno != 0 || optarg + strlen(optarg) != endptr) {
+        size_t optarg_len = strlen(optarg);
+
+        if (errno != 0) {
           PN_FATAL("Unable to parse memory-size flag \"%s\".\n", optarg);
         }
+
+        if (endptr == optarg + optarg_len - 1) {
+          if (*endptr == 'k' || *endptr == 'K') {
+            size *= 1024;
+          } else if (*endptr == 'm' || *endptr == 'M') {
+            size *= 1024 * 1024;
+          } else {
+            PN_FATAL("Unknown suffix on memory-size \"%s\".\n", optarg);
+          }
+        } else {
+          PN_FATAL("Unable to parse memory-size flag \"%s\".\n", optarg);
+        }
+
 
         if (size < PN_MEMORY_GUARD_SIZE) {
           PN_FATAL(
