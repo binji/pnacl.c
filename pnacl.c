@@ -6405,11 +6405,13 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       (void)align;
       (void)is_volatile;
 
-      pn_memory_check(executor->memory, dst_p, len);
-      pn_memory_check(executor->memory, src_p, len);
-      void* dst_pointer = executor->memory->data + dst_p;
-      void* src_pointer = executor->memory->data + src_p;
-      memcpy(dst_pointer, src_pointer, len);
+      if (len > 0) {
+        pn_memory_check(executor->memory, dst_p, len);
+        pn_memory_check(executor->memory, src_p, len);
+        void* dst_pointer = executor->memory->data + dst_p;
+        void* src_pointer = executor->memory->data + src_p;
+        memcpy(dst_pointer, src_pointer, len);
+      }
       location->instruction_id++;
       break;
     }
@@ -6430,9 +6432,11 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       (void)align;
       (void)is_volatile;
 
-      pn_memory_check(executor->memory, dst_p, len);
-      void* dst_pointer = executor->memory->data + dst_p;
-      memset(dst_pointer, value, len);
+      if (len > 0) {
+        pn_memory_check(executor->memory, dst_p, len);
+        void* dst_pointer = executor->memory->data + dst_p;
+        memset(dst_pointer, value, len);
+      }
       location->instruction_id++;
       break;
     }
@@ -6453,11 +6457,13 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       (void)align;
       (void)is_volatile;
 
-      pn_memory_check(executor->memory, dst_p, len);
-      pn_memory_check(executor->memory, src_p, len);
-      void* dst_pointer = executor->memory->data + dst_p;
-      void* src_pointer = executor->memory->data + src_p;
-      memmove(dst_pointer, src_pointer, len);
+      if (len > 0) {
+        pn_memory_check(executor->memory, dst_p, len);
+        pn_memory_check(executor->memory, src_p, len);
+        void* dst_pointer = executor->memory->data + dst_p;
+        void* src_pointer = executor->memory->data + src_p;
+        memmove(dst_pointer, src_pointer, len);
+      }
       location->instruction_id++;
       break;
     }
