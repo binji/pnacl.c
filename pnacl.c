@@ -170,7 +170,8 @@ static PNBool g_pn_print_time;
   V(MODULE_BLOCK, "module-block")             \
   V(BASIC_BLOCKS, "basic-blocks")             \
   V(INSTRUCTIONS, "instructions")             \
-  V(EXECUTE, "execute")
+  V(EXECUTE, "execute")                       \
+  V(IRT, "irt")
 
 #define PN_TRACE_ENUM(name, flag) PN_TRACE_##name,
 enum { PN_FOREACH_TRACE(PN_TRACE_ENUM) PN_NUM_TRACE };
@@ -5498,8 +5499,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNExecutor* executor,
   PN_BUILTIN_ARG(name, 0, u32);
   PN_BUILTIN_ARG(table, 1, u32);
   PN_BUILTIN_ARG(table_size, 2, u32);
-  PN_TRACE(EXECUTE, "    NACL_IRT_QUERY(%u, %u, %u)\n", name, table,
-           table_size);
+  PN_TRACE(IRT, "    NACL_IRT_QUERY(%u, %u, %u)\n", name, table, table_size);
 
   PNMemory* memory = executor->memory;
   pn_memory_check(memory, name, 1);
@@ -5559,7 +5559,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNExecutor* executor,
     PN_WRITE_BUILTIN(1, NACL_IRT_FUTEX_WAKE);
     return pn_executor_value_u32(8);
   } else {
-    PN_TRACE(EXECUTE, "Unknown interface name: \"%s\".\n", iface_name);
+    PN_TRACE(IRT, "Unknown interface name: \"%s\".\n", iface_name);
     return pn_executor_value_u32(0);
   }
 
@@ -5572,7 +5572,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNExecutor* executor,
   static PNRuntimeValue pn_builtin_##name(                           \
       PNExecutor* executor, PNFunction* function, uint32_t num_args, \
       PNValueId* arg_ids) {                                          \
-    PN_TRACE(EXECUTE, "    " #name "(...)\n");                       \
+    PN_TRACE(IRT, "    " #name "(...)\n");                           \
     return pn_executor_value_u32(PN_ENOSYS);                         \
   }
 
@@ -6549,6 +6549,10 @@ static void pn_options_parse(int argc, char** argv, char** env) {
 
   if (g_pn_trace_BASIC_BLOCKS) {
     g_pn_trace_FUNCTION_BLOCK = PN_TRUE;
+  }
+
+  if (g_pn_trace_EXECUTE) {
+    g_pn_trace_IRT = PN_TRUE;
   }
 #endif /* PN_TRACING */
 
