@@ -52,7 +52,7 @@ out/pnacl-32: pnacl.c | out
 
 #### TESTS ####
 
-TESTS = start main
+TESTS = start main puts
 TEST_PEXES = $(TESTS:%=out/test/%.pexe)
 
 .PHONY: test
