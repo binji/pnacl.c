@@ -52,7 +52,7 @@
 #if PN_TRACING
 #define PN_TRACE(flag, ...) \
   if (g_pn_trace_##flag)    \
-    printf(__VA_ARGS__);    \
+    PN_PRINT(__VA_ARGS__);    \
   else                      \
   (void)0
 #define PN_IS_TRACE(flag) g_pn_trace_##flag
@@ -62,9 +62,10 @@
 #endif /* PN_TRACING */
 #define PN_WARN(...)              \
   if (g_pn_verbose > 0)           \
-    fprintf(stderr, __VA_ARGS__); \
+    PN_PRINT(__VA_ARGS__); \
   else                            \
   (void)0
+#define PN_PRINT(...) PN_ERROR(__VA_ARGS__)
 #define PN_ERROR(...) fprintf(stderr, __VA_ARGS__)
 #define PN_FATAL(...)      \
   do {                     \
@@ -1169,6 +1170,8 @@ static void pn_free(void* p) {
 #define strdup DONT_CALL_THIS_FUNCTION
 #undef free
 #define free DONT_CALL_THIS_FUNCTION
+#undef printf
+#define printf DONT_CALL_THIS_FUNCTION
 
 static size_t pn_max(size_t x, size_t y) {
   return x > y ? x : y;
@@ -1589,7 +1592,8 @@ static void pn_context_fix_value_ids(PNBlockInfoContext* context,
 
 static PNType* pn_module_get_type(PNModule* module, PNTypeId type_id) {
   if (type_id < 0 || type_id >= module->num_types) {
-    PN_FATAL("accessing invalid type %d (max %d)", type_id, module->num_types);
+    PN_FATAL("accessing invalid type %d (max %d)\n", type_id,
+             module->num_types);
   }
 
   return &module->types[type_id];
@@ -1632,7 +1636,7 @@ static void pn_string_concat(PNAllocator* allocator,
 static PNFunction* pn_module_get_function(PNModule* module,
                                           PNFunctionId function_id) {
   if (function_id >= module->num_functions) {
-    PN_FATAL("accessing invalid function %d (max %d)", function_id,
+    PN_FATAL("accessing invalid function %d (max %d)\n", function_id,
              module->num_functions);
   }
 
@@ -1642,7 +1646,7 @@ static PNFunction* pn_module_get_function(PNModule* module,
 static PNConstant* pn_function_get_constant(PNFunction* function,
                                             PNConstantId constant_id) {
   if (constant_id >= function->num_constants) {
-    PN_FATAL("accessing invalid constant %d (max %d)", constant_id,
+    PN_FATAL("accessing invalid constant %d (max %d)\n", constant_id,
              function->num_constants);
   }
 
@@ -1661,7 +1665,7 @@ static PNConstant* pn_function_append_constant(PNModule* module,
 static PNGlobalVar* pn_module_get_global_var(PNModule* module,
                                              PNGlobalVarId global_var_id) {
   if (global_var_id >= module->num_global_vars) {
-    PN_FATAL("accessing invalid global_var %d (max %d)", global_var_id,
+    PN_FATAL("accessing invalid global_var %d (max %d)\n", global_var_id,
              module->num_global_vars);
   }
 
@@ -1670,7 +1674,7 @@ static PNGlobalVar* pn_module_get_global_var(PNModule* module,
 
 static PNValue* pn_module_get_value(PNModule* module, PNValueId value_id) {
   if (value_id >= module->num_values) {
-    PN_FATAL("accessing invalid value %d (max %d)", value_id,
+    PN_FATAL("accessing invalid value %d (max %d)\n", value_id,
              module->num_values);
   }
 
@@ -1688,7 +1692,7 @@ static PNValue* pn_module_append_value(PNModule* module,
 
 static void pn_memory_check(PNMemory* memory, uint32_t offset, uint32_t size) {
   if (offset < PN_MEMORY_GUARD_SIZE) {
-    PN_FATAL("memory access out of bounds: %u < %u", offset,
+    PN_FATAL("memory access out of bounds: %u < %u\n", offset,
              PN_MEMORY_GUARD_SIZE);
   }
 
@@ -1789,7 +1793,8 @@ static PNValue* pn_function_get_value(PNModule* module,
     return &function->values[value_id];
   }
 
-  PN_FATAL("accessing invalid value %d (max %d)", value_id,
+  PN_FATAL("accessing invalid value %d (max %d)\n",
+           value_id + module->num_values,
            module->num_values + function->num_values);
 }
 
@@ -1967,29 +1972,30 @@ static void pn_instruction_trace(PNModule* module,
   switch (inst->code) {
     case PN_FUNCTION_CODE_INST_BINOP: {
       PNInstructionBinop* i = (PNInstructionBinop*)inst;
-      printf("  %s. binop op:%s(%d) %s %s (flags:%d)\n",
-             pn_value_describe(module, function, i->result_value_id),
-             pn_binop_get_name(i->binop_opcode), i->binop_opcode,
-             pn_value_describe(module, function, i->value0_id),
-             pn_value_describe(module, function, i->value1_id), i->flags);
+      PN_PRINT("  %s. binop op:%s(%d) %s %s (flags:%d)\n",
+               pn_value_describe(module, function, i->result_value_id),
+               pn_binop_get_name(i->binop_opcode), i->binop_opcode,
+               pn_value_describe(module, function, i->value0_id),
+               pn_value_describe(module, function, i->value1_id), i->flags);
       break;
     }
 
     case PN_FUNCTION_CODE_INST_CAST: {
       PNInstructionCast* i = (PNInstructionCast*)inst;
-      printf("  %s. cast op:%s(%d) %s\n",
-             pn_value_describe(module, function, i->result_value_id),
-             pn_cast_get_name(i->cast_opcode), i->cast_opcode,
-             pn_value_describe(module, function, i->value_id));
+      PN_PRINT("  %s. cast op:%s(%d) %s\n",
+               pn_value_describe(module, function, i->result_value_id),
+               pn_cast_get_name(i->cast_opcode), i->cast_opcode,
+               pn_value_describe(module, function, i->value_id));
       break;
     }
 
     case PN_FUNCTION_CODE_INST_RET: {
       PNInstructionRet* i = (PNInstructionRet*)inst;
       if (i->value_id != PN_INVALID_VALUE_ID) {
-        printf("  ret %s\n", pn_value_describe(module, function, i->value_id));
+        PN_PRINT("  ret %s\n",
+                 pn_value_describe(module, function, i->value_id));
       } else {
-        printf("  ret\n");
+        PN_PRINT("  ret\n");
       }
       break;
     }
@@ -1997,97 +2003,97 @@ static void pn_instruction_trace(PNModule* module,
     case PN_FUNCTION_CODE_INST_BR: {
       PNInstructionBr* i = (PNInstructionBr*)inst;
       if (i->false_bb_id != PN_INVALID_BB_ID) {
-        printf("  br %s ? %d : %d\n",
-               pn_value_describe(module, function, i->value_id), i->true_bb_id,
-               i->false_bb_id);
+        PN_PRINT("  br %s ? %d : %d\n",
+                 pn_value_describe(module, function, i->value_id),
+                 i->true_bb_id, i->false_bb_id);
       } else {
-        printf("  br %d\n", i->true_bb_id);
+        PN_PRINT("  br %d\n", i->true_bb_id);
       }
       break;
     }
 
     case PN_FUNCTION_CODE_INST_SWITCH: {
       PNInstructionSwitch* i = (PNInstructionSwitch*)inst;
-      printf("  switch value:%s [default:%d]",
-             pn_value_describe(module, function, i->value_id),
-             i->default_bb_id);
+      PN_PRINT("  switch value:%s [default:%d]",
+               pn_value_describe(module, function, i->value_id),
+               i->default_bb_id);
 
       uint32_t c;
       for (c = 0; c < i->num_cases; ++c) {
         PNSwitchCase* switch_case = &i->cases[c];
-        printf(" [%" PRId64 " => bb:%d]", switch_case->value,
-               switch_case->bb_id);
+        PN_PRINT(" [%" PRId64 " => bb:%d]", switch_case->value,
+                 switch_case->bb_id);
       }
-      printf("\n");
+      PN_PRINT("\n");
       break;
     }
 
     case PN_FUNCTION_CODE_INST_UNREACHABLE:
-      printf("  unreachable\n");
+      PN_PRINT("  unreachable\n");
       break;
 
     case PN_FUNCTION_CODE_INST_PHI: {
       PNInstructionPhi* i = (PNInstructionPhi*)inst;
-      printf("  %s. phi",
-             pn_value_describe(module, function, i->result_value_id));
+      PN_PRINT("  %s. phi",
+               pn_value_describe(module, function, i->result_value_id));
       int32_t n;
       for (n = 0; n < i->num_incoming; ++n) {
-        printf(" bb:%d=>%s", i->incoming[n].bb_id,
-               pn_value_describe(module, function, i->incoming[n].value_id));
+        PN_PRINT(" bb:%d=>%s", i->incoming[n].bb_id,
+                 pn_value_describe(module, function, i->incoming[n].value_id));
       }
-      printf("\n");
+      PN_PRINT("\n");
       break;
     }
 
     case PN_FUNCTION_CODE_INST_ALLOCA: {
       PNInstructionAlloca* i = (PNInstructionAlloca*)inst;
-      printf("  %s. alloca %s align=%d\n",
-             pn_value_describe(module, function, i->result_value_id),
-             pn_value_describe(module, function, i->size_id), i->alignment);
+      PN_PRINT("  %s. alloca %s align=%d\n",
+               pn_value_describe(module, function, i->result_value_id),
+               pn_value_describe(module, function, i->size_id), i->alignment);
       break;
     }
 
     case PN_FUNCTION_CODE_INST_LOAD: {
       PNInstructionLoad* i = (PNInstructionLoad*)inst;
-      printf("  %s. load src:%s align=%d\n",
-             pn_value_describe(module, function, i->result_value_id),
-             pn_value_describe(module, function, i->src_id), i->alignment);
+      PN_PRINT("  %s. load src:%s align=%d\n",
+               pn_value_describe(module, function, i->result_value_id),
+               pn_value_describe(module, function, i->src_id), i->alignment);
       break;
     }
 
     case PN_FUNCTION_CODE_INST_STORE: {
       PNInstructionStore* i = (PNInstructionStore*)inst;
-      printf("  store dest:%s value:%s align=%d\n",
-             pn_value_describe(module, function, i->dest_id),
-             pn_value_describe(module, function, i->value_id), i->alignment);
+      PN_PRINT("  store dest:%s value:%s align=%d\n",
+               pn_value_describe(module, function, i->dest_id),
+               pn_value_describe(module, function, i->value_id), i->alignment);
       break;
     }
 
     case PN_FUNCTION_CODE_INST_CMP2: {
       PNInstructionCmp2* i = (PNInstructionCmp2*)inst;
-      printf("  %s. cmp2 op:%s(%d) %s %s\n",
-             pn_value_describe(module, function, i->result_value_id),
-             pn_cmp2_get_name(i->cmp2_opcode), i->cmp2_opcode,
-             pn_value_describe(module, function, i->value0_id),
-             pn_value_describe(module, function, i->value1_id));
+      PN_PRINT("  %s. cmp2 op:%s(%d) %s %s\n",
+               pn_value_describe(module, function, i->result_value_id),
+               pn_cmp2_get_name(i->cmp2_opcode), i->cmp2_opcode,
+               pn_value_describe(module, function, i->value0_id),
+               pn_value_describe(module, function, i->value1_id));
       break;
     }
 
     case PN_FUNCTION_CODE_INST_VSELECT: {
       PNInstructionVselect* i = (PNInstructionVselect*)inst;
-      printf("  %s. vselect %s ? %s : %s\n",
-             pn_value_describe(module, function, i->result_value_id),
-             pn_value_describe(module, function, i->cond_id),
-             pn_value_describe(module, function, i->true_value_id),
-             pn_value_describe(module, function, i->false_value_id));
+      PN_PRINT("  %s. vselect %s ? %s : %s\n",
+               pn_value_describe(module, function, i->result_value_id),
+               pn_value_describe(module, function, i->cond_id),
+               pn_value_describe(module, function, i->true_value_id),
+               pn_value_describe(module, function, i->false_value_id));
       break;
     }
 
     case PN_FUNCTION_CODE_INST_FORWARDTYPEREF: {
       PNInstructionForwardtyperef* i = (PNInstructionForwardtyperef*)inst;
-      printf("  forwardtyperef %s %s\n",
-             pn_value_describe(module, function, i->value_id),
-             pn_type_describe(module, i->type_id));
+      PN_PRINT("  forwardtyperef %s %s\n",
+               pn_value_describe(module, function, i->value_id),
+               pn_type_describe(module, i->type_id));
       break;
     }
 
@@ -2096,14 +2102,15 @@ static void pn_instruction_trace(PNModule* module,
       PNInstructionCall* i = (PNInstructionCall*)inst;
       PNType* return_type = pn_module_get_type(module, i->return_type_id);
       PNBool is_return_type_void = return_type->code == PN_TYPE_CODE_VOID;
-      printf("  ");
+      PN_PRINT("  ");
       if (!is_return_type_void) {
-        printf("%s. ", pn_value_describe(module, function, i->result_value_id));
+        PN_PRINT("%s. ",
+                 pn_value_describe(module, function, i->result_value_id));
       }
-      printf("call ");
+      PN_PRINT("call ");
       const char* name = NULL;
       if (i->is_indirect) {
-        printf("indirect ");
+        PN_PRINT("indirect ");
       } else {
         PNValue* function_value = pn_module_get_value(module, i->callee_id);
         PNFunction* called_function =
@@ -2111,18 +2118,18 @@ static void pn_instruction_trace(PNModule* module,
         name = called_function->name;
       }
       if (name && name[0]) {
-        printf("%s(%s) ", pn_value_describe(module, function, i->callee_id),
-               name);
+        PN_PRINT("%s(%s) ", pn_value_describe(module, function, i->callee_id),
+                 name);
       } else {
-        printf("%s ", pn_value_describe(module, function, i->callee_id));
+        PN_PRINT("%s ", pn_value_describe(module, function, i->callee_id));
       }
-      printf("args:");
+      PN_PRINT("args:");
 
       int32_t n;
       for (n = 0; n < i->num_args; ++n) {
-        printf(" %s", pn_value_describe(module, function, i->arg_ids[n]));
+        PN_PRINT(" %s", pn_value_describe(module, function, i->arg_ids[n]));
       }
-      printf("\n");
+      PN_PRINT("\n");
       break;
     }
 
@@ -2143,58 +2150,58 @@ static void pn_basic_block_trace(PNModule* module,
   }
 
   uint32_t n;
-  printf("bb:%d (", bb_id);
+  PN_PRINT("bb:%d (", bb_id);
 #if PN_CALCULATE_LIVENESS
-  printf("preds:");
+  PN_PRINT("preds:");
   for (n = 0; n < bb->num_pred_bbs; ++n) {
-    printf(" %d", bb->pred_bb_ids[n]);
+    PN_PRINT(" %d", bb->pred_bb_ids[n]);
   }
-  printf(" ");
+  PN_PRINT(" ");
 #endif
-  printf("succs:");
+  PN_PRINT("succs:");
   for (n = 0; n < bb->num_succ_bbs; ++n) {
-    printf(" %d", bb->succ_bb_ids[n]);
+    PN_PRINT(" %d", bb->succ_bb_ids[n]);
   }
-  printf(")\n");
+  PN_PRINT(")\n");
   if (bb->first_def_id != PN_INVALID_VALUE_ID) {
-    printf(" defs: [%%%d,%%%d]\n", bb->first_def_id, bb->last_def_id);
+    PN_PRINT(" defs: [%%%d,%%%d]\n", bb->first_def_id, bb->last_def_id);
   }
   if (bb->num_uses) {
-    printf(" uses:");
+    PN_PRINT(" uses:");
     for (n = 0; n < bb->num_uses; ++n) {
-      printf(" %%%d", bb->uses[n]);
+      PN_PRINT(" %%%d", bb->uses[n]);
     }
-    printf("\n");
+    PN_PRINT("\n");
   }
   if (bb->num_phi_uses) {
-    printf(" phi uses:");
+    PN_PRINT(" phi uses:");
     for (n = 0; n < bb->num_phi_uses; ++n) {
-      printf(" bb:%d=>%%%d", bb->phi_uses[n].incoming.bb_id,
-             bb->phi_uses[n].incoming.value_id);
+      PN_PRINT(" bb:%d=>%%%d", bb->phi_uses[n].incoming.bb_id,
+               bb->phi_uses[n].incoming.value_id);
     }
-    printf("\n");
+    PN_PRINT("\n");
   }
   if (bb->num_phi_assigns) {
-    printf(" phi assigns:");
+    PN_PRINT(" phi assigns:");
     for (n = 0; n < bb->num_phi_assigns; ++n) {
-      printf(" %%%d<=%%%d", bb->phi_assigns[n].dest_value_id,
-             bb->phi_assigns[n].source_value_id);
+      PN_PRINT(" %%%d<=%%%d", bb->phi_assigns[n].dest_value_id,
+               bb->phi_assigns[n].source_value_id);
     }
-    printf("\n");
+    PN_PRINT("\n");
   }
   if (bb->num_livein) {
-    printf(" livein:");
+    PN_PRINT(" livein:");
     for (n = 0; n < bb->num_livein; ++n) {
-      printf(" %%%d", bb->livein[n]);
+      PN_PRINT(" %%%d", bb->livein[n]);
     }
-    printf("\n");
+    PN_PRINT("\n");
   }
   if (bb->num_liveout) {
-    printf(" liveout:");
+    PN_PRINT(" liveout:");
     for (n = 0; n < bb->num_liveout; ++n) {
-      printf(" %%%d", bb->liveout[n]);
+      PN_PRINT(" %%%d", bb->liveout[n]);
     }
-    printf("\n");
+    PN_PRINT("\n");
   }
 
   uint32_t i;
@@ -2206,9 +2213,9 @@ static void pn_basic_block_trace(PNModule* module,
 static void pn_function_trace_header(PNFunction* function,
                                      PNFunctionId function_id) {
   if (function->name) {
-    printf("function %%%d (%s)\n", function_id, function->name);
+    PN_PRINT("function %%%d (%s)\n", function_id, function->name);
   } else {
-    printf("function %%%d\n", function_id);
+    PN_PRINT("function %%%d\n", function_id);
   }
 }
 
@@ -5563,44 +5570,56 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
   pn_executor_set_value(executor, value_id, value);
 }
 
+#if PN_TRACING
 static void pn_executor_value_trace(PNExecutor* executor,
-                                    PNTypeId type_id,
+                                    PNFunction* function,
                                     PNValueId value_id,
                                     PNRuntimeValue value,
                                     const char* prefix,
                                     const char* postfix) {
-#if PN_TRACING
   if (PN_IS_TRACE(EXECUTE)) {
+    PNModule* module = executor->module;
+    PNValue* val = pn_function_get_value(module, function, value_id);
+    PNTypeId type_id = val->type_id;
+
     PNType* type = pn_module_get_type(executor->module, type_id);
     switch (type->basic_type) {
       case PN_BASIC_TYPE_INT1:
-        printf("%s%%%d = %u%s", prefix, value_id, value.u8, postfix);
+        PN_PRINT("%s%%%d = %u%s", prefix, value_id, value.u8, postfix);
         break;
       case PN_BASIC_TYPE_INT8:
-        printf("%s%%%d = %u%s", prefix, value_id, value.u8, postfix);
+        PN_PRINT("%s%%%d = %u%s", prefix, value_id, value.u8, postfix);
         break;
       case PN_BASIC_TYPE_INT16:
-        printf("%s%%%d = %u%s", prefix, value_id, value.u16, postfix);
+        PN_PRINT("%s%%%d = %u%s", prefix, value_id, value.u16, postfix);
         break;
       case PN_BASIC_TYPE_INT32:
-        printf("%s%%%d = %u%s", prefix, value_id, value.u32, postfix);
+        PN_PRINT("%s%%%d = %u%s", prefix, value_id, value.u32, postfix);
         break;
       case PN_BASIC_TYPE_INT64:
-        printf("%s%%%d = %" PRIu64 "%s", prefix, value_id, value.u64, postfix);
+        PN_PRINT("%s%%%d = %" PRIu64 "%s", prefix, value_id, value.u64,
+                 postfix);
         break;
       case PN_BASIC_TYPE_FLOAT:
-        printf("%s%%%d = %f%s", prefix, value_id, value.f32, postfix);
+        PN_PRINT("%s%%%d = %f%s", prefix, value_id, value.f32, postfix);
         break;
       case PN_BASIC_TYPE_DOUBLE:
-        printf("%s%%%d = %f%s", prefix, value_id, value.f64, postfix);
+        PN_PRINT("%s%%%d = %f%s", prefix, value_id, value.f64, postfix);
         break;
       default:
         PN_UNREACHABLE();
         break;
     }
   }
-#endif
 }
+#else
+static void pn_executor_value_trace(PNExecutor* executor,
+                                    PNFunction* function,
+                                    PNValueId value_id,
+                                    PNRuntimeValue value,
+                                    const char* prefix,
+                                    const char* postfix) {}
+#endif
 
 #define PN_BUILTIN_ARG(name, n, ty)                                      \
   PNRuntimeValue value##n = pn_executor_get_value(executor, arg_ids[n]); \
@@ -6082,14 +6101,8 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
         PNRuntimeValue arg =
             pn_executor_get_value_from_frame(executor, frame, i->arg_ids[n]);
 
-#if PN_TRACING
-        if (PN_IS_TRACE(EXECUTE)) {
-          PNValue* value =
-              pn_function_get_value(executor->module, function, value_id);
-          pn_executor_value_trace(executor, value->type_id, i->arg_ids[n], arg,
-                                  "", "  ");
-        }
-#endif
+        pn_executor_value_trace(executor, function, i->arg_ids[n], arg, "",
+                                "  ");
         pn_executor_set_value(executor, value_id, arg);
       }
 
@@ -6102,8 +6115,13 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     case PN_OPCODE_CAST_BITCAST_INT32_FLOAT:
     case PN_OPCODE_CAST_BITCAST_INT64_DOUBLE: {
       PNInstructionCast* i = (PNInstructionCast*)inst;
-      PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);
-      pn_executor_set_value(executor, i->result_value_id, value);
+      PNRuntimeValue result = pn_executor_get_value(executor, i->value_id);
+      pn_executor_set_value(executor, i->result_value_id, result);
+      pn_executor_value_trace(executor, function, i->result_value_id, result,
+                              "    ", "\n");
+      pn_executor_value_trace(executor, function, i->value_id, result, "    ",
+                              "\n");
+
       location->instruction_id++;
       break;
     }
@@ -6644,12 +6662,10 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
           PNValueId value_id = i->incoming[n].value_id;
           PNRuntimeValue result = pn_executor_get_value(executor, value_id);
           pn_executor_set_value(executor, i->result_value_id, result);
-#if PN_TRACING
-          pn_executor_value_trace(executor, i->type_id, i->result_value_id,
+          pn_executor_value_trace(executor, function, i->result_value_id,
                                   result, "    ", "  ");
-          pn_executor_value_trace(executor, i->type_id, value_id,
-                                  result, "", "\n");
-#endif
+          pn_executor_value_trace(executor, function, value_id, result, "",
+                                  "\n");
           break;
         }
       }
@@ -6683,26 +6699,13 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       PNInstructionCall* c =
           (PNInstructionCall*)new_bb->instructions[location->instruction_id];
       pn_executor_set_value(executor, c->result_value_id, value);
-
-#if PN_TRACING
-      if (PN_IS_TRACE(EXECUTE)) {
-        pn_executor_value_trace(executor, c->return_type_id, i->value_id, value,
-                                "    ", "\n");
-      }
-#endif
-
+      pn_executor_value_trace(executor, function, i->value_id, value, "    ",
+                              "\n");
       pn_allocator_reset_to_mark(&executor->allocator, frame->parent->mark);
-
       PN_TRACE(EXECUTE, "function = %d  bb = %d\n", location->function_id,
                location->bb_id);
-
-#if PN_TRACING
-      if (PN_IS_TRACE(EXECUTE)) {
-        pn_executor_value_trace(executor, c->return_type_id, c->result_value_id,
-                                value, "    ", "\n");
-      }
-#endif
-
+      pn_executor_value_trace(executor, new_function, c->result_value_id, value,
+                              "    ", "\n");
       location->instruction_id++;
       break;
     }
@@ -6839,15 +6842,15 @@ static struct option long_options[] = {
 PN_STATIC_ASSERT(PN_NUM_FLAGS + 1 == PN_ARRAY_SIZE(long_options));
 
 static void pn_usage(const char* prog) {
-  fprintf(stderr, "usage: %s [option] filename\n", prog);
-  fprintf(stderr, "options:\n");
+  PN_PRINT("usage: %s [option] filename\n", prog);
+  PN_PRINT("options:\n");
   int i = 0;
   for (; long_options[i].name; ++i) {
     if (long_options[i].val) {
-      fprintf(stderr, "  -%c, --%s\n", long_options[i].val,
+      PN_PRINT("  -%c, --%s\n", long_options[i].val,
               long_options[i].name);
     } else {
-      fprintf(stderr, "      --%s\n", long_options[i].name);
+      PN_PRINT("      --%s\n", long_options[i].name);
     }
   }
   exit(0);
@@ -6920,7 +6923,7 @@ static void pn_environ_print(char** environ) {
   if (environ) {
     char** env;
     for (env = environ; *env; ++env) {
-      printf("  %s\n", *env);
+      PN_PRINT("  %s\n", *env);
     }
   }
 }
@@ -7087,15 +7090,15 @@ static void pn_options_parse(int argc, char** argv, char** env) {
   pn_environ_free(environ_copy);
 #if PN_TRACING
   if (g_pn_trace_FLAGS) {
-    printf("*** ARGS:\n");
+    PN_PRINT("*** ARGS:\n");
     if (g_pn_argv) {
       char** p;
       int i = 0;
       for (p = g_pn_argv; *p; ++p, ++i) {
-        printf("  [%d] %s\n", i, *p);
+        PN_PRINT("  [%d] %s\n", i, *p);
       }
     }
-    printf("*** ENVIRONMENT:\n");
+    PN_PRINT("*** ENVIRONMENT:\n");
     pn_environ_print(g_pn_environ);
   }
 #endif /* PN_TRACING */
@@ -7190,9 +7193,9 @@ static const char* pn_human_readable_size_leaky(size_t size) {
 }
 
 static void pn_allocator_print_stats_leaky(PNAllocator* allocator) {
-  printf("%12s allocator: used: %7s frag: %7s\n", allocator->name,
-         pn_human_readable_size_leaky(allocator->total_used),
-         pn_human_readable_size_leaky(allocator->internal_fragmentation));
+  PN_PRINT("%12s allocator: used: %7s frag: %7s\n", allocator->name,
+           pn_human_readable_size_leaky(allocator->total_used),
+           pn_human_readable_size_leaky(allocator->internal_fragmentation));
 }
 
 int main(int argc, char** argv, char** envp) {
@@ -7260,7 +7263,7 @@ int main(int argc, char** argv, char** envp) {
     PN_END_TIME(EXECUTE);
 
     if (g_pn_verbose) {
-      printf("Exit code: %d\n", executor.exit_code);
+      PN_PRINT("Exit code: %d\n", executor.exit_code);
     }
   }
 
@@ -7268,42 +7271,42 @@ int main(int argc, char** argv, char** envp) {
 
 #if PN_TIMERS
   if (g_pn_print_time) {
-    printf("-----------------\n");
+    PN_PRINT("-----------------\n");
 #define PN_PRINT_TIMER(name)                                          \
   struct timespec* timer_##name = &g_pn_timer_times[PN_TIMER_##name]; \
-  printf("timer %-30s: %f sec (%%%.0f)\n", #name,                     \
-         pn_timespec_to_double(timer_##name),                         \
-         100 * pn_timespec_to_double(timer_##name) /                  \
-             pn_timespec_to_double(timer_TOTAL));
+  PN_PRINT("timer %-30s: %f sec (%%%.0f)\n", #name,                   \
+           pn_timespec_to_double(timer_##name),                       \
+           100 * pn_timespec_to_double(timer_##name) /                \
+               pn_timespec_to_double(timer_TOTAL));
     PN_FOREACH_TIMER(PN_PRINT_TIMER);
   }
 #endif /* PN_TIMERS */
 
   if (g_pn_print_named_functions) {
-    printf("-----------------\n");
+    PN_PRINT("-----------------\n");
     uint32_t i;
     for (i = 0; i < module.num_functions; ++i) {
       PNFunction* function = &module.functions[i];
       if (function->name) {
-        printf("%s\n", function->name);
+        PN_PRINT("%s\n", function->name);
       }
     }
   }
 
   if (g_pn_print_stats) {
-    printf("-----------------\n");
-    printf("num_types: %u\n", module.num_types);
-    printf("num_functions: %u\n", module.num_functions);
-    printf("num_global_vars: %u\n", module.num_global_vars);
-    printf("max num_constants: %u\n", pn_max_num_constants(&module));
-    printf("max num_values: %u\n", pn_max_num_values(&module));
-    printf("max num_bbs: %u\n", pn_max_num_bbs(&module));
-    printf("global_var size : %s\n",
-           pn_human_readable_size_leaky(memory.globalvar_end -
-                                        memory.globalvar_start));
-    printf("startinfo size : %s\n",
-           pn_human_readable_size_leaky(memory.startinfo_end -
-                                        memory.startinfo_start));
+    PN_PRINT("-----------------\n");
+    PN_PRINT("num_types: %u\n", module.num_types);
+    PN_PRINT("num_functions: %u\n", module.num_functions);
+    PN_PRINT("num_global_vars: %u\n", module.num_global_vars);
+    PN_PRINT("max num_constants: %u\n", pn_max_num_constants(&module));
+    PN_PRINT("max num_values: %u\n", pn_max_num_values(&module));
+    PN_PRINT("max num_bbs: %u\n", pn_max_num_bbs(&module));
+    PN_PRINT("global_var size : %s\n",
+             pn_human_readable_size_leaky(memory.globalvar_end -
+                                          memory.globalvar_start));
+    PN_PRINT("startinfo size : %s\n",
+             pn_human_readable_size_leaky(memory.startinfo_end -
+                                          memory.startinfo_start));
     pn_allocator_print_stats_leaky(&module.allocator);
     pn_allocator_print_stats_leaky(&module.value_allocator);
     pn_allocator_print_stats_leaky(&module.instruction_allocator);
