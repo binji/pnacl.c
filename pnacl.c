@@ -6130,38 +6130,47 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
   do {                                                                   \
     PNInstructionCast* i = (PNInstructionCast*)inst;                     \
     PNRuntimeValue value = pn_executor_get_value(executor, i->value_id); \
-    pn_executor_set_value(executor, i->result_value_id,                  \
-                          pn_executor_value_##to(value.from));           \
+    PNRuntimeValue result = pn_executor_value_##to(value.from);          \
+    pn_executor_set_value(executor, i->result_value_id, result);         \
+    PN_TRACE(EXECUTE,                                                    \
+             "    %%%d = " FORMAT_##to "  %%%d = " FORMAT_##from "\n",   \
+             i->result_value_id, result.to, i->value_id, result.from);   \
     location->instruction_id++;                                          \
   } while (0) /* no semicolon */
 
-#define OPCODE_CAST_SEXT1(size)                                          \
-  do {                                                                   \
-    PNInstructionCast* i = (PNInstructionCast*)inst;                     \
-    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id); \
-    pn_executor_set_value(                                               \
-        executor, i->result_value_id,                                    \
-        pn_executor_value_i##size(-(int##size##_t)(value.u8 & 1)));      \
-    location->instruction_id++;                                          \
+#define OPCODE_CAST_SEXT1(size)                                           \
+  do {                                                                    \
+    PNInstructionCast* i = (PNInstructionCast*)inst;                      \
+    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);  \
+    PNRuntimeValue result =                                               \
+        pn_executor_value_i##size(-(int##size##_t)(value.u8 & 1));        \
+    pn_executor_set_value(executor, i->result_value_id, result);          \
+    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " FORMAT_i##size "\n",       \
+             i->result_value_id, result.u8, i->value_id, result.i##size); \
+    location->instruction_id++;                                           \
   } while (0) /* no semicolon */
 
-#define OPCODE_CAST_TRUNC1(size)                                         \
-  do {                                                                   \
-    PNInstructionCast* i = (PNInstructionCast*)inst;                     \
-    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id); \
-    pn_executor_set_value(executor, i->result_value_id,                  \
-                          pn_executor_value_u8(value.u##size & 1));      \
-    location->instruction_id++;                                          \
+#define OPCODE_CAST_TRUNC1(size)                                          \
+  do {                                                                    \
+    PNInstructionCast* i = (PNInstructionCast*)inst;                      \
+    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);  \
+    PNRuntimeValue result = pn_executor_value_u8(value.u##size & 1);      \
+    pn_executor_set_value(executor, i->result_value_id, result);          \
+    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " FORMAT_u##size "\n",       \
+             i->result_value_id, result.u8, i->value_id, result.u##size); \
+    location->instruction_id++;                                           \
   } while (0) /* no semicolon */
 
-#define OPCODE_CAST_ZEXT1(size)                                          \
-  do {                                                                   \
-    PNInstructionCast* i = (PNInstructionCast*)inst;                     \
-    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id); \
-    pn_executor_set_value(                                               \
-        executor, i->result_value_id,                                    \
-        pn_executor_value_u##size(~(uint##size##_t)(value.u8 & 1) + 1)); \
-    location->instruction_id++;                                          \
+#define OPCODE_CAST_ZEXT1(size)                                           \
+  do {                                                                    \
+    PNInstructionCast* i = (PNInstructionCast*)inst;                      \
+    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);  \
+    PNRuntimeValue result =                                               \
+        pn_executor_value_u##size(~(uint##size##_t)(value.u8 & 1) + 1);   \
+    pn_executor_set_value(executor, i->result_value_id, result);          \
+    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " FORMAT_u##size "\n",       \
+             i->result_value_id, result.u8, i->value_id, result.u##size); \
+    location->instruction_id++;                                           \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_CAST_FPEXT_FLOAT_DOUBLE:   OPCODE_CAST(f32, f64); break;
@@ -6759,6 +6768,7 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 #undef OPCODE_SWITCH
 
     case PN_OPCODE_UNREACHABLE:
+      PN_FATAL("Reached unreachable instruction!\n");
       location->instruction_id++;
       break;
 
@@ -6766,8 +6776,12 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       PNInstructionVselect* i = (PNInstructionVselect*)inst;
       PNRuntimeValue cond = pn_executor_get_value(executor, i->cond_id);
       PNValueId value_id = (cond.u8 & 1) ? i->true_value_id : i->false_value_id;
-      PNRuntimeValue value = pn_executor_get_value(executor, value_id);
-      pn_executor_set_value(executor, i->result_value_id, value);
+      PNRuntimeValue result = pn_executor_get_value(executor, value_id);
+      pn_executor_set_value(executor, i->result_value_id, result);
+      pn_executor_value_trace(executor, function, i->result_value_id, result,
+                              "    ", "  ");
+      pn_executor_value_trace(executor, function, i->cond_id, cond, "", "  ");
+      pn_executor_value_trace(executor, function, value_id, result, "", "\n");
       location->instruction_id++;
       break;
     }
