@@ -52,7 +52,7 @@
 #if PN_TRACING
 #define PN_TRACE(flag, ...) \
   if (g_pn_trace_##flag)    \
-    PN_PRINT(__VA_ARGS__);    \
+    PN_PRINT(__VA_ARGS__);  \
   else                      \
   (void)0
 #define PN_IS_TRACE(flag) g_pn_trace_##flag
@@ -60,10 +60,10 @@
 #define PN_TRACE(flag, ...) (void)0
 #define PN_IS_TRACE(flag) PN_FALSE
 #endif /* PN_TRACING */
-#define PN_WARN(...)              \
-  if (g_pn_verbose > 0)           \
+#define PN_WARN(...)       \
+  if (g_pn_verbose > 0)    \
     PN_PRINT(__VA_ARGS__); \
-  else                            \
+  else                     \
   (void)0
 #define PN_PRINT(...) PN_ERROR(__VA_ARGS__)
 #define PN_ERROR(...) fprintf(stderr, __VA_ARGS__)
@@ -1916,10 +1916,8 @@ static const char* pn_value_describe(PNModule* module,
 }
 
 static const char* pn_binop_get_name(uint32_t op) {
-  const char* names[] = {
-      "add", "sub", "mul", "udiv", "sdiv", "urem", "srem", "shl", "lshr",
-      "ashr", "and", "or", "xor"
-  };
+  const char* names[] = {"add", "sub",  "mul",  "udiv", "sdiv", "urem", "srem",
+                         "shl", "lshr", "ashr", "and",  "or",   "xor"};
 
   if (op >= PN_ARRAY_SIZE(names)) {
     PN_FATAL("Invalid op: %u\n", op);
@@ -1929,10 +1927,9 @@ static const char* pn_binop_get_name(uint32_t op) {
 }
 
 static const char* pn_cast_get_name(uint32_t op) {
-  const char* names[] = {
-      "trunc", "zext", "sext", "fptoui", "fptosi", "uitofp", "sitofp",
-      "fptrunc", "fpext", NULL, NULL, "bitcast"
-  };
+  const char* names[] = {"trunc",  "zext",   "sext",   "fptoui",
+                         "fptosi", "uitofp", "sitofp", "fptrunc",
+                         "fpext",  NULL,     NULL,     "bitcast"};
 
   if (op >= PN_ARRAY_SIZE(names)) {
     PN_FATAL("Invalid op: %u\n", op);
@@ -2255,24 +2252,20 @@ static const char* pn_value_describe(PNModule* module,
 static void pn_instruction_trace(PNModule* module,
                                  PNFunction* function,
                                  PNInstruction* inst,
-                                 PNBool force) {
-}
+                                 PNBool force) {}
 
 static void pn_basic_block_trace(PNModule* module,
                                  PNFunction* function,
                                  PNBasicBlock* bb,
-                                 PNBasicBlockId bb_id) {
-}
+                                 PNBasicBlockId bb_id) {}
 
 static void pn_function_trace_header(PNFunction* function,
-                                     PNFunctionId function_id) {
-}
+                                     PNFunctionId function_id) {}
 
 static void pn_function_trace(PNModule* module,
                               PNFunction* function,
                               PNFunctionId function_id,
-                              PNBool print_header) {
-}
+                              PNBool print_header) {}
 
 #endif /* PN_TRACING */
 
@@ -4406,19 +4399,18 @@ static void pn_value_symtab_block_read(PNModule* module,
                   pn_module_get_function(module, function_id);
               function->name = name;
 
-#define PN_INTRINSIC_CHECK(i_enum, i_name)                            \
-  if (strcmp(name, i_name) == 0) {                                    \
-    module->known_functions[PN_INTRINSIC_##i_enum] = function_id;     \
-    function->intrinsic_id = PN_INTRINSIC_##i_enum;                   \
+#define PN_INTRINSIC_CHECK(i_enum, i_name)                              \
+  if (strcmp(name, i_name) == 0) {                                      \
+    module->known_functions[PN_INTRINSIC_##i_enum] = function_id;       \
+    function->intrinsic_id = PN_INTRINSIC_##i_enum;                     \
     PN_TRACE(VALUE_SYMTAB_BLOCK, "    intrinsic \"%s\" (%d)\n", i_name, \
-             PN_INTRINSIC_##i_enum);                                  \
+             PN_INTRINSIC_##i_enum);                                    \
   } else
 
               PN_FOREACH_INTRINSIC(PN_INTRINSIC_CHECK)
               { /* Unknown function name */ }
 
 #undef PN_INTRINSIC_CHECK
-
             }
 
             break;
@@ -5469,7 +5461,7 @@ static void pn_executor_set_value(PNExecutor* executor,
     value_id -= executor->module->num_values;
     executor->current_call_frame->function_values[value_id] = value;
   } else {
-    executor->module_values[value_id ] = value;
+    executor->module_values[value_id] = value;
   }
 }
 
@@ -5735,9 +5727,9 @@ static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_SYSCONF(PNExecutor* executor,
 }
 
 static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_CLOSE(PNExecutor* executor,
-                                                      PNFunction* function,
-                                                      uint32_t num_args,
-                                                      PNValueId* arg_ids) {
+                                                     PNFunction* function,
+                                                     uint32_t num_args,
+                                                     PNValueId* arg_ids) {
   PN_CHECK(num_args == 1);
   PN_BUILTIN_ARG(fd, 0, u32);
   PN_TRACE(IRT, "    NACL_IRT_FDIO_CLOSE(%u)\n", fd);
@@ -5771,9 +5763,9 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_WRITE(PNExecutor* executor,
 }
 
 static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_FSTAT(PNExecutor* executor,
-                                                      PNFunction* function,
-                                                      uint32_t num_args,
-                                                      PNValueId* arg_ids) {
+                                                     PNFunction* function,
+                                                     uint32_t num_args,
+                                                     PNValueId* arg_ids) {
   PN_CHECK(num_args == 2);
   PN_BUILTIN_ARG(fd, 0, u32);
   PN_BUILTIN_ARG(stat_p, 1, u32);
@@ -6445,7 +6437,6 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       break;
     }
 
-
     case PN_OPCODE_INTRINSIC_LLVM_MEMMOVE: {
       PNInstructionCall* i = (PNInstructionCall*)inst;
       PN_CHECK(i->num_args == 5);
@@ -6470,7 +6461,6 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       location->instruction_id++;
       break;
     }
-
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I32: {
       PNInstructionCall* i = (PNInstructionCall*)inst;
@@ -6511,70 +6501,70 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     location->instruction_id++;                                             \
   } while (0) /* no semicolon */
 
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8:
-    OPCODE_INTRINSIC_RMW(1, +, u8);
-    break;
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I16:
-    OPCODE_INTRINSIC_RMW(1, +, u16);
-    break;
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I32:
-    OPCODE_INTRINSIC_RMW(1, +, u32);
-    break;
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I64:
-    OPCODE_INTRINSIC_RMW(1, +, u64);
-    break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8:
+      OPCODE_INTRINSIC_RMW(1, +, u8);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I16:
+      OPCODE_INTRINSIC_RMW(1, +, u16);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I32:
+      OPCODE_INTRINSIC_RMW(1, +, u32);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I64:
+      OPCODE_INTRINSIC_RMW(1, +, u64);
+      break;
 
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I8:
-    OPCODE_INTRINSIC_RMW(2, -, u8);
-    break;
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I16:
-    OPCODE_INTRINSIC_RMW(2, -, u16);
-    break;
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I32:
-    OPCODE_INTRINSIC_RMW(2, -, u32);
-    break;
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I64:
-    OPCODE_INTRINSIC_RMW(2, -, u64);
-    break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I8:
+      OPCODE_INTRINSIC_RMW(2, -, u8);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I16:
+      OPCODE_INTRINSIC_RMW(2, -, u16);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I32:
+      OPCODE_INTRINSIC_RMW(2, -, u32);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I64:
+      OPCODE_INTRINSIC_RMW(2, -, u64);
+      break;
 
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I8:
-    OPCODE_INTRINSIC_RMW(3, &, u8);
-    break;
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I16:
-    OPCODE_INTRINSIC_RMW(3, &, u16);
-    break;
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I32:
-    OPCODE_INTRINSIC_RMW(3, &, u32);
-    break;
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I64:
-    OPCODE_INTRINSIC_RMW(3, &, u64);
-    break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I8:
+      OPCODE_INTRINSIC_RMW(3, &, u8);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I16:
+      OPCODE_INTRINSIC_RMW(3, &, u16);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I32:
+      OPCODE_INTRINSIC_RMW(3, &, u32);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I64:
+      OPCODE_INTRINSIC_RMW(3, &, u64);
+      break;
 
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I8:
-    OPCODE_INTRINSIC_RMW(4, |, u8);
-    break;
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I16:
-    OPCODE_INTRINSIC_RMW(4, |, u16);
-    break;
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I32:
-    OPCODE_INTRINSIC_RMW(4, |, u32);
-    break;
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I64:
-    OPCODE_INTRINSIC_RMW(4, |, u64);
-    break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I8:
+      OPCODE_INTRINSIC_RMW(4, |, u8);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I16:
+      OPCODE_INTRINSIC_RMW(4, |, u16);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I32:
+      OPCODE_INTRINSIC_RMW(4, |, u32);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I64:
+      OPCODE_INTRINSIC_RMW(4, |, u64);
+      break;
 
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I8:
-    OPCODE_INTRINSIC_RMW(5, ^, u8);
-    break;
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I16:
-    OPCODE_INTRINSIC_RMW(5, ^, u16);
-    break;
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I32:
-    OPCODE_INTRINSIC_RMW(5, ^, u32);
-    break;
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I64:
-    OPCODE_INTRINSIC_RMW(5, ^, u64);
-    break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I8:
+      OPCODE_INTRINSIC_RMW(5, ^, u8);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I16:
+      OPCODE_INTRINSIC_RMW(5, ^, u16);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I32:
+      OPCODE_INTRINSIC_RMW(5, ^, u32);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I64:
+      OPCODE_INTRINSIC_RMW(5, ^, u64);
+      break;
 
 #define OPCODE_INTRINSIC_EXCHANGE(opval, ty)                                \
   do {                                                                      \
@@ -6599,18 +6589,18 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     location->instruction_id++;                                             \
   } while (0) /* no semicolon */
 
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I8:
-    OPCODE_INTRINSIC_EXCHANGE(6, u8);
-    break;
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I16:
-    OPCODE_INTRINSIC_EXCHANGE(6, u16);
-    break;
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I32:
-    OPCODE_INTRINSIC_EXCHANGE(6, u32);
-    break;
-  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I64:
-    OPCODE_INTRINSIC_EXCHANGE(6, u64);
-    break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I8:
+      OPCODE_INTRINSIC_EXCHANGE(6, u8);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I16:
+      OPCODE_INTRINSIC_EXCHANGE(6, u16);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I32:
+      OPCODE_INTRINSIC_EXCHANGE(6, u32);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I64:
+      OPCODE_INTRINSIC_EXCHANGE(6, u64);
+      break;
 
 #undef OPCODE_INTRINSIC_RMW
 #undef OPCODE_INTRINSIC_EXCHANGE
@@ -6801,7 +6791,6 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 #undef FORMAT_i16
 #undef FORMAT_i32
 #undef FORMAT_i64
-
 }
 
 /* Option parsing, environment variables */
@@ -6861,8 +6850,7 @@ static void pn_usage(const char* prog) {
   int i = 0;
   for (; long_options[i].name; ++i) {
     if (long_options[i].val) {
-      PN_PRINT("  -%c, --%s\n", long_options[i].val,
-              long_options[i].name);
+      PN_PRINT("  -%c, --%s\n", long_options[i].val, long_options[i].name);
     } else {
       PN_PRINT("      --%s\n", long_options[i].name);
     }
