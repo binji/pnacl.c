@@ -617,6 +617,31 @@ typedef enum PNOpcode {
   PN_FOREACH_INTRINSIC(PN_INTRINSIC_OPCODE)
 #undef PN_INTRINSIC_OPCODE
 
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I16,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I32,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I64,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I8,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I16,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I32,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I64,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I8,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I16,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I32,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I64,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I8,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I16,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I32,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I64,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I8,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I16,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I32,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I64,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I8,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I16,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I32,
+  PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I64,
+
   PN_OPCODE_LOAD_DOUBLE,
   PN_OPCODE_LOAD_FLOAT,
   PN_OPCODE_LOAD_INT8,
@@ -640,6 +665,30 @@ typedef enum PNOpcode {
   PN_OPCODE_UNREACHABLE,
   PN_OPCODE_VSELECT,
 } PNOpcode;
+
+/* These asserts allow us to ensure that for all atomic ops, the types are
+ * consecutive and the types are ordered i8, i16, i32, i64. We can then safely
+ * do basic arithmetic on the enum value. */
+#define PN_ASSERT_ATOMIC_SEQUENTIAL_TYPES(opcode)                   \
+  PN_STATIC_ASSERT(                                                 \
+      PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_##opcode##_I8 <          \
+          PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_##opcode##_I16 &&    \
+      PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_##opcode##_I16 <         \
+          PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_##opcode##_I32 &&    \
+      PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_##opcode##_I32 <         \
+          PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_##opcode##_I64 &&    \
+      PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_##opcode##_I64 -         \
+              PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_##opcode##_I8 == \
+          3) /* no semicolon */
+PN_ASSERT_ATOMIC_SEQUENTIAL_TYPES(RMW);
+PN_ASSERT_ATOMIC_SEQUENTIAL_TYPES(ADD);
+PN_ASSERT_ATOMIC_SEQUENTIAL_TYPES(SUB);
+PN_ASSERT_ATOMIC_SEQUENTIAL_TYPES(AND);
+PN_ASSERT_ATOMIC_SEQUENTIAL_TYPES(OR);
+PN_ASSERT_ATOMIC_SEQUENTIAL_TYPES(XOR);
+PN_ASSERT_ATOMIC_SEQUENTIAL_TYPES(EXCHANGE);
+
+#undef PN_ASSERT_ATOMIC_SEQUENTIAL_TYPES
 
 typedef enum PNIntrinsicId {
   PN_INTRINSIC_NULL,
@@ -2919,6 +2968,59 @@ static void pn_basic_block_calculate_opcodes(PNModule* module,
         } else {
           i->base.opcode = PN_OPCODE_CALL;
         }
+
+        /* Specialize some intrinsics based on constant args */
+        switch (i->base.opcode) {
+          case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I8:
+          case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I16:
+          case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I32:
+          case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I64: {
+            uint32_t type_offset =
+                i->base.opcode - PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I8;
+
+            PN_CHECK(i->num_args == 4);
+            PNValue* opcode =
+                pn_function_get_value(module, function, i->arg_ids[0]);
+            PN_CHECK(opcode->code == PN_VALUE_CODE_CONSTANT);
+            PNConstant* op = pn_function_get_constant(function, opcode->index);
+            PN_CHECK(op->basic_type == PN_BASIC_TYPE_INT32);
+            switch (op->value.u32) {
+              case 1:
+                i->base.opcode =
+                    PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8 + type_offset;
+                break;
+              case 2:
+                i->base.opcode =
+                    PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I8 + type_offset;
+                break;
+              case 3:
+                i->base.opcode =
+                    PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I8 + type_offset;
+                break;
+              case 4:
+                i->base.opcode =
+                    PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I8 + type_offset;
+                break;
+              case 5:
+                i->base.opcode =
+                    PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I8 + type_offset;
+                break;
+              case 6:
+                i->base.opcode =
+                    PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I8 +
+                    type_offset;
+                break;
+              default:
+                PN_UNREACHABLE();
+                break;
+            }
+            break;
+          }
+
+          default:
+            break;
+        }
+
         /* TODO(binji): check arg types against function type? */
         break;
       }
@@ -6203,50 +6305,132 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       break;
     }
 
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I32: {
-      PNInstructionCall* i = (PNInstructionCall*)inst;
-      PN_CHECK(i->num_args == 4);
-      uint32_t op = pn_executor_get_value(executor, i->arg_ids[0]).u32;
-      uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;
-      uint32_t value = pn_executor_get_value(executor, i->arg_ids[2]).u32;
-      uint32_t memory_order =
-          pn_executor_get_value(executor, i->arg_ids[3]).u32;
-      uint32_t old_value = pn_memory_read_uint32(executor->memory, addr_p);
-      uint32_t new_value;
-      switch (op) {
-        case 1: /* Add */
-          new_value = old_value + value;
-          break;
-        case 2: /* Sub */
-          new_value = old_value - value;
-          break;
-        case 3: /* And */
-          new_value = old_value & value;
-          break;
-        case 4: /* Or */
-          new_value = old_value | value;
-          break;
-        case 5: /* Xor */
-          new_value = old_value ^ value;
-          break;
-        case 6: /* Exchange */
-          new_value = value;
-          break;
-        default:
-          PN_UNREACHABLE();
-          break;
-      }
+#define OPCODE_INTRINSIC_RMW(opval, op, ctype, type, ty)                    \
+  do {                                                                      \
+    PNInstructionCall* i = (PNInstructionCall*)inst;                        \
+    PN_CHECK(i->num_args == 4);                                             \
+    PN_CHECK(pn_executor_get_value(executor, i->arg_ids[0]).u32 == opval);  \
+    uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;   \
+    ctype value = pn_executor_get_value(executor, i->arg_ids[2]).ty;        \
+    uint32_t memory_order =                                                 \
+        pn_executor_get_value(executor, i->arg_ids[3]).u32;                 \
+    ctype old_value = pn_memory_read_##type(executor->memory, addr_p);      \
+    ctype new_value = old_value op value;                                   \
+    pn_memory_write_##type(executor->memory, addr_p, new_value);            \
+    PNRuntimeValue result = pn_executor_value_u32(old_value);               \
+    pn_executor_set_value(executor, i->result_value_id, result);            \
+    PN_TRACE(EXECUTE, "    %%%d = " FORMAT_##ty                             \
+             "  %%%d = %u  %%%d = %u  %%%d = " FORMAT_##ty "  %%%d = %u\n", \
+             i->result_value_id, result.ty, i->arg_ids[0], opval,           \
+             i->arg_ids[1], addr_p, i->arg_ids[2], value, i->arg_ids[3],    \
+             memory_order);                                                 \
+    (void) memory_order;                                                    \
+    location->instruction_id++;                                             \
+  } while (0) /* no semicolon */
 
-      PNRuntimeValue result = pn_executor_value_u32(new_value);
-      pn_executor_set_value(executor, i->result_value_id, result);
-      PN_TRACE(EXECUTE,
-               "    %%%d = %u  %%%d = %u  %%%d = %u  %%%d = %u  %%%d = %u\n",
-               i->result_value_id, result.u32, i->arg_ids[0], op, i->arg_ids[1],
-               addr_p, i->arg_ids[2], value, i->arg_ids[3], memory_order);
-      (void)memory_order;
-      location->instruction_id++;
-      break;
-    }
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8:
+    OPCODE_INTRINSIC_RMW(1, +, uint8_t, uint8, u8);
+    break;
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I16:
+    OPCODE_INTRINSIC_RMW(1, +, uint16_t, uint16, u16);
+    break;
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I32:
+    OPCODE_INTRINSIC_RMW(1, +, uint32_t, uint32, u32);
+    break;
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I64:
+    OPCODE_INTRINSIC_RMW(1, +, uint64_t, uint64, u64);
+    break;
+
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I8:
+    OPCODE_INTRINSIC_RMW(2, -, uint8_t, uint8, u8);
+    break;
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I16:
+    OPCODE_INTRINSIC_RMW(2, -, uint16_t, uint16, u16);
+    break;
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I32:
+    OPCODE_INTRINSIC_RMW(2, -, uint32_t, uint32, u32);
+    break;
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I64:
+    OPCODE_INTRINSIC_RMW(2, -, uint64_t, uint64, u64);
+    break;
+
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I8:
+    OPCODE_INTRINSIC_RMW(3, &, uint8_t, uint8, u8);
+    break;
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I16:
+    OPCODE_INTRINSIC_RMW(3, &, uint16_t, uint16, u16);
+    break;
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I32:
+    OPCODE_INTRINSIC_RMW(3, &, uint32_t, uint32, u32);
+    break;
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I64:
+    OPCODE_INTRINSIC_RMW(3, &, uint64_t, uint64, u64);
+    break;
+
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I8:
+    OPCODE_INTRINSIC_RMW(4, |, uint8_t, uint8, u8);
+    break;
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I16:
+    OPCODE_INTRINSIC_RMW(4, |, uint16_t, uint16, u16);
+    break;
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I32:
+    OPCODE_INTRINSIC_RMW(4, |, uint32_t, uint32, u32);
+    break;
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I64:
+    OPCODE_INTRINSIC_RMW(4, |, uint64_t, uint64, u64);
+    break;
+
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I8:
+    OPCODE_INTRINSIC_RMW(5, ^, uint8_t, uint8, u8);
+    break;
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I16:
+    OPCODE_INTRINSIC_RMW(5, ^, uint16_t, uint16, u16);
+    break;
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I32:
+    OPCODE_INTRINSIC_RMW(5, ^, uint32_t, uint32, u32);
+    break;
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I64:
+    OPCODE_INTRINSIC_RMW(5, ^, uint64_t, uint64, u64);
+    break;
+
+#define OPCODE_INTRINSIC_EXCHANGE(opval, ctype, type, ty)                   \
+  do {                                                                      \
+    PNInstructionCall* i = (PNInstructionCall*)inst;                        \
+    PN_CHECK(i->num_args == 4);                                             \
+    PN_CHECK(pn_executor_get_value(executor, i->arg_ids[0]).u32 == opval);  \
+    uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;   \
+    ctype value = pn_executor_get_value(executor, i->arg_ids[2]).ty;        \
+    uint32_t memory_order =                                                 \
+        pn_executor_get_value(executor, i->arg_ids[3]).u32;                 \
+    ctype old_value = pn_memory_read_##type(executor->memory, addr_p);      \
+    ctype new_value = value;                                                \
+    pn_memory_write_##type(executor->memory, addr_p, new_value);            \
+    PNRuntimeValue result = pn_executor_value_u32(old_value);               \
+    pn_executor_set_value(executor, i->result_value_id, result);            \
+    PN_TRACE(EXECUTE, "    %%%d = " FORMAT_##ty                             \
+             "  %%%d = %u  %%%d = %u  %%%d = " FORMAT_##ty "  %%%d = %u\n", \
+             i->result_value_id, result.ty, i->arg_ids[0], opval,           \
+             i->arg_ids[1], addr_p, i->arg_ids[2], value, i->arg_ids[3],    \
+             memory_order);                                                 \
+    (void) memory_order;                                                    \
+    location->instruction_id++;                                             \
+  } while (0) /* no semicolon */
+
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I8:
+    OPCODE_INTRINSIC_EXCHANGE(6, uint8_t, uint8, u8);
+    break;
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I16:
+    OPCODE_INTRINSIC_EXCHANGE(6, uint16_t, uint16, u16);
+    break;
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I32:
+    OPCODE_INTRINSIC_EXCHANGE(6, uint32_t, uint32, u32);
+    break;
+  case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I64:
+    OPCODE_INTRINSIC_EXCHANGE(6, uint64_t, uint64, u64);
+    break;
+
+#undef OPCODE_INTRINSIC_RMW
+#undef OPCODE_INTRINSIC_EXCHANGE
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_READ_TP: {
       PNInstructionCall* i = (PNInstructionCall*)inst;
