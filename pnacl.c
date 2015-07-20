@@ -34,6 +34,7 @@
 #define PN_MAX_BLOCK_ABBREV 100
 #define PN_DEFAULT_MEMORY_SIZE (1024 * 1024)
 #define PN_MEMORY_GUARD_SIZE 1024
+#define PN_PAGE_SIZE 4096
 
 #define PN_FALSE 0
 #define PN_TRUE 1
@@ -5491,6 +5492,9 @@ static void pn_executor_value_trace(PNExecutor* executor,
   PN_TYPE_##ty name = value##n.ty;                                       \
   (void) name /* no semicolon */
 
+#define PN_EINVAL 22
+#define PN_ENOSYS 38
+
 static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNExecutor* executor,
                                                 PNFunction* function,
                                                 uint32_t num_args,
@@ -5566,7 +5570,38 @@ static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNExecutor* executor,
 #undef PN_WRITE_BUILTIN
 }
 
-#define PN_ENOSYS 38
+static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNExecutor* executor,
+                                                      PNFunction* function,
+                                                      uint32_t num_args,
+                                                      PNValueId* arg_ids) {
+  PN_CHECK(num_args == 6);
+  PN_BUILTIN_ARG(addr, 0, u32);
+  PN_BUILTIN_ARG(len, 1, u32);
+  PN_BUILTIN_ARG(prot, 2, u32);
+  PN_BUILTIN_ARG(flags, 3, u32);
+  PN_BUILTIN_ARG(fd, 4, i32);
+  PN_BUILTIN_ARG(off, 5, u64);
+  PN_TRACE(IRT, "    NACL_IRT_MEMORY_MMAP(%u, %u, %u, %u, %d, %" PRId64 ")\n",
+           addr, len, prot, flags, fd, off);
+
+  if ((flags & 0x20) != 0x20) { /* MAP_ANONYMOUS */
+    return pn_executor_value_u32(PN_EINVAL);
+  }
+
+  PNMemory* memory = executor->memory;
+
+  /* TODO(binji): Less stupid mmap */
+  void* result_pointer = pn_align_up_pointer(executor->heap_end, PN_PAGE_SIZE);
+  size_t size = pn_align_up(len, PN_PAGE_SIZE);
+  void* end_pointer = result_pointer + size;
+
+  pn_memory_check_pointer(memory, result_pointer, size);
+  executor->heap_end = end_pointer;
+
+  uint32_t result_address = result_pointer - memory->data;
+  pn_memory_write_uint32(memory, addr, result_address);
+  return pn_executor_value_u32(0);
+}
 
 #define PN_BUILTIN_STUB(name)                                        \
   static PNRuntimeValue pn_builtin_##name(                           \
@@ -5590,7 +5625,6 @@ PN_BUILTIN_STUB(NACL_IRT_FDIO_WRITE)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_SEEK)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_FSTAT)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_GETDENTS)
-PN_BUILTIN_STUB(NACL_IRT_MEMORY_MMAP)
 PN_BUILTIN_STUB(NACL_IRT_MEMORY_MUNMAP)
 PN_BUILTIN_STUB(NACL_IRT_MEMORY_MPROTECT)
 PN_BUILTIN_STUB(NACL_IRT_TLS_INIT)
@@ -6095,6 +6129,17 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 #undef OPCODE_CMP2_NOT
 #undef OPCODE_CMP2_ORD
 #undef OPCODE_CMP2_UNO
+
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_READ_TP: {
+      PNInstructionCall* i = (PNInstructionCall*)inst;
+      PN_CHECK(i->num_args == 0);
+      PN_CHECK(i->result_value_id != PN_INVALID_VALUE_ID);
+      PNRuntimeValue result = pn_executor_value_u32(0);
+      pn_executor_set_value(executor, i->result_value_id, result);
+      PN_TRACE(EXECUTE, "    %%%d = %u\n", i->result_value_id, result.u32);
+      location->instruction_id++;
+      break;
+    }
 
 #define OPCODE_LOAD(type, ty)                                        \
   do {                                                               \
