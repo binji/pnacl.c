@@ -37,7 +37,8 @@
 #define PN_MAX_BLOCK_ABBREV 100
 #define PN_DEFAULT_MEMORY_SIZE (1024 * 1024)
 #define PN_MEMORY_GUARD_SIZE 1024
-#define PN_PAGE_SIZE 4096
+#define PN_PAGESHIFT 12
+#define PN_PAGESIZE (1 << PN_PAGESHIFT)
 
 #define PN_FALSE 0
 #define PN_TRUE 1
@@ -1039,12 +1040,12 @@ typedef struct PNGlobalVar {
 typedef struct PNMemory {
   void* data;
   uint32_t size;
-  void* globalvar_start;
-  void* globalvar_end;
-  void* startinfo_start;
-  void* startinfo_end;
-  void* heap_start;
-  void* stack_end;
+  uint32_t globalvar_start;
+  uint32_t globalvar_end;
+  uint32_t startinfo_start;
+  uint32_t startinfo_end;
+  uint32_t heap_start;
+  uint32_t stack_end;
 } PNMemory;
 
 typedef struct PNModule {
@@ -1091,7 +1092,7 @@ typedef struct PNLocation {
 typedef struct PNCallFrame {
   PNLocation location;
   PNRuntimeValue* function_values;
-  void* memory_stack_top; /* Grows down */
+  uint32_t memory_stack_top; /* Grows down */
   struct PNCallFrame* parent;
   PNAllocatorMark mark;
 } PNCallFrame;
@@ -1101,7 +1102,8 @@ typedef struct PNExecutor {
   PNMemory* memory;
   PNCallFrame* current_call_frame;
   PNRuntimeValue* module_values;
-  void* heap_end; /* Grows up */
+  uint32_t heap_end; /* Grows up */
+  PNBitSet mapped_pages;
   uint32_t tls;
   PNCallFrame sentinel_frame;
   PNAllocator allocator;
@@ -1233,6 +1235,11 @@ static inline size_t pn_align_up(size_t size, uint32_t align) {
 static inline void* pn_align_up_pointer(void* p, uint32_t align) {
   assert(pn_is_power_of_two(align));
   return (void*)(((intptr_t)p + align - 1) & ~((intptr_t)align - 1));
+}
+
+static inline PNBool pn_is_aligned(size_t size, uint32_t align) {
+  assert(pn_is_power_of_two(align));
+  return (size & (align - 1)) == 0;
 }
 
 static inline PNBool pn_is_aligned_pointer(void* p, uint32_t align) {
@@ -4192,7 +4199,7 @@ static void pn_globalvar_block_read(PNModule* module,
   uint8_t* data8 = memory->data;
   uint32_t data_offset = PN_MEMORY_GUARD_SIZE;
 
-  memory->globalvar_start = memory->data + data_offset;
+  memory->globalvar_start = data_offset;
 
   PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
 
@@ -4217,7 +4224,7 @@ static void pn_globalvar_block_read(PNModule* module,
                                    reloc_infos[i].addend);
         }
 
-        memory->globalvar_end = memory->data + data_offset;
+        memory->globalvar_end = data_offset;
 
         pn_allocator_reset_to_mark(&module->temp_allocator, mark);
         PN_END_TIME(GLOBALVAR_BLOCK_READ);
@@ -5360,8 +5367,8 @@ static int pn_string_list_count(char** p) {
 static void pn_memory_init_startinfo(PNMemory* memory,
                                      char** argv,
                                      char** envp) {
-  void* memory_startinfo = memory->startinfo_start =
-      pn_align_up_pointer(memory->globalvar_end, 4);
+  memory->startinfo_start = pn_align_up(memory->globalvar_end, 4);
+  void* memory_startinfo = memory->data + memory->startinfo_start;
   /*
    * From nacl_start.h in the native_client repo:
    *
@@ -5448,9 +5455,9 @@ static void pn_memory_init_startinfo(PNMemory* memory,
   memory_auxv[1] = pn_builtin_to_pointer(PN_BUILTIN_NACL_IRT_QUERY);
   memory_auxv[2] = 0; /* AT_NULL */
 
-  memory->startinfo_end = data_offset;
-  memory->heap_start = pn_align_up_pointer(memory->startinfo_end, 16);
-  memory->stack_end = memory->data + memory->size;
+  memory->startinfo_end = data_offset - memory->data;
+  memory->heap_start = pn_align_up(memory->startinfo_end, PN_PAGESIZE);
+  memory->stack_end = memory->size;
 }
 
 #define DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(ty, ctype)             \
@@ -5585,6 +5592,16 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
   executor->exit_code = 0;
   executor->exiting = PN_FALSE;
 
+  PN_CHECK(pn_is_aligned(executor->memory->size, PN_PAGESIZE));
+  PN_CHECK(pn_is_aligned(executor->memory->heap_start, PN_PAGESIZE));
+  size_t pages = executor->memory->size >> PN_PAGESHIFT;
+  pn_bitset_init(&executor->allocator, &executor->mapped_pages, pages);
+  size_t start_pages = executor->memory->heap_start >> PN_PAGESHIFT;
+  int i;
+  for (i = 0; i < start_pages; ++i) {
+    pn_bitset_set(&executor->mapped_pages, i, PN_TRUE);
+  }
+
   pn_executor_init_module_values(executor);
 
   PNFunctionId start_function_id = module->known_functions[PN_INTRINSIC_START];
@@ -5598,7 +5615,7 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
 
   PNValueId value_id = executor->module->num_values;
   PNRuntimeValue value;
-  value.u32 = executor->memory->startinfo_start - executor->memory->data;
+  value.u32 = executor->memory->startinfo_start;
   pn_executor_set_value(executor, value_id, value);
 }
 
@@ -5821,8 +5838,8 @@ static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_SYSCONF(PNExecutor* executor,
   PN_TRACE(IRT, "    NACL_IRT_BASIC_SYSCONF(%u, %u)\n", name, value_p);
   switch (name) {
     case 2: /* _SC_PAGESIZE */
-      pn_memory_write_u32(executor->memory, value_p, PN_PAGE_SIZE);
-      PN_TRACE(IRT, "      SC_PAGESIZE => %u\n", PN_PAGE_SIZE);
+      pn_memory_write_u32(executor->memory, value_p, PN_PAGESIZE);
+      PN_TRACE(IRT, "      SC_PAGESIZE => %u\n", PN_PAGESIZE);
       break;
     default:
       return pn_executor_value_u32(PN_EINVAL);
@@ -6078,24 +6095,90 @@ static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNExecutor* executor,
     return pn_executor_value_u32(PN_EINVAL);
   }
 
+  /* TODO(binji): optimize */
   PNMemory* memory = executor->memory;
-
-  /* TODO(binji): Less stupid mmap */
-  void* result_pointer = pn_align_up_pointer(executor->heap_end, PN_PAGE_SIZE);
-  size_t size = pn_align_up(len, PN_PAGE_SIZE);
-  void* end_pointer = result_pointer + size;
-
-  if (end_pointer > executor->current_call_frame->memory_stack_top) {
-    PN_FATAL("Out of heap\n");
+  assert(pn_is_aligned(executor->heap_end, PN_PAGESIZE));
+  len = pn_align_up(len, PN_PAGESIZE);
+  uint32_t pages = len >> PN_PAGESHIFT;
+  uint32_t first_page = memory->heap_start >> PN_PAGESHIFT;
+  uint32_t last_page = executor->heap_end >> PN_PAGESHIFT;
+  uint32_t consecutive = 0;
+  uint32_t result;
+  uint32_t page_start;
+  uint32_t new_heap_end;
+  uint32_t i;
+  PN_TRACE(IRT, "      Searching from [%d, %d)\n", first_page, last_page);
+  for (i = first_page; i < last_page; ++i) {
+    if (!pn_bitset_is_set(&executor->mapped_pages, i)) {
+      if (consecutive == 0) {
+        PN_TRACE(IRT, "      %d unmapped. starting. %d pages needed.\n", i,
+                 pages);
+        page_start = i;
+      }
+      if (++consecutive == pages) {
+        /* Found a spot */
+        PN_TRACE(IRT, "      found %d consecutive pages.\n", pages);
+        result = page_start << PN_PAGESHIFT;
+        goto found;
+      }
+    } else {
+      if (consecutive > 0) {
+        PN_TRACE(IRT, "      %d mapped.\n", i);
+      }
+      consecutive = 0;
+    }
   }
 
-  pn_memory_check_pointer(memory, result_pointer, size);
-  executor->heap_end = end_pointer;
+  /* Move heap_end back, if possible */
+  result = executor->heap_end;
+  assert(pn_is_aligned(result, PN_PAGESIZE));
+  pn_memory_check(memory, result, len);
+  new_heap_end = executor->heap_end + len;
+  if (new_heap_end > executor->current_call_frame->memory_stack_top) {
+    PN_FATAL("Out of heap\n");
+  }
+  executor->heap_end = new_heap_end;
 
-  uint32_t result_address = result_pointer - memory->data;
-  pn_memory_write_u32(memory, addr_pp, result_address);
-  PN_TRACE(IRT, "      returning %u\n", result_address);
+found:
+  for (i = 0; i < pages; ++i) {
+    pn_bitset_set(&executor->mapped_pages, (result >> PN_PAGESHIFT) + i,
+                  PN_TRUE);
+  }
+  pn_memory_write_u32(memory, addr_pp, result);
+  PN_TRACE(IRT, "      returning %u\n", result);
   return pn_executor_value_u32(0);
+}
+
+static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MUNMAP(PNExecutor* executor,
+                                                        PNFunction* function,
+                                                        uint32_t num_args,
+                                                        PNValueId* arg_ids) {
+  PN_CHECK(num_args == 2);
+  PN_BUILTIN_ARG(addr_p, 0, u32);
+  PN_BUILTIN_ARG(len, 1, u32);
+
+  PNMemory* memory = executor->memory;
+  uint32_t old_addr_p = addr_p;
+  addr_p = pn_align_down(addr_p, PN_PAGESIZE);
+  len = pn_align_up(old_addr_p + len, PN_PAGESIZE) - addr_p;
+  uint32_t pages = len >> PN_PAGESHIFT;
+  uint32_t first_page = memory->heap_start >> PN_PAGESHIFT;
+  uint32_t last_page = executor->heap_end >> PN_PAGESHIFT;
+  uint32_t begin = addr_p >> PN_PAGESHIFT;
+  uint32_t end = begin + pages;
+  if (begin < first_page) {
+    begin = first_page;
+  }
+  if (end > last_page) {
+    end = last_page;
+  }
+  uint32_t i;
+  for (i = begin; i < end; ++i) {
+    pn_bitset_set(&executor->mapped_pages, i, PN_FALSE);
+  }
+
+  PN_TRACE(IRT, "    NACL_IRT_MEMORY_MUNMAP(%u, %u)\n", addr_p, len);
+  return pn_executor_value_u32(PN_ENOSYS);
 }
 
 static PNRuntimeValue pn_builtin_NACL_IRT_TLS_INIT(PNExecutor* executor,
@@ -6196,7 +6279,6 @@ PN_BUILTIN_STUB(NACL_IRT_FILENAME_SYMLINK)
 PN_BUILTIN_STUB(NACL_IRT_FILENAME_CHMOD)
 PN_BUILTIN_STUB(NACL_IRT_FILENAME_ACCESS)
 PN_BUILTIN_STUB(NACL_IRT_FILENAME_UTIMES)
-PN_BUILTIN_STUB(NACL_IRT_MEMORY_MUNMAP)
 PN_BUILTIN_STUB(NACL_IRT_MEMORY_MPROTECT)
 PN_BUILTIN_STUB(NACL_IRT_TLS_GET)
 PN_BUILTIN_STUB(NACL_IRT_THREAD_CREATE)
@@ -6225,14 +6307,14 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     case PN_OPCODE_ALLOCA_INT32: {
       PNInstructionAlloca* i = (PNInstructionAlloca*)inst;
       PNRuntimeValue size = pn_executor_get_value(executor, i->size_id);
-      frame->memory_stack_top = pn_align_down_pointer(
-          frame->memory_stack_top - size.i32, i->alignment);
+      frame->memory_stack_top =
+          pn_align_down(frame->memory_stack_top - size.i32, i->alignment);
       if (frame->memory_stack_top < executor->heap_end) {
         PN_FATAL("Out of stack\n");
         break;
       }
       PNRuntimeValue result;
-      result.u32 = frame->memory_stack_top - executor->memory->data;
+      result.u32 = frame->memory_stack_top;
       pn_executor_set_value(executor, i->result_value_id, result);
       PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = %d\n", i->result_value_id,
                result.u32, i->size_id, size.i32);
@@ -7462,6 +7544,7 @@ static void pn_options_parse(int argc, char** argv, char** env) {
               size, PN_MEMORY_GUARD_SIZE);
         }
 
+        size = pn_align_up(size, PN_PAGESIZE);
         PN_TRACE(FLAGS, "Setting memory-size to %ld\n", size);
         g_pn_memory_size = size;
         break;
