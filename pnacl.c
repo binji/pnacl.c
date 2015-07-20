@@ -5536,7 +5536,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNExecutor* executor,
     PN_WRITE_BUILTIN(6, NACL_IRT_FDIO_FSTAT);
     PN_WRITE_BUILTIN(7, NACL_IRT_FDIO_GETDENTS);
     return pn_executor_value_u32(32);
-  } else if (strcmp(iface_name, "nacl-irt-memory-0.1") == 0) {
+  } else if (strcmp(iface_name, "nacl-irt-memory-0.3") == 0) {
     PN_CHECK(table_size == 12);
     PN_WRITE_BUILTIN(0, NACL_IRT_MEMORY_MMAP);
     PN_WRITE_BUILTIN(1, NACL_IRT_MEMORY_MUNMAP);
