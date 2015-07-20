@@ -1131,7 +1131,7 @@ static inline void* pn_align_down_pointer(void* p, uint32_t align) {
   return (void*)((intptr_t)p & ~((intptr_t)align - 1));
 }
 
-static inline uint32_t pn_align_up(uint32_t size, uint32_t align) {
+static inline size_t pn_align_up(size_t size, uint32_t align) {
   assert(pn_is_power_of_two(align));
   return (size + align - 1) & ~(align - 1);
 }
