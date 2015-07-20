@@ -181,11 +181,6 @@ PN_FOREACH_TRACE(PN_TRACE_DEFINE)
 #undef PN_TRACE_DEFINE
 #endif /* PN_TRACING */
 
-typedef enum PNBuiltinFunctions {
-  PN_BUILTIN_NACL_IRT_QUERY = 1,
-  PN_MAX_BUILTINS
-} PNBuiltinFunctions;
-
 typedef enum PNEntry {
   PN_ENTRY_END_BLOCK = 0,
   PN_ENTRY_SUBBLOCK = 1,
@@ -341,6 +336,17 @@ typedef enum PNBasicType {
   PN_BASIC_TYPE_FLOAT,
   PN_BASIC_TYPE_DOUBLE,
 } PNBasicType;
+
+#define PN_FOREACH_BUILTIN(V) \
+  V(NACL_IRT_QUERY, "nacl_irt_query", 3)
+
+typedef enum PNBuiltinId {
+  PN_BUILTIN_NULL,
+#define PN_BUILTIN(e, name, argc) PN_BUILTIN_##e,
+  PN_FOREACH_BUILTIN(PN_BUILTIN)
+#undef PN_BUILTIN
+  PN_MAX_BUILTINS
+} PNBuiltinId;
 
 #define PN_FOREACH_INTRINSIC(V)                                   \
   V(LLVM_BSWAP_I16, "llvm.bswap.i16")                             \
@@ -1338,7 +1344,11 @@ static int64_t pn_decode_sign_rotated_value_int64(uint64_t value) {
   }
 }
 
-static uint32_t pn_function_index_to_pointer(PNFunctionId function_id) {
+static uint32_t pn_builtin_to_pointer(PNBuiltinId builtin_id) {
+  return builtin_id << 2;
+}
+
+static uint32_t pn_function_id_to_pointer(PNFunctionId function_id) {
   return (function_id + PN_MAX_BUILTINS) << 2;
 }
 
@@ -3959,7 +3969,7 @@ static void pn_globalvar_write_reloc(PNModule* module,
     case PN_VALUE_CODE_FUNCTION:
       PN_CHECK(addend == 0);
       /* Use the function index as the function "address". */
-      reloc_value = pn_function_index_to_pointer(value->index);
+      reloc_value = pn_function_id_to_pointer(value->index);
       break;
 
     default:
@@ -5247,7 +5257,7 @@ static void pn_memory_init_startinfo(PNMemory* memory,
   uint32_t* memory_auxv = memory_startinfo32 + 3 + argc + 1 + envc + 1;
   PN_TRACE(EXECUTE, "auxv = %" PRIuPTR "\n", (void*)memory_auxv - memory->data);
   memory_auxv[0] = 32; /* AT_SYSINFO */
-  memory_auxv[1] = PN_BUILTIN_NACL_IRT_QUERY;
+  memory_auxv[1] = pn_builtin_to_pointer(PN_BUILTIN_NACL_IRT_QUERY);
   memory_auxv[2] = 0; /* AT_NULL */
 
   memory->startinfo_end = data_offset;
@@ -5319,7 +5329,7 @@ static void pn_executor_init_module_values(PNExecutor* executor) {
     switch (value->code) {
       case PN_VALUE_CODE_FUNCTION:
         executor->module_values[value_id].u32 =
-            pn_function_index_to_pointer(value->index);
+            pn_function_id_to_pointer(value->index);
         break;
 
       case PN_VALUE_CODE_GLOBAL_VAR: {
@@ -5439,6 +5449,28 @@ static void pn_executor_value_trace(PNExecutor* executor,
   }
 #endif
 }
+
+#define PN_BUILTIN_ARG(n)                                                \
+  PNRuntimeValue value##n = pn_executor_get_value(executor, arg_ids[n]); \
+  (void) value##n /* no semicolon */
+
+static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNExecutor* executor,
+                                                PNFunction* function,
+                                                uint32_t num_args,
+                                                PNValueId* arg_ids) {
+  PN_CHECK(num_args == 3);
+  PN_BUILTIN_ARG(0);
+  PN_BUILTIN_ARG(1);
+  PN_BUILTIN_ARG(2);
+  PN_TRACE(EXECUTE, "    NACL_IRT_QUERY(%u, %u, %u)\n", value0.u32, value1.u32,
+           value2.u32);
+
+  PNRuntimeValue ret;
+  ret.u32 = 0;
+  return ret;
+}
+
+#undef PN_BUILTIN_ARG
 
 static void pn_executor_execute_instruction(PNExecutor* executor) {
   PNCallFrame* frame = executor->current_call_frame;
@@ -5585,20 +5617,41 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     case PN_OPCODE_CALL_INDIRECT: {
       PNInstructionCall* i = (PNInstructionCall*)inst;
 
-      PN_TRACE(EXECUTE, "    ");
-
       PNFunctionId new_function_id;
       if (i->is_indirect) {
         PNRuntimeValue function_value =
             pn_executor_get_value(executor, i->callee_id);
-        new_function_id = pn_function_pointer_to_index(function_value.u32);
-        assert(new_function_id < executor->module->num_functions);
-        PN_TRACE(EXECUTE, "%%%d = %u ", i->callee_id, function_value.u32);
+        PNFunctionId callee_function_id =
+            pn_function_pointer_to_index(function_value.u32);
+        if (callee_function_id < PN_MAX_BUILTINS) {
+          /* Builtin function. Call it directly, don't set up a new frame */
+          switch (callee_function_id) {
+#define PN_BUILTIN(e, name, argc)                                    \
+  case PN_BUILTIN_##e: {                                             \
+    PNRuntimeValue result =                                          \
+        pn_builtin_##e(executor, function, i->num_args, i->arg_ids); \
+    pn_executor_set_value(executor, i->result_value_id, result);     \
+    break;                                                           \
+  }
+            PN_FOREACH_BUILTIN(PN_BUILTIN)
+#undef PN_BUILTIN
+            default:
+              PN_FATAL("Unknown builtin: %d\n", callee_function_id);
+              break;
+          }
+          location->instruction_id++;
+          break;
+        } else {
+          new_function_id = callee_function_id - PN_MAX_BUILTINS;
+          assert(new_function_id < executor->module->num_functions);
+          PN_TRACE(EXECUTE, "    %%%d = %u ", i->callee_id, function_value.u32);
+        }
       } else {
         PNValue* function_value =
             pn_module_get_value(executor->module, i->callee_id);
         assert(function_value->code == PN_VALUE_CODE_FUNCTION);
         new_function_id = function_value->index;
+        PN_TRACE(EXECUTE, "    ");
       }
 
       PNFunction* new_function =
