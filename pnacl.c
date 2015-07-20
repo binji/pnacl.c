@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -5660,6 +5661,7 @@ static void pn_executor_value_trace(PNExecutor* executor,
 #define PN_EAGAIN 11
 #define PN_EINVAL 22
 #define PN_ENOSYS 38
+#define PN_ETIMEDOUT 110
 
 static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNExecutor* executor,
                                                 PNFunction* function,
@@ -5783,6 +5785,29 @@ static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_EXIT(PNExecutor* executor,
   PN_TRACE(IRT, "    NACL_IRT_BASIC_EXIT(%d)\n", exit_code);
   executor->exit_code = exit_code;
   executor->exiting = PN_TRUE;
+  return pn_executor_value_u32(0);
+}
+
+static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_GETTOD(PNExecutor* executor,
+                                                       PNFunction* function,
+                                                       uint32_t num_args,
+                                                       PNValueId* arg_ids) {
+  PN_CHECK(num_args == 1);
+  PN_BUILTIN_ARG(tv_p, 0, i32);
+  PN_TRACE(IRT, "    NACL_IRT_BASIC_GETTOD(%u)\n", tv_p);
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+
+  /*
+  * offset size
+  * 0  8 time_t      tv_sec;
+  * 8  4 suseconds_t tv_usec;
+  * 16 total
+  */
+  pn_memory_write_u64(executor->memory, tv_p + 0, tv.tv_sec);
+  pn_memory_write_u32(executor->memory, tv_p + 8, tv.tv_usec);
+  PN_TRACE(IRT, "      tv_sec => %" PRId64 " tv_usec = %u\n",
+           (int64_t)tv.tv_sec, (int32_t)tv.tv_usec);
   return pn_executor_value_u32(0);
 }
 
@@ -6108,8 +6133,15 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FUTEX_WAIT_ABS(PNExecutor* executor,
     return pn_executor_value_u32(PN_EAGAIN);
   }
 
-  /* Pretend we are woken up by another thread */
-  return pn_executor_value_u32(0);
+  if (abstime_p != 0) {
+    /* Pretend we timed out */
+    PN_TRACE(IRT, "      returning ETIMEDOUT (%d)\n", PN_ETIMEDOUT);
+    return pn_executor_value_u32(PN_ETIMEDOUT);
+  } else {
+    /* Pretend we are woken up by another thread */
+    PN_TRACE(IRT, "      returning 0\n");
+    return pn_executor_value_u32(0);
+  }
 }
 
 static PNRuntimeValue pn_builtin_NACL_IRT_FUTEX_WAKE(PNExecutor* executor,
@@ -6139,7 +6171,6 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FUTEX_WAKE(PNExecutor* executor,
     return pn_executor_value_u32(PN_ENOSYS);                         \
   }
 
-PN_BUILTIN_STUB(NACL_IRT_BASIC_GETTOD)
 PN_BUILTIN_STUB(NACL_IRT_BASIC_CLOCK)
 PN_BUILTIN_STUB(NACL_IRT_BASIC_NANOSLEEP)
 PN_BUILTIN_STUB(NACL_IRT_BASIC_SCHED_YIELD)
