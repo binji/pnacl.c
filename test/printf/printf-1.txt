@@ -1,0 +1,6 @@
+# FLAGS: -r
+# FILE: res/printf.pexe
+# ARGS: one
+# STDOUT:
+arg0 = res/printf.pexe
+arg1 = one

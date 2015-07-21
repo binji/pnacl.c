@@ -1,0 +1,5 @@
+# FLAGS: -r
+# FILE: res/puts.pexe
+# STDOUT:
+Hello, World!
+

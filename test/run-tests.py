@@ -24,121 +24,119 @@ class Error(Exception):
   pass
 
 
+def LinesMatch(expected_lines, actual_lines):
+  if len(actual_lines) != len(expected_lines):
+    return False
+
+  num_lines = len(expected_lines)
+  for n in range(num_lines):
+    if actual_lines[n] != expected_lines[n]:
+      return False
+
+  return True
+
+
+def Indent(s, spaces):
+  return ''.join(' '*spaces + l for l in s.splitlines(1))
+
+
+def DiffLines(expected_lines, actual_lines):
+  return list(difflib.unified_diff(expected_lines, actual_lines,
+                                   fromfile='expected', tofile='actual'))
+
+
 class TestInfo(object):
   def __init__(self):
     self.name = ''
-    self.header_lines = ''
+    self.header_lines = []
+    self.expected_stdout_lines = []
+    self.expected_stderr_lines = []
     self.exe = '../out/pnacl'
     self.pexe = ''
     self.flags = []
     self.args = []
-    self.expected_lines = ''
     self.expected_error = 0
-
-  def _Error(self, msg):
-    logger.error('- %s:\n  %s' % (self.name, msg))
+    self.cmd = []
 
   def Parse(self, filename):
     self.name = filename
 
     with open(filename) as f:
-      lines = f.readlines()
-      if len(lines) == 0:
-        self._Error('empty test file')
-        return False
+      seen_keys = set()
+      state = 'header'
+      empty = True
+      for line in f.readlines():
+        empty = False
+        m = re.match(r'\s*#(.*)$', line)
+        if m:
+          if state == 'stdout':
+            raise Error('unexpected directive in STDOUT block: %s' % line)
 
-      n = 0
-      while n < len(lines):
-        m = re.match(r'\s*#(.*)$', lines[n])
-        if not m:
-          break
+          directive = m.group(1).strip()
+          if directive.lower() == 'stdout:':
+            state = 'stdout'
+            continue
 
-        key, value = m.group(1).split(':')
-        key = key.strip()
-        value = value.strip()
-        if key.lower() == 'exe':
-          if self.exe:
-            self._Error('exe already set')
-            return False
-          self.exe = value
-        elif key.lower() == 'flags':
-          if self.flags:
-            self._Error('flags already set')
-            return False
-          self.flags = shlex.split(value)
-        elif key.lower() == 'file':
-          if self.pexe:
-            self._Error('pexe already set')
-            return False
-          self.pexe = value
-        elif key.lower() == 'error':
-          if self.expected_error:
-            self._Error('error already set')
-            return False
-          self.expected_error = int(value)
-        elif key.lower() == 'args':
-          if self.args:
-            self._Error('args already set')
-            return False
-          self.args = shlex.split(value)
-        n += 1
+          if state != 'header':
+            raise Error('unexpected directive: %s' % line)
 
-      self.header_lines = lines[:n]
-      self.expected_lines = lines[n:]
-    return True
+          key, value = directive.split(':')
+          key = key.strip()
+          value = value.strip()
+          if key in seen_keys:
+            raise Error('%s already set' % key)
+          seen_keys.add(key)
+          if key.lower() == 'exe':
+            self.exe = value
+          elif key.lower() == 'flags':
+            self.flags = shlex.split(value)
+          elif key.lower() == 'file':
+            self.pexe = value
+          elif key.lower() == 'error':
+            self.expected_error = int(value)
+          elif key.lower() == 'args':
+            self.args = shlex.split(value)
+          else:
+            raise Error('Unknown directive: %s' % key)
+        elif state == 'header':
+          state = 'stderr'
 
-  def Run(self, options):
-    cmd = [self.exe]
+        if state == 'header':
+          self.header_lines.append(line)
+        elif state == 'stderr':
+          self.expected_stderr_lines.append(line)
+        elif state == 'stdout':
+          self.expected_stdout_lines.append(line)
+    if empty:
+      raise Error('empty test file')
+
+  def Run(self):
+    self.cmd = [self.exe]
     if self.flags:
-      cmd += self.flags
+      self.cmd += self.flags
     if self.pexe:
-      cmd += [self.pexe]
+      self.cmd += [self.pexe]
     if self.args:
-      cmd += ['--'] + self.args
+      self.cmd += ['--'] + self.args
     try:
-      process = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                      stderr=subprocess.PIPE)
+      process = subprocess.Popen(self.cmd, stdout=subprocess.PIPE,
+                                           stderr=subprocess.PIPE)
       stdout, stderr = process.communicate()
     except OSError as e:
-      self._Error('%s: %s' % (' '.join(cmd), str(e)))
-      return False
+      raise Error(str(e))
 
     if process.returncode != self.expected_error:
-      self._Error('%s: expected error code %d, got %d.' % (
-          ' '.join(cmd), self.expected_error, process.returncode))
-      return False
+      raise Error('expected error code %d, got %d.' % (self.expected_error,
+                                                       process.returncode))
 
-    stderr_lines = stderr.splitlines(1)
+    return stdout.splitlines(1), stderr.splitlines(1)
 
-    if options.rebase:
-      with open(self.name, 'w') as f:
-        f.writelines(self.header_lines + stderr_lines)
-      return True
-    else:
-      matched = True
-      if len(stderr_lines) == len(self.expected_lines):
-        num_lines = len(self.expected_lines)
-        for n in range(num_lines):
-          if stderr_lines[n] != self.expected_lines[n]:
-            matched = False
-      else:
-        matched = False
-
-      if matched:
-        if logger.isEnabledFor(logging.INFO):
-          logger.info('+ %s' % self.name)
-      else:
-        if logger.isEnabledFor(logging.INFO):
-          diff = ''.join(
-              list(difflib.unified_diff(self.expected_lines, stderr_lines,
-                                        fromfile='expected', tofile='actual')))
-          logger.info('- %s:\n%s' % (self.name, diff))
-        else:
-          logger.error('- %s failed.' % self.name)
-
-      logger.debug('    cmd = %s' % ' '.join(cmd))
-
-      return matched
+  def Rebase(self, stdout_lines, stderr_lines):
+    with open(self.name, 'w') as f:
+      f.writelines(self.header_lines)
+      f.writelines(stderr_lines)
+      f.write('# STDOUT:\n')
+      f.writelines(stdout_lines)
 
 
 def main(args):
@@ -155,7 +153,8 @@ def main(args):
   options = parser.parse_args(args)
 
   if options.patterns:
-    pattern_re = '|'.join(fnmatch.translate(p) for p in options.patterns)
+    pattern_re = '|'.join(fnmatch.translate('*%s*' % p)
+                          for p in options.patterns)
   else:
     pattern_re = '.*'
 
@@ -177,6 +176,7 @@ def main(args):
   if options.list:
     for test in tests:
       print test
+    return 1
 
   os.chdir(SCRIPT_DIR)
 
@@ -187,10 +187,31 @@ def main(args):
       continue
 
     info = TestInfo()
-    if info.Parse(test) and info.Run(options):
+    try:
+      info.Parse(test)
+      stdout_lines, stderr_lines = info.Run()
+      if options.rebase:
+        info.Rebase(stdout_lines, stderr_lines)
+      else:
+        stderr_matched = LinesMatch(info.expected_stderr_lines, stderr_lines)
+        if not stderr_matched:
+          diff_lines = DiffLines(info.expected_stderr_lines, stderr_lines)
+          raise Error('stderr mismatch:\n' + ''.join(diff_lines))
+
+        stdout_matched = LinesMatch(info.expected_stdout_lines, stdout_lines)
+        if not stdout_matched:
+          diff_lines = DiffLines(info.expected_stdout_lines, stdout_lines)
+          raise Error('stdout mismatch:\n' + ''.join(diff_lines))
+
       passed_tests.append(info)
-    else:
+      logger.info('+ %s' % info.name)
+    except Error as e:
       failed_tests.append(info)
+      msg = ''
+      if logger.isEnabledFor(logging.DEBUG) and info.cmd:
+        msg += Indent('cmd = %s\n' % ' '.join(info.cmd), 2)
+      msg += Indent(str(e), 2)
+      logger.error('- %s\n%s' % (info.name, msg))
 
   logger.warning('[+%d|-%d]' % (len(passed_tests), len(failed_tests)))
   if failed_tests:
