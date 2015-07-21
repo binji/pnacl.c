@@ -1,0 +1,22 @@
+# FLAGS: -r
+# FILE: res/setjmp.pexe
+# ARGS: 10
+# STDOUT:
+fact(10)
+fact(9)
+fact(8)
+fact(7)
+fact(6)
+fact(5)
+fact(4)
+fact(3)
+fact(2)
+fact(1)
+fact(0)
+~fact(1) => 1
+~fact(2) => 2
+~fact(3) => 6
+~fact(4) => 24
+~fact(5) => 120
+~fact(6) => 720
+longjmp'd. val = 5040
