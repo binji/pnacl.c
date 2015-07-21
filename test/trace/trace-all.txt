@@ -1,0 +1,756 @@
+# FLAGS: --trace-all
+# FILE: res/main.pexe
+*** ARGS:
+  [0] res/main.pexe
+*** ENVIRONMENT:
+entry: 1
+module version: 1
+*** SUBBLOCK BLOCKINFO (0)
+block id: 14
+block id: 11
+block id: 12
+block id: 19
+*** END BLOCK
+*** SUBBLOCK TYPE (17)
+num types: 17
+0: type integer 32
+1: type void
+2: type integer 1
+3: type integer 8
+4: type function is_varargs:0 ret:1 0 
+5: type function is_varargs:0 ret:1 
+6: type function is_varargs:0 ret:0 0 0 0 
+7: type function is_varargs:0 ret:1 0 0 0 
+8: type function is_varargs:0 ret:0 0 0 0 0 
+9: type integer 64
+10: type function is_varargs:0 ret:0 0 0 
+11: type function is_varargs:0 ret:0 
+12: type function is_varargs:0 ret:1 0 0 0 0 2 
+13: type function is_varargs:0 ret:0 0 
+14: type function is_varargs:0 ret:0 0 9 0 0 
+15: type function is_varargs:0 ret:0 0 0 0 0 0 9 
+16: type function is_varargs:0 ret:1 0 0 
+*** END BLOCK
+%0. module function: (type:12,cc:0,is_proto:1,linkage:0)
+%1. module function: (type:5,cc:0,is_proto:1,linkage:0)
+%2. module function: (type:4,cc:0,is_proto:0,linkage:0)
+%3. module function: (type:7,cc:0,is_proto:0,linkage:3)
+%4. module function: (type:4,cc:0,is_proto:0,linkage:3)
+%5. module function: (type:8,cc:0,is_proto:0,linkage:3)
+%6. module function: (type:10,cc:0,is_proto:0,linkage:3)
+%7. module function: (type:14,cc:0,is_proto:0,linkage:3)
+%8. module function: (type:8,cc:0,is_proto:0,linkage:3)
+%9. module function: (type:8,cc:0,is_proto:0,linkage:3)
+%10. module function: (type:10,cc:0,is_proto:0,linkage:3)
+%11. module function: (type:10,cc:0,is_proto:0,linkage:3)
+%12. module function: (type:13,cc:0,is_proto:0,linkage:3)
+%13. module function: (type:6,cc:0,is_proto:0,linkage:3)
+%14. module function: (type:5,cc:0,is_proto:0,linkage:3)
+%15. module function: (type:11,cc:0,is_proto:1,linkage:0)
+*** SUBBLOCK GLOBALVAR (19)
+global var count: 23
+%16. var. alignment:4 is_constant:0 offset:1024
+  zerofill. num_bytes: 4, data_offset:1024
+%17. var. alignment:4 is_constant:0 offset:1028
+  compound. num initializers: 8
+  writing reloc value. offset:1028 value:240 (0xf0)
+    write.u32 [    1028] <= 240
+  reloc. index: 12 addend: 0 data_offset:1028
+  writing reloc value. offset:1032 value:236 (0xec)
+    write.u32 [    1032] <= 236
+  reloc. index: 11 addend: 0 data_offset:1032
+  writing reloc value. offset:1036 value:232 (0xe8)
+    write.u32 [    1036] <= 232
+  reloc. index: 10 addend: 0 data_offset:1036
+  writing reloc value. offset:1040 value:228 (0xe4)
+    write.u32 [    1040] <= 228
+  reloc. index: 9 addend: 0 data_offset:1040
+  writing reloc value. offset:1044 value:224 (0xe0)
+    write.u32 [    1044] <= 224
+  reloc. index: 8 addend: 0 data_offset:1044
+  writing reloc value. offset:1048 value:220 (0xdc)
+    write.u32 [    1048] <= 220
+  reloc. index: 7 addend: 0 data_offset:1048
+  writing reloc value. offset:1052 value:216 (0xd8)
+    write.u32 [    1052] <= 216
+  reloc. index: 6 addend: 0 data_offset:1052
+  writing reloc value. offset:1056 value:212 (0xd4)
+    write.u32 [    1056] <= 212
+  reloc. index: 5 addend: 0 data_offset:1056
+%18. var. alignment:4 is_constant:0 offset:1060
+  zerofill. num_bytes: 4, data_offset:1060
+%19. var. alignment:1 is_constant:1 offset:1064
+  data. num_bytes: 33 offset:1064
+%20. var. alignment:1 is_constant:1 offset:1097
+  data. num_bytes: 52 offset:1097
+%21. var. alignment:4 is_constant:0 offset:1152
+  zerofill. num_bytes: 24, data_offset:1152
+%22. var. alignment:4 is_constant:0 offset:1176
+  zerofill. num_bytes: 12, data_offset:1176
+%23. var. alignment:4 is_constant:0 offset:1188
+  zerofill. num_bytes: 8, data_offset:1188
+%24. var. alignment:1 is_constant:1 offset:1196
+  data. num_bytes: 18 offset:1196
+%25. var. alignment:1 is_constant:1 offset:1214
+  data. num_bytes: 22 offset:1214
+%26. var. alignment:1 is_constant:1 offset:1236
+  data. num_bytes: 19 offset:1236
+%27. var. alignment:1 is_constant:1 offset:1255
+  data. num_bytes: 20 offset:1255
+%28. var. alignment:1 is_constant:1 offset:1275
+  data. num_bytes: 20 offset:1275
+%29. var. alignment:1 is_constant:1 offset:1295
+  data. num_bytes: 20 offset:1295
+%30. var. alignment:1 is_constant:1 offset:1315
+  data. num_bytes: 17 offset:1315
+%31. var. alignment:4 is_constant:0 offset:1332
+  zerofill. num_bytes: 4, data_offset:1332
+%32. var. alignment:4 is_constant:0 offset:1336
+  writing reloc value. offset:1336 value:1332 (0x534)
+    write.u32 [    1336] <= 1332
+  reloc. index: 31 addend: 0 data_offset:1336
+%33. var. alignment:4 is_constant:0 offset:1340
+  zerofill. num_bytes: 4, data_offset:1340
+%34. var. alignment:1 is_constant:0 offset:1344
+  zerofill. num_bytes: 1, data_offset:1344
+%35. var. alignment:1 is_constant:0 offset:1345
+  zerofill. num_bytes: 1, data_offset:1345
+%36. var. alignment:8 is_constant:0 offset:1352
+  compound. num initializers: 7
+  zerofill. num_bytes: 4, data_offset:1352
+  writing reloc value. offset:1356 value:2104 (0x838)
+    write.u32 [    1356] <= 2104
+  reloc. index: 36 addend: 752 data_offset:1356
+  writing reloc value. offset:1360 value:2232 (0x8b8)
+    write.u32 [    1360] <= 2232
+  reloc. index: 36 addend: 880 data_offset:1360
+  writing reloc value. offset:1364 value:2360 (0x938)
+    write.u32 [    1364] <= 2360
+  reloc. index: 36 addend: 1008 data_offset:1364
+  zerofill. num_bytes: 36, data_offset:1368
+  reloc. index: 37 addend: 0 data_offset:1404
+  data. num_bytes: 1080 offset:1408
+%37. var. alignment:1 is_constant:1 offset:2488
+  data. num_bytes: 2 offset:2488
+%38. var. alignment:8 is_constant:1 offset:2496
+  compound. num initializers: 7
+  data. num_bytes: 12 offset:2496
+  writing reloc value. offset:2508 value:2104 (0x838)
+    write.u32 [    2508] <= 2104
+  reloc. index: 36 addend: 752 data_offset:2508
+  writing reloc value. offset:2512 value:2232 (0x8b8)
+    write.u32 [    2512] <= 2232
+  reloc. index: 36 addend: 880 data_offset:2512
+  writing reloc value. offset:2516 value:2360 (0x938)
+    write.u32 [    2516] <= 2360
+  reloc. index: 36 addend: 1008 data_offset:2516
+  zerofill. num_bytes: 36, data_offset:2520
+  writing reloc value. offset:2556 value:2488 (0x9b8)
+    write.u32 [    2556] <= 2488
+  reloc. index: 37 addend: 0 data_offset:2556
+  data. num_bytes: 1080 offset:2560
+  writing reloc value. offset:1404 value:2488 (0x9b8)
+    write.u32 [    1404] <= 2488
+*** END BLOCK
+*** SUBBLOCK VALUE_SYMTAB (14)
+  entry: id:15 name:"llvm.nacl.read.tp"
+    intrinsic "llvm.nacl.read.tp" (28)
+  entry: id:1 name:"llvm.trap"
+    intrinsic "llvm.trap" (34)
+  entry: id:2 name:"_start"
+    intrinsic "_start" (35)
+  entry: id:0 name:"llvm.memcpy.p0i8.p0i8.i32"
+    intrinsic "llvm.memcpy.p0i8.p0i8.i32" (8)
+*** END BLOCK
+*** SUBBLOCK FUNCTION (12)
+function %2 (_start)
+  %39. function arg 0
+num bbs:57
+*** SUBBLOCK CONSTANTS (11)
+  constants settype 0 (int32)
+  %40. integer 0
+  %41. integer 4
+  %42. integer 8
+  %43. integer 328
+  %44. integer 1
+  %45. integer 332
+  %46. integer 16
+  %47. integer 32
+  %48. integer 12
+  %49. integer -1
+  %50. integer 31
+  %51. integer 1155
+  %52. integer 11
+  %53. integer -1144
+  %54. integer 1144
+  %55. integer 5
+  %56. integer 24
+  %57. integer 3
+  %58. integer 34
+  %59. integer 7
+  %60. integer -8
+  %61. integer -1136
+  %62. integer 392
+  %63. integer 396
+  %64. integer 136
+  %65. integer 60
+  constants settype 2 (int1)
+  %66. integer -1
+  %67. integer 0
+  constants settype 9 (int64)
+  %68. integer 0
+*** END BLOCK
+bb:0 (succs: 1)
+ defs: [%69,%83]
+  %69(int32). alloca %41(int32) align=4
+  %70(int32). alloca %46(int32) align=4
+  %71(int32). alloca %41(int32) align=4
+  store dest:%71(int32) value:%39(int32) align=1
+  %72(int32). load src:%39(int32) align=1
+  %73(int32). binop op:add(0) %39(int32) %42(int32) (flags:0)
+  %74(int32). load src:%73(int32) align=1
+  %75(int32). binop op:add(0) %74(int32) %41(int32) (flags:0)
+  %76(int32). binop op:mul(2) %75(int32) %41(int32) (flags:0)
+  %77(int32). binop op:add(0) %39(int32) %76(int32) (flags:0)
+  %78(int32). binop op:add(0) %39(int32) %41(int32) (flags:0)
+  %79(int32). load src:%78(int32) align=1
+  %80(int32). binop op:add(0) %74(int32) %55(int32) (flags:0)
+  %81(int32). binop op:add(0) %80(int32) %79(int32) (flags:0)
+  %82(int32). binop op:mul(2) %81(int32) %41(int32) (flags:0)
+  %83(int32). binop op:add(0) %39(int32) %82(int32) (flags:0)
+  store dest:%32(int32) value:%77(int32) align=1
+  store dest:%16(int32) value:%71(int32) align=1
+  br 1
+bb:1 (succs: 3 4 2)
+ defs: [%84,%85]
+  forwardtyperef %88(int32) int32
+  %84(int32). phi bb:0=>%83(int32) bb:3=>%88(int32)
+  %85(int32). load src:%84(int32) align=1
+  switch value:%85(int32) [default:3] [0 => bb:4] [32 => bb:2]
+bb:2 (succs: 3)
+ defs: [%86,%87]
+  %86(int32). binop op:add(0) %84(int32) %41(int32) (flags:0)
+  %87(int32). load src:%86(int32) align=1
+  store dest:%18(int32) value:%87(int32) align=1
+  br 3
+bb:3 (succs: 1)
+ defs: [%88,%88]
+  %88(int32). binop op:add(0) %84(int32) %42(int32) (flags:0)
+  br 1
+bb:4 (succs: 5 6)
+ defs: [%89,%90]
+  %89(int32). load src:%18(int32) align=1
+  %90(int1). cmp2 op:icmp_eq(32) %89(int32) %40(int32)
+  br %90(int1) ? 5 : 6
+bb:5 (succs:)
+  call %4(void(int32)) args: %19(int32)
+  unreachable
+bb:6 (succs: 10 7)
+ defs: [%91,%92]
+  %91(int32). call indirect %89(int32) args: %24(int32) %17(int32) %47(int32)
+  %92(int1). cmp2 op:icmp_eq(32) %91(int32) %47(int32)
+  br %92(int1) ? 10 : 7
+bb:7 (succs: 8 9)
+ defs: [%93,%94]
+  %93(int32). load src:%18(int32) align=1
+  %94(int1). cmp2 op:icmp_eq(32) %93(int32) %40(int32)
+  br %94(int1) ? 8 : 9
+bb:8 (succs:)
+  call %4(void(int32)) args: %19(int32)
+  unreachable
+bb:9 (succs: 10)
+ defs: [%95,%95]
+  %95(int32). call indirect %93(int32) args: %25(int32) %17(int32) %47(int32)
+  br 10
+bb:10 (succs: 11 12)
+ defs: [%96,%97]
+  call %3(void(int32,int32,int32)) args: %26(int32) %21(int32) %56(int32)
+  %96(int32). load src:%18(int32) align=1
+  %97(int1). cmp2 op:icmp_eq(32) %96(int32) %40(int32)
+  br %97(int1) ? 11 : 12
+bb:11 (succs:)
+  call %4(void(int32)) args: %19(int32)
+  unreachable
+bb:12 (succs: 18 13)
+ defs: [%98,%99]
+  %98(int32). call indirect %96(int32) args: %27(int32) %22(int32) %48(int32)
+  %99(int1). cmp2 op:icmp_eq(32) %98(int32) %48(int32)
+  br %99(int1) ? 18 : 13
+bb:13 (succs: 14 15)
+ defs: [%100,%101]
+  %100(int32). load src:%18(int32) align=1
+  %101(int1). cmp2 op:icmp_eq(32) %100(int32) %40(int32)
+  br %101(int1) ? 14 : 15
+bb:14 (succs:)
+  call %4(void(int32)) args: %19(int32)
+  unreachable
+bb:15 (succs: 17 16)
+ defs: [%102,%103]
+  %102(int32). call indirect %100(int32) args: %28(int32) %70(int32) %46(int32)
+  %103(int1). cmp2 op:icmp_eq(32) %102(int32) %46(int32)
+  br %103(int1) ? 17 : 16
+bb:16 (succs: 17)
+ defs: [%104,%104]
+  call %3(void(int32,int32,int32)) args: %29(int32) %70(int32) %48(int32)
+  %104(int32). binop op:add(0) %22(int32) %42(int32) (flags:0)
+  store dest:%104(int32) value:%13(int32(int32,int32,int32)) align=1
+  br 17
+bb:17 (succs: 18)
+ defs: [%105,%109]
+  %105(int32). binop op:add(0) %70(int32) %41(int32) (flags:0)
+  %106(int32). load src:%105(int32) align=1
+  store dest:%22(int32) value:%106(int32) align=1
+  %107(int32). binop op:add(0) %70(int32) %42(int32) (flags:0)
+  %108(int32). load src:%107(int32) align=1
+  %109(int32). binop op:add(0) %22(int32) %41(int32) (flags:0)
+  store dest:%109(int32) value:%108(int32) align=1
+  br 18
+bb:18 (succs: 23 19)
+ defs: [%110,%110]
+  call %3(void(int32,int32,int32)) args: %30(int32) %23(int32) %42(int32)
+  %110(int1). cmp2 op:icmp_eq(32) %72(int32) %40(int32)
+  br %110(int1) ? 23 : 19
+bb:19 (succs: 20 21)
+ defs: [%111,%113]
+  %111(int32). binop op:add(0) %36(int32) %43(int32) (flags:0)
+  %112(int32). load src:%111(int32) align=1
+  %113(int1). cmp2 op:icmp_eq(32) %112(int32) %40(int32)
+  br %113(int1) ? 20 : 21
+bb:20 (succs: 21)
+ defs: [%114,%116]
+  %114(int32). binop op:add(0) %36(int32) %45(int32) (flags:0)
+  %115(int32). binop op:add(0) %36(int32) %43(int32) (flags:0)
+  store dest:%115(int32) value:%114(int32) align=1
+  %116(int32). binop op:add(0) %36(int32) %45(int32) (flags:0)
+  br 21
+bb:21 (succs: 23 22)
+ defs: [%117,%120]
+  %117(int32). phi bb:20=>%116(int32) bb:19=>%112(int32)
+  %118(int32). binop op:add(0) %117(int32) %41(int32) (flags:0)
+  %119(int32). load src:%118(int32) align=1
+  %120(int1). cmp2 op:icmp_sgt(38) %119(int32) %50(int32)
+  br %120(int1) ? 23 : 22
+bb:22 (succs: 23)
+ defs: [%121,%124]
+  %121(int32). binop op:add(0) %119(int32) %44(int32) (flags:0)
+  store dest:%118(int32) value:%121(int32) align=1
+  %122(int32). binop op:add(0) %117(int32) %42(int32) (flags:0)
+  %123(int32). binop op:mul(2) %119(int32) %41(int32) (flags:0)
+  %124(int32). binop op:add(0) %122(int32) %123(int32) (flags:0)
+  store dest:%124(int32) value:%72(int32) align=1
+  br 23
+bb:23 (succs: 24 25)
+ defs: [%125,%127]
+  %125(int32). binop op:add(0) %36(int32) %43(int32) (flags:0)
+  %126(int32). load src:%125(int32) align=1
+  %127(int1). cmp2 op:icmp_eq(32) %126(int32) %40(int32)
+  br %127(int1) ? 24 : 25
+bb:24 (succs: 25)
+ defs: [%128,%130]
+  %128(int32). binop op:add(0) %36(int32) %45(int32) (flags:0)
+  %129(int32). binop op:add(0) %36(int32) %43(int32) (flags:0)
+  store dest:%129(int32) value:%128(int32) align=1
+  %130(int32). binop op:add(0) %36(int32) %45(int32) (flags:0)
+  br 25
+bb:25 (succs: 27 26)
+ defs: [%131,%134]
+  %131(int32). phi bb:24=>%130(int32) bb:23=>%126(int32)
+  %132(int32). binop op:add(0) %131(int32) %41(int32) (flags:0)
+  %133(int32). load src:%132(int32) align=1
+  %134(int1). cmp2 op:icmp_sgt(38) %133(int32) %50(int32)
+  br %134(int1) ? 27 : 26
+bb:26 (succs: 27)
+ defs: [%135,%138]
+  %135(int32). binop op:add(0) %133(int32) %44(int32) (flags:0)
+  store dest:%132(int32) value:%135(int32) align=1
+  %136(int32). binop op:add(0) %131(int32) %42(int32) (flags:0)
+  %137(int32). binop op:mul(2) %133(int32) %41(int32) (flags:0)
+  %138(int32). binop op:add(0) %136(int32) %137(int32) (flags:0)
+  store dest:%138(int32) value:%14(void()) align=1
+  br 27
+bb:27 (succs: 28 29)
+ defs: [%139,%140]
+  %139(int8). load src:%35(int32) align=1
+  %140(int1). cast op:trunc(0) %139(int8)
+  br %140(int1) ? 28 : 29
+bb:28 (succs: 30)
+ defs: [%141,%142]
+  %141(int8). load src:%34(int32) align=1
+  %142(int1). cast op:trunc(0) %141(int8)
+  br 30
+bb:29 (succs: 30)
+ defs: [%143,%144]
+  %143(int8). cast op:zext(1) %66(int1)
+  store dest:%35(int32) value:%143(int8) align=1
+  store dest:%33(int32) value:%38(int32) align=1
+  %144(int8). cast op:zext(1) %66(int1)
+  store dest:%34(int32) value:%144(int8) align=1
+  br 30
+bb:30 (succs: 32 31)
+ defs: [%145,%149]
+  %145(int1). phi bb:28=>%142(int1) bb:29=>%66(int1)
+  %146(int32). vselect %145(int1) ? %51(int32) : %52(int32)
+  store dest:%69(int32) value:%40(int32) align=1
+  %147(int32). load src:%22(int32) align=1
+  %148(int32). call indirect %147(int32) args: %69(int32) %146(int32) %57(int32) %58(int32) %49(int32) %68(int64)
+  %149(int1). cmp2 op:icmp_eq(32) %148(int32) %40(int32)
+  br %149(int1) ? 32 : 31
+bb:31 (succs: 33)
+ defs: [%150,%152]
+  %150(int32). call %15(int32())(llvm.nacl.read.tp) args:
+  %151(int32). binop op:add(0) %150(int32) %53(int32) (flags:0)
+  %152(int32). load src:%151(int32) align=1
+  store dest:%152(int32) value:%148(int32) align=1
+  br 33
+bb:32 (succs: 33)
+ defs: [%153,%153]
+  %153(int32). load src:%69(int32) align=1
+  br 33
+bb:33 (succs: 34 35)
+ defs: [%154,%156]
+  %154(int32). phi bb:31=>%49(int32) bb:32=>%153(int32)
+  %155(int8). load src:%35(int32) align=1
+  %156(int1). cast op:trunc(0) %155(int8)
+  br %156(int1) ? 34 : 35
+bb:34 (succs: 36)
+ defs: [%157,%158]
+  %157(int8). load src:%34(int32) align=1
+  %158(int1). cast op:trunc(0) %157(int8)
+  br 36
+bb:35 (succs: 36)
+ defs: [%159,%160]
+  %159(int8). cast op:zext(1) %66(int1)
+  store dest:%35(int32) value:%159(int8) align=1
+  store dest:%33(int32) value:%38(int32) align=1
+  %160(int8). cast op:zext(1) %66(int1)
+  store dest:%34(int32) value:%160(int8) align=1
+  br 36
+bb:36 (succs: 37 38)
+ defs: [%161,%170]
+  %161(int1). phi bb:34=>%158(int1) bb:35=>%66(int1)
+  %162(int32). vselect %161(int1) ? %51(int32) : %52(int32)
+  %163(int32). binop op:add(0) %154(int32) %162(int32) (flags:0)
+  %164(int32). vselect %161(int1) ? %54(int32) : %40(int32)
+  %165(int32). binop op:add(0) %154(int32) %59(int32) (flags:0)
+  %166(int32). binop op:and(10) %165(int32) %60(int32) (flags:0)
+  %167(int32). binop op:add(0) %166(int32) %164(int32) (flags:0)
+  %168(int32). vselect %161(int1) ? %54(int32) : %40(int32)
+  %169(int32). binop op:add(0) %166(int32) %168(int32) (flags:0)
+  %170(int1). cmp2 op:icmp_ugt(34) %169(int32) %163(int32)
+  br %170(int1) ? 37 : 38
+bb:37 (succs:)
+  call %1(void())(llvm.trap) args:
+  unreachable
+bb:38 (succs: 54 40)
+ defs: [%171,%179]
+  %171(int32). load src:%33(int32) align=1
+  call %0(void(int32,int32,int32,int32,int1))(llvm.memcpy.p0i8.p0i8.i32) args: %166(int32) %171(int32) %168(int32) %44(int32) %67(int1)
+  store dest:%167(int32) value:%167(int32) align=1
+  %172(int32). load src:%23(int32) align=1
+  %173(int32). call indirect %172(int32) args: %167(int32)
+  %174(int32). call %15(int32())(llvm.nacl.read.tp) args:
+  %175(int32). binop op:add(0) %174(int32) %53(int32) (flags:0)
+  %176(int32). binop op:add(0) %174(int32) %61(int32) (flags:0)
+  store dest:%175(int32) value:%176(int32) align=1
+  %177(int32). binop op:add(0) %36(int32) %43(int32) (flags:0)
+  %178(int32). load src:%177(int32) align=1
+  %179(int1). cmp2 op:icmp_eq(32) %178(int32) %40(int32)
+  br %179(int1) ? 54 : 40
+bb:39 (succs: 54 40)
+ defs: [%180,%180]
+  forwardtyperef %213(int32) int32
+  %180(int1). cmp2 op:icmp_eq(32) %213(int32) %40(int32)
+  br %180(int1) ? 54 : 40
+bb:40 (succs: 41 54)
+ defs: [%181,%184]
+  %181(int32). phi bb:39=>%213(int32) bb:38=>%178(int32)
+  %182(int32). binop op:add(0) %181(int32) %41(int32) (flags:0)
+  %183(int32). load src:%182(int32) align=1
+  %184(int1). cmp2 op:icmp_sgt(38) %183(int32) %40(int32)
+  br %184(int1) ? 41 : 54
+bb:41 (succs: 42)
+ defs: [%185,%186]
+  %185(int32). binop op:add(0) %181(int32) %62(int32) (flags:0)
+  %186(int32). binop op:add(0) %181(int32) %63(int32) (flags:0)
+  br 42
+bb:42 (succs: 45 46)
+ defs: [%187,%195]
+  forwardtyperef %197(int32) int32
+  %187(int32). phi bb:41=>%183(int32) bb:44=>%197(int32)
+  forwardtyperef %189(int32) int32
+  %188(int32). phi bb:41=>%183(int32) bb:44=>%189(int32)
+  %189(int32). binop op:add(0) %188(int32) %49(int32) (flags:0)
+  %190(int32). binop op:shl(7) %44(int32) %189(int32) (flags:0)
+  %191(int32). binop op:add(0) %181(int32) %42(int32) (flags:0)
+  %192(int32). binop op:mul(2) %189(int32) %41(int32) (flags:0)
+  %193(int32). binop op:add(0) %191(int32) %192(int32) (flags:0)
+  %194(int32). load src:%193(int32) align=1
+  %195(int1). cmp2 op:icmp_eq(32) %188(int32) %187(int32)
+  br %195(int1) ? 45 : 46
+bb:43 (succs: 44 54)
+ defs: [%196,%196]
+  %196(int1). cmp2 op:icmp_sgt(38) %188(int32) %44(int32)
+  br %196(int1) ? 44 : 54
+bb:44 (succs: 42)
+ defs: [%197,%197]
+  %197(int32). load src:%182(int32) align=1
+  br 42
+bb:45 (succs: 47)
+  store dest:%182(int32) value:%189(int32) align=1
+  br 47
+bb:46 (succs: 47)
+  store dest:%193(int32) value:%40(int32) align=1
+  br 47
+bb:47 (succs: 43 48)
+ defs: [%198,%198]
+  %198(int1). cmp2 op:icmp_eq(32) %194(int32) %40(int32)
+  br %198(int1) ? 43 : 48
+bb:48 (succs: 49 50)
+ defs: [%199,%202]
+  %199(int32). load src:%182(int32) align=1
+  %200(int32). load src:%185(int32) align=1
+  %201(int32). binop op:and(10) %200(int32) %190(int32) (flags:0)
+  %202(int1). cmp2 op:icmp_eq(32) %201(int32) %40(int32)
+  br %202(int1) ? 49 : 50
+bb:49 (succs: 53)
+  call indirect %194(int32) args:
+  br 53
+bb:50 (succs: 51 52)
+ defs: [%203,%209]
+  %203(int32). load src:%186(int32) align=1
+  %204(int32). binop op:and(10) %203(int32) %190(int32) (flags:0)
+  %205(int1). cmp2 op:icmp_eq(32) %204(int32) %40(int32)
+  %206(int32). binop op:add(0) %181(int32) %64(int32) (flags:0)
+  %207(int32). binop op:mul(2) %189(int32) %41(int32) (flags:0)
+  %208(int32). binop op:add(0) %206(int32) %207(int32) (flags:0)
+  %209(int32). load src:%208(int32) align=1
+  br %205(int1) ? 51 : 52
+bb:51 (succs: 53)
+  call indirect %194(int32) args: %40(int32) %209(int32)
+  br 53
+bb:52 (succs: 53)
+  call indirect %194(int32) args: %209(int32)
+  br 53
+bb:53 (succs: 43 39)
+ defs: [%210,%215]
+  %210(int32). load src:%182(int32) align=1
+  %211(int1). cmp2 op:icmp_eq(32) %199(int32) %210(int32)
+  %212(int32). binop op:add(0) %36(int32) %43(int32) (flags:0)
+  %213(int32). load src:%212(int32) align=1
+  %214(int1). cmp2 op:icmp_eq(32) %213(int32) %181(int32)
+  %215(int1). binop op:and(10) %211(int1) %214(int1) (flags:0)
+  br %215(int1) ? 43 : 39
+bb:54 (succs: 56 55)
+ defs: [%216,%218]
+  %216(int32). binop op:add(0) %36(int32) %65(int32) (flags:0)
+  %217(int32). load src:%216(int32) align=1
+  %218(int1). cmp2 op:icmp_eq(32) %217(int32) %40(int32)
+  br %218(int1) ? 56 : 55
+bb:55 (succs: 56)
+  call indirect %217(int32) args: %36(int32)
+  br 56
+bb:56 (succs:)
+ defs: [%219,%219]
+  %219(int32). load src:%21(int32) align=1
+  call indirect %219(int32) args: %40(int32)
+  call %1(void())(llvm.trap) args:
+  unreachable
+*** END BLOCK
+*** SUBBLOCK FUNCTION (12)
+function %3
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+num bbs:5
+*** SUBBLOCK CONSTANTS (11)
+  constants settype 0 (int32)
+  %42. integer 0
+*** END BLOCK
+bb:0 (succs: 1 2)
+ defs: [%43,%44]
+  %43(int32). load src:%18(int32) align=1
+  %44(int1). cmp2 op:icmp_eq(32) %43(int32) %42(int32)
+  br %44(int1) ? 1 : 2
+bb:1 (succs:)
+  call %4(void(int32)) args: %19(int32)
+  unreachable
+bb:2 (succs: 4 3)
+ defs: [%45,%46]
+  %45(int32). call indirect %43(int32) args: %39(int32) %40(int32) %41(int32)
+  %46(int1). cmp2 op:icmp_eq(32) %45(int32) %41(int32)
+  br %46(int1) ? 4 : 3
+bb:3 (succs:)
+  call %4(void(int32)) args: %20(int32)
+  unreachable
+bb:4 (succs:)
+  ret
+*** END BLOCK
+*** SUBBLOCK FUNCTION (12)
+function %4
+  %39. function arg 0
+num bbs:5
+*** SUBBLOCK CONSTANTS (11)
+  constants settype 0 (int32)
+  %40. integer 0
+  %41. integer 1
+  %42. integer 4
+  %43. integer 16
+  %44. integer 2
+  constants settype 3 (int8)
+  %45. integer 0
+*** END BLOCK
+bb:0 (succs: 4 1)
+ defs: [%46,%49]
+  %46(int32). alloca %42(int32) align=4
+  %47(int32). binop op:add(0) %17(int32) %43(int32) (flags:0)
+  %48(int32). load src:%47(int32) align=1
+  %49(int1). cmp2 op:icmp_eq(32) %48(int32) %40(int32)
+  br %49(int1) ? 4 : 1
+bb:1 (succs: 3 2)
+ defs: [%50,%51]
+  %50(int8). load src:%39(int32) align=1
+  %51(int1). cmp2 op:icmp_eq(32) %50(int8) %45(int8)
+  br %51(int1) ? 3 : 2
+bb:2 (succs: 3 2)
+ defs: [%52,%57]
+  forwardtyperef %55(int32) int32
+  %52(int32). phi bb:2=>%55(int32) bb:1=>%40(int32)
+  forwardtyperef %54(int32) int32
+  %53(int32). phi bb:2=>%54(int32) bb:1=>%39(int32)
+  %54(int32). binop op:add(0) %53(int32) %41(int32) (flags:0)
+  %55(int32). binop op:add(0) %52(int32) %41(int32) (flags:0)
+  %56(int8). load src:%54(int32) align=1
+  %57(int1). cmp2 op:icmp_eq(32) %56(int8) %45(int8)
+  br %57(int1) ? 3 : 2
+bb:3 (succs: 4)
+ defs: [%58,%59]
+  %58(int32). phi bb:1=>%40(int32) bb:2=>%55(int32)
+  %59(int32). call indirect %48(int32) args: %44(int32) %39(int32) %58(int32) %46(int32)
+  br 4
+bb:4 (succs:)
+  call %1(void())(llvm.trap) args:
+  unreachable
+*** END BLOCK
+*** SUBBLOCK FUNCTION (12)
+function %5
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+  %42. function arg 3
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+  constants settype 0 (int32)
+  %43. integer 38
+*** END BLOCK
+bb:0 (succs:)
+  ret %43(int32)
+*** END BLOCK
+*** SUBBLOCK FUNCTION (12)
+function %6
+  %39. function arg 0
+  %40. function arg 1
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+  constants settype 0 (int32)
+  %41. integer 38
+*** END BLOCK
+bb:0 (succs:)
+  ret %41(int32)
+*** END BLOCK
+*** SUBBLOCK FUNCTION (12)
+function %7
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+  %42. function arg 3
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+  constants settype 0 (int32)
+  %43. integer 38
+*** END BLOCK
+bb:0 (succs:)
+  ret %43(int32)
+*** END BLOCK
+*** SUBBLOCK FUNCTION (12)
+function %8
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+  %42. function arg 3
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+  constants settype 0 (int32)
+  %43. integer 38
+*** END BLOCK
+bb:0 (succs:)
+  ret %43(int32)
+*** END BLOCK
+*** SUBBLOCK FUNCTION (12)
+function %9
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+  %42. function arg 3
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+  constants settype 0 (int32)
+  %43. integer 38
+*** END BLOCK
+bb:0 (succs:)
+  ret %43(int32)
+*** END BLOCK
+*** SUBBLOCK FUNCTION (12)
+function %10
+  %39. function arg 0
+  %40. function arg 1
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+  constants settype 0 (int32)
+  %41. integer 38
+*** END BLOCK
+bb:0 (succs:)
+  ret %41(int32)
+*** END BLOCK
+*** SUBBLOCK FUNCTION (12)
+function %11
+  %39. function arg 0
+  %40. function arg 1
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+  constants settype 0 (int32)
+  %41. integer 38
+*** END BLOCK
+bb:0 (succs:)
+  ret %41(int32)
+*** END BLOCK
+*** SUBBLOCK FUNCTION (12)
+function %12
+  %39. function arg 0
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+  constants settype 0 (int32)
+  %40. integer 38
+*** END BLOCK
+bb:0 (succs:)
+  ret %40(int32)
+*** END BLOCK
+*** SUBBLOCK FUNCTION (12)
+function %13
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+  constants settype 0 (int32)
+  %42. integer 38
+*** END BLOCK
+bb:0 (succs:)
+  ret %42(int32)
+*** END BLOCK
+*** SUBBLOCK FUNCTION (12)
+function %14
+num bbs:1
+bb:0 (succs:)
+  ret
+*** END BLOCK
+done
