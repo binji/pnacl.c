@@ -1,0 +1,3 @@
+# FLAGS: -m 2000foo
+# ERROR: 1
+Unable to parse memory-size flag "2000foo".

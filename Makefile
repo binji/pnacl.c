@@ -52,30 +52,15 @@ out/pnacl-32: pnacl.c | out
 
 #### TESTS ####
 
-TESTS = start main puts setjmp
-TEST_PEXES = $(TESTS:%=out/test/%.pexe)
-
 .PHONY: test
-test: out/pnacl out/pnacl-asan $(TEST_PEXES)
-	@set -e; for exe in out/pnacl out/pnacl-asan; do \
-		for test in $(TESTS); do \
-			PEXE=out/test/$$test.pexe; \
-			echo "Testing $$exe -t $$PEXE"; \
-			diff -u test/$$test.c.golden --label "'output from $$PEXE'" <($$exe -t $$PEXE); \
-		done; \
-	done
+test: out/pnacl out/pnacl-asan
+	@make -C test/res
+	@python test/run-tests.py
 
 .PHONY: reset-golden
-reset-golden: out/pnacl $(TEST_PEXES)
-	@set -e; for test in $(TESTS); do \
-		out/pnacl -t out/test/$$test.pexe > test/$$test.c.golden; \
-	done
-
-out/test/%.bc: test/%.c | out/test
-	`$(NACL_SDK_ROOT)/tools/nacl_config.py --tool cc -t pnacl` -std=gnu89 -O2 -o $@ $^
-
-out/test/%.pexe: out/test/%.bc | out/test
-	`$(NACL_SDK_ROOT)/tools/nacl_config.py --tool finalize -t pnacl` -o $@ $^
+reset-golden: out/pnacl out/pnacl-asan
+	@make -C test/res
+	@python test/run-tests.py -r
 
 #### FUZZ ####
 

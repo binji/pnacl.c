@@ -7666,6 +7666,8 @@ static void pn_options_parse(int argc, char** argv, char** env) {
           } else {
             PN_FATAL("Unknown suffix on memory-size \"%s\".\n", optarg);
           }
+        } else if (endptr == optarg + optarg_len) {
+          /* Size in bytes, do nothing */
         } else {
           PN_FATAL("Unable to parse memory-size flag \"%s\".\n", optarg);
         }

@@ -1,0 +1,29 @@
+# FLAGS: -h
+usage: ../out/pnacl [option] filename
+options:
+  -v, --verbose
+  -h, --help
+  -m, --memory-size
+  -r, --run
+  -e, --env
+  -E, --use-host-env
+  -t, --trace-all
+      --trace-block
+      --trace-flags
+      --trace-blockinfo-block
+      --trace-type-block
+      --trace-globalvar-block
+      --trace-value-symtab-block
+      --trace-constants-block
+      --trace-function-block
+      --trace-module-block
+      --trace-basic-blocks
+      --trace-instructions
+      --trace-execute
+      --trace-irt
+      --trace-intrinsics
+      --trace-memory
+  -p, --print-all
+      --print-named-functions
+      --print-time
+      --print-stats

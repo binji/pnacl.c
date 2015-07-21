@@ -1,0 +1,7 @@
+# FLAGS: --trace-flags -e "foo=bar" -e "foo"
+# FILE: res/empty.pexe
+# ERROR: 1
+*** ARGS:
+  [0] res/empty.pexe
+*** ENVIRONMENT:
+PN_CHECK failed: num_bits <= bs->curword_bits.

@@ -1,5 +1,7 @@
+# FLAGS: -t
+# FILE: res/start.pexe
 *** ARGS:
-  [0] out/test/start.pexe
+  [0] res/start.pexe
 *** ENVIRONMENT:
 entry: 1
 module version: 1
