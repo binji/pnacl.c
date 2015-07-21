@@ -1,0 +1,13 @@
+# FLAGS: --trace-flags -m100k -e"hello=world"
+# FILE: res/empty.pexe
+# ARGS: foo bar baz
+# ERROR: 1
+Setting memory-size to 102400
+*** ARGS:
+  [0] res/empty.pexe
+  [1] foo
+  [2] bar
+  [3] baz
+*** ENVIRONMENT:
+  hello=world
+PN_CHECK failed: num_bits <= bs->curword_bits.

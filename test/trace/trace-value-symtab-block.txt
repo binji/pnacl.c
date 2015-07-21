@@ -1,0 +1,5 @@
+# FLAGS: --trace-value-symtab-block
+# FILE: res/start.pexe
+  entry: id:0 name:"_start"
+    intrinsic "_start" (35)
+*** END BLOCK

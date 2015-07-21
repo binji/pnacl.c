@@ -1,0 +1,213 @@
+# FLAGS: --trace-basic-blocks
+# FILE: res/main.pexe
+function %2 (_start)
+  %39. function arg 0
+num bbs:57
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs: 1)
+ defs: [%69,%83]
+bb:1 (succs: 3 4 2)
+ defs: [%84,%85]
+bb:2 (succs: 3)
+ defs: [%86,%87]
+bb:3 (succs: 1)
+ defs: [%88,%88]
+bb:4 (succs: 5 6)
+ defs: [%89,%90]
+bb:5 (succs:)
+bb:6 (succs: 10 7)
+ defs: [%91,%92]
+bb:7 (succs: 8 9)
+ defs: [%93,%94]
+bb:8 (succs:)
+bb:9 (succs: 10)
+ defs: [%95,%95]
+bb:10 (succs: 11 12)
+ defs: [%96,%97]
+bb:11 (succs:)
+bb:12 (succs: 18 13)
+ defs: [%98,%99]
+bb:13 (succs: 14 15)
+ defs: [%100,%101]
+bb:14 (succs:)
+bb:15 (succs: 17 16)
+ defs: [%102,%103]
+bb:16 (succs: 17)
+ defs: [%104,%104]
+bb:17 (succs: 18)
+ defs: [%105,%109]
+bb:18 (succs: 23 19)
+ defs: [%110,%110]
+bb:19 (succs: 20 21)
+ defs: [%111,%113]
+bb:20 (succs: 21)
+ defs: [%114,%116]
+bb:21 (succs: 23 22)
+ defs: [%117,%120]
+bb:22 (succs: 23)
+ defs: [%121,%124]
+bb:23 (succs: 24 25)
+ defs: [%125,%127]
+bb:24 (succs: 25)
+ defs: [%128,%130]
+bb:25 (succs: 27 26)
+ defs: [%131,%134]
+bb:26 (succs: 27)
+ defs: [%135,%138]
+bb:27 (succs: 28 29)
+ defs: [%139,%140]
+bb:28 (succs: 30)
+ defs: [%141,%142]
+bb:29 (succs: 30)
+ defs: [%143,%144]
+bb:30 (succs: 32 31)
+ defs: [%145,%149]
+bb:31 (succs: 33)
+ defs: [%150,%152]
+bb:32 (succs: 33)
+ defs: [%153,%153]
+bb:33 (succs: 34 35)
+ defs: [%154,%156]
+bb:34 (succs: 36)
+ defs: [%157,%158]
+bb:35 (succs: 36)
+ defs: [%159,%160]
+bb:36 (succs: 37 38)
+ defs: [%161,%170]
+bb:37 (succs:)
+bb:38 (succs: 54 40)
+ defs: [%171,%179]
+bb:39 (succs: 54 40)
+ defs: [%180,%180]
+bb:40 (succs: 41 54)
+ defs: [%181,%184]
+bb:41 (succs: 42)
+ defs: [%185,%186]
+bb:42 (succs: 45 46)
+ defs: [%187,%195]
+bb:43 (succs: 44 54)
+ defs: [%196,%196]
+bb:44 (succs: 42)
+ defs: [%197,%197]
+bb:45 (succs: 47)
+bb:46 (succs: 47)
+bb:47 (succs: 43 48)
+ defs: [%198,%198]
+bb:48 (succs: 49 50)
+ defs: [%199,%202]
+bb:49 (succs: 53)
+bb:50 (succs: 51 52)
+ defs: [%203,%209]
+bb:51 (succs: 53)
+bb:52 (succs: 53)
+bb:53 (succs: 43 39)
+ defs: [%210,%215]
+bb:54 (succs: 56 55)
+ defs: [%216,%218]
+bb:55 (succs: 56)
+bb:56 (succs:)
+ defs: [%219,%219]
+*** END BLOCK
+function %3
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+num bbs:5
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs: 1 2)
+ defs: [%43,%44]
+bb:1 (succs:)
+bb:2 (succs: 4 3)
+ defs: [%45,%46]
+bb:3 (succs:)
+bb:4 (succs:)
+*** END BLOCK
+function %4
+  %39. function arg 0
+num bbs:5
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs: 4 1)
+ defs: [%46,%49]
+bb:1 (succs: 3 2)
+ defs: [%50,%51]
+bb:2 (succs: 3 2)
+ defs: [%52,%57]
+bb:3 (succs: 4)
+ defs: [%58,%59]
+bb:4 (succs:)
+*** END BLOCK
+function %5
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+  %42. function arg 3
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs:)
+*** END BLOCK
+function %6
+  %39. function arg 0
+  %40. function arg 1
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs:)
+*** END BLOCK
+function %7
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+  %42. function arg 3
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs:)
+*** END BLOCK
+function %8
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+  %42. function arg 3
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs:)
+*** END BLOCK
+function %9
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+  %42. function arg 3
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs:)
+*** END BLOCK
+function %10
+  %39. function arg 0
+  %40. function arg 1
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs:)
+*** END BLOCK
+function %11
+  %39. function arg 0
+  %40. function arg 1
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs:)
+*** END BLOCK
+function %12
+  %39. function arg 0
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs:)
+*** END BLOCK
+function %13
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs:)
+*** END BLOCK
+function %14
+num bbs:1
+bb:0 (succs:)
+*** END BLOCK

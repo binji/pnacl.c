@@ -31,6 +31,7 @@ class TestInfo(object):
     self.exe = '../out/pnacl'
     self.pexe = ''
     self.flags = []
+    self.args = []
     self.expected_lines = ''
     self.expected_error = 0
 
@@ -54,26 +55,32 @@ class TestInfo(object):
 
         key, value = m.group(1).split(':')
         key = key.strip()
+        value = value.strip()
         if key.lower() == 'exe':
           if self.exe:
             self._Error('exe already set')
             return False
-          self.exe = value.strip()
+          self.exe = value
         elif key.lower() == 'flags':
           if self.flags:
             self._Error('flags already set')
             return False
-          self.flags = shlex.split(value.strip())
+          self.flags = shlex.split(value)
         elif key.lower() == 'file':
           if self.pexe:
             self._Error('pexe already set')
             return False
-          self.pexe = value.strip()
+          self.pexe = value
         elif key.lower() == 'error':
           if self.expected_error:
             self._Error('error already set')
             return False
-          self.expected_error = int(value.strip())
+          self.expected_error = int(value)
+        elif key.lower() == 'args':
+          if self.args:
+            self._Error('args already set')
+            return False
+          self.args = shlex.split(value)
         n += 1
 
       self.header_lines = lines[:n]
@@ -86,6 +93,8 @@ class TestInfo(object):
       cmd += self.flags
     if self.pexe:
       cmd += [self.pexe]
+    if self.args:
+      cmd += ['--'] + self.args
     try:
       process = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                       stderr=subprocess.PIPE)

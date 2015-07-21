@@ -1,0 +1,4 @@
+# FLAGS: --trace-intrinsics -r
+# FILE: res/main.pexe
+    llvm.memcpy(dst_p:4096, src_p:2496, len:1144, align:1, is_volatile:0)
+    llvm.nacl.read.tp()

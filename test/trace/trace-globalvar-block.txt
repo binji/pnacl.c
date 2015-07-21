@@ -1,0 +1,89 @@
+# FLAGS: --trace-globalvar-block
+# FILE: res/main.pexe
+global var count: 23
+%16. var. alignment:4 is_constant:0 offset:1024
+  zerofill. num_bytes: 4, data_offset:1024
+%17. var. alignment:4 is_constant:0 offset:1028
+  compound. num initializers: 8
+  writing reloc value. offset:1028 value:240 (0xf0)
+  reloc. index: 12 addend: 0 data_offset:1028
+  writing reloc value. offset:1032 value:236 (0xec)
+  reloc. index: 11 addend: 0 data_offset:1032
+  writing reloc value. offset:1036 value:232 (0xe8)
+  reloc. index: 10 addend: 0 data_offset:1036
+  writing reloc value. offset:1040 value:228 (0xe4)
+  reloc. index: 9 addend: 0 data_offset:1040
+  writing reloc value. offset:1044 value:224 (0xe0)
+  reloc. index: 8 addend: 0 data_offset:1044
+  writing reloc value. offset:1048 value:220 (0xdc)
+  reloc. index: 7 addend: 0 data_offset:1048
+  writing reloc value. offset:1052 value:216 (0xd8)
+  reloc. index: 6 addend: 0 data_offset:1052
+  writing reloc value. offset:1056 value:212 (0xd4)
+  reloc. index: 5 addend: 0 data_offset:1056
+%18. var. alignment:4 is_constant:0 offset:1060
+  zerofill. num_bytes: 4, data_offset:1060
+%19. var. alignment:1 is_constant:1 offset:1064
+  data. num_bytes: 33 offset:1064
+%20. var. alignment:1 is_constant:1 offset:1097
+  data. num_bytes: 52 offset:1097
+%21. var. alignment:4 is_constant:0 offset:1152
+  zerofill. num_bytes: 24, data_offset:1152
+%22. var. alignment:4 is_constant:0 offset:1176
+  zerofill. num_bytes: 12, data_offset:1176
+%23. var. alignment:4 is_constant:0 offset:1188
+  zerofill. num_bytes: 8, data_offset:1188
+%24. var. alignment:1 is_constant:1 offset:1196
+  data. num_bytes: 18 offset:1196
+%25. var. alignment:1 is_constant:1 offset:1214
+  data. num_bytes: 22 offset:1214
+%26. var. alignment:1 is_constant:1 offset:1236
+  data. num_bytes: 19 offset:1236
+%27. var. alignment:1 is_constant:1 offset:1255
+  data. num_bytes: 20 offset:1255
+%28. var. alignment:1 is_constant:1 offset:1275
+  data. num_bytes: 20 offset:1275
+%29. var. alignment:1 is_constant:1 offset:1295
+  data. num_bytes: 20 offset:1295
+%30. var. alignment:1 is_constant:1 offset:1315
+  data. num_bytes: 17 offset:1315
+%31. var. alignment:4 is_constant:0 offset:1332
+  zerofill. num_bytes: 4, data_offset:1332
+%32. var. alignment:4 is_constant:0 offset:1336
+  writing reloc value. offset:1336 value:1332 (0x534)
+  reloc. index: 31 addend: 0 data_offset:1336
+%33. var. alignment:4 is_constant:0 offset:1340
+  zerofill. num_bytes: 4, data_offset:1340
+%34. var. alignment:1 is_constant:0 offset:1344
+  zerofill. num_bytes: 1, data_offset:1344
+%35. var. alignment:1 is_constant:0 offset:1345
+  zerofill. num_bytes: 1, data_offset:1345
+%36. var. alignment:8 is_constant:0 offset:1352
+  compound. num initializers: 7
+  zerofill. num_bytes: 4, data_offset:1352
+  writing reloc value. offset:1356 value:2104 (0x838)
+  reloc. index: 36 addend: 752 data_offset:1356
+  writing reloc value. offset:1360 value:2232 (0x8b8)
+  reloc. index: 36 addend: 880 data_offset:1360
+  writing reloc value. offset:1364 value:2360 (0x938)
+  reloc. index: 36 addend: 1008 data_offset:1364
+  zerofill. num_bytes: 36, data_offset:1368
+  reloc. index: 37 addend: 0 data_offset:1404
+  data. num_bytes: 1080 offset:1408
+%37. var. alignment:1 is_constant:1 offset:2488
+  data. num_bytes: 2 offset:2488
+%38. var. alignment:8 is_constant:1 offset:2496
+  compound. num initializers: 7
+  data. num_bytes: 12 offset:2496
+  writing reloc value. offset:2508 value:2104 (0x838)
+  reloc. index: 36 addend: 752 data_offset:2508
+  writing reloc value. offset:2512 value:2232 (0x8b8)
+  reloc. index: 36 addend: 880 data_offset:2512
+  writing reloc value. offset:2516 value:2360 (0x938)
+  reloc. index: 36 addend: 1008 data_offset:2516
+  zerofill. num_bytes: 36, data_offset:2520
+  writing reloc value. offset:2556 value:2488 (0x9b8)
+  reloc. index: 37 addend: 0 data_offset:2556
+  data. num_bytes: 1080 offset:2560
+  writing reloc value. offset:1404 value:2488 (0x9b8)
+*** END BLOCK

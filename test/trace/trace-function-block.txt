@@ -1,0 +1,84 @@
+# FLAGS: --trace-function-block
+# FILE: res/main.pexe
+function %2 (_start)
+  %39. function arg 0
+num bbs:57
+*** SUBBLOCK CONSTANTS (11)
+*** END BLOCK
+function %3
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+num bbs:5
+*** SUBBLOCK CONSTANTS (11)
+*** END BLOCK
+function %4
+  %39. function arg 0
+num bbs:5
+*** SUBBLOCK CONSTANTS (11)
+*** END BLOCK
+function %5
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+  %42. function arg 3
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+*** END BLOCK
+function %6
+  %39. function arg 0
+  %40. function arg 1
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+*** END BLOCK
+function %7
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+  %42. function arg 3
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+*** END BLOCK
+function %8
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+  %42. function arg 3
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+*** END BLOCK
+function %9
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+  %42. function arg 3
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+*** END BLOCK
+function %10
+  %39. function arg 0
+  %40. function arg 1
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+*** END BLOCK
+function %11
+  %39. function arg 0
+  %40. function arg 1
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+*** END BLOCK
+function %12
+  %39. function arg 0
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+*** END BLOCK
+function %13
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+*** END BLOCK
+function %14
+num bbs:1
+*** END BLOCK
