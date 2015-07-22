@@ -7,6 +7,7 @@
 #include <getopt.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <math.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -7240,6 +7241,34 @@ longjmp_done:
       break;
     }
 
+    case PN_OPCODE_INTRINSIC_LLVM_SQRT_F32: {
+      PNInstructionCall* i = (PNInstructionCall*)inst;
+      PN_CHECK(i->num_args == 1);
+      PN_CHECK(i->result_value_id != PN_INVALID_VALUE_ID);
+      float value = pn_executor_get_value(executor, i->arg_ids[0]).f32;
+      PNRuntimeValue result = pn_executor_value_f32(sqrtf(value));
+      pn_executor_set_value(executor, i->result_value_id, result);
+      PN_TRACE(INTRINSICS, "    llvm.sqrt.f32(%f)\n", value);
+      PN_TRACE(EXECUTE, "    %%%d = %f  %%%d = %f\n", i->result_value_id,
+               result.f32, i->arg_ids[0], value);
+      location->instruction_id++;
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_SQRT_F64: {
+      PNInstructionCall* i = (PNInstructionCall*)inst;
+      PN_CHECK(i->num_args == 1);
+      PN_CHECK(i->result_value_id != PN_INVALID_VALUE_ID);
+      double value = pn_executor_get_value(executor, i->arg_ids[0]).f64;
+      PNRuntimeValue result = pn_executor_value_f64(sqrt(value));
+      pn_executor_set_value(executor, i->result_value_id, result);
+      PN_TRACE(INTRINSICS, "    llvm.sqrt.f64(%f)\n", value);
+      PN_TRACE(EXECUTE, "    %%%d = %f  %%%d = %f\n", i->result_value_id,
+               result.f64, i->arg_ids[0], value);
+      location->instruction_id++;
+      break;
+    }
+
     case PN_OPCODE_INTRINSIC_LLVM_TRAP: {
       PNInstructionCall* i = (PNInstructionCall*)inst;
       PN_CHECK(i->num_args == 0);
@@ -7249,31 +7278,29 @@ longjmp_done:
       break;
     }
 
-#define OPCODE_INTRINSIC_STUB(name)                   \
+#define PN_OPCODE_INTRINSIC_STUB(name)                   \
   case PN_OPCODE_INTRINSIC_##name: {                  \
     PN_FATAL("Unimplemented intrinsic: %s\n", #name); \
     break;                                            \
   }
 
-    OPCODE_INTRINSIC_STUB(LLVM_BSWAP_I16)
-    OPCODE_INTRINSIC_STUB(LLVM_BSWAP_I32)
-    OPCODE_INTRINSIC_STUB(LLVM_BSWAP_I64)
-    OPCODE_INTRINSIC_STUB(LLVM_CTLZ_I32)
-    OPCODE_INTRINSIC_STUB(LLVM_CTTZ_I32)
-    OPCODE_INTRINSIC_STUB(LLVM_FABS_F32)
-    OPCODE_INTRINSIC_STUB(LLVM_FABS_F64)
-    OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_RMW_I8)
-    OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_RMW_I16)
-    OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_RMW_I32)
-    OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_RMW_I64)
-    OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I8)
-    OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I16)
-    OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I64)
-    OPCODE_INTRINSIC_STUB(LLVM_SQRT_F32)
-    OPCODE_INTRINSIC_STUB(LLVM_SQRT_F64)
-    OPCODE_INTRINSIC_STUB(LLVM_STACKRESTORE)
-    OPCODE_INTRINSIC_STUB(LLVM_STACKSAVE)
-    OPCODE_INTRINSIC_STUB(START)
+    PN_OPCODE_INTRINSIC_STUB(LLVM_BSWAP_I16)
+    PN_OPCODE_INTRINSIC_STUB(LLVM_BSWAP_I32)
+    PN_OPCODE_INTRINSIC_STUB(LLVM_BSWAP_I64)
+    PN_OPCODE_INTRINSIC_STUB(LLVM_CTLZ_I32)
+    PN_OPCODE_INTRINSIC_STUB(LLVM_CTTZ_I32)
+    PN_OPCODE_INTRINSIC_STUB(LLVM_FABS_F32)
+    PN_OPCODE_INTRINSIC_STUB(LLVM_FABS_F64)
+    PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_RMW_I8)
+    PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_RMW_I16)
+    PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_RMW_I32)
+    PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_RMW_I64)
+    PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I8)
+    PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I16)
+    PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I64)
+    PN_OPCODE_INTRINSIC_STUB(LLVM_STACKRESTORE)
+    PN_OPCODE_INTRINSIC_STUB(LLVM_STACKSAVE)
+    PN_OPCODE_INTRINSIC_STUB(START)
 
 #define OPCODE_LOAD(ty)                                              \
   do {                                                               \

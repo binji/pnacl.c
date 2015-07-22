@@ -12,7 +12,7 @@ everything: out/pnacl out/pnacl-liveness out/pnacl-notrace out/pnacl-notimers \
 	out/pnacl-notrace-notimers out/pnacl-opt out/pnacl-opt-assert out/pnacl-msan \
 	out/pnacl-asan out/pnacl-32
 
-CFLAGS = -Wall -Wno-unused-function -Werror -std=gnu89 -g
+CFLAGS = -Wall -Wno-unused-function -Werror -std=gnu89 -g -lm
 
 out/:
 	mkdir $@
