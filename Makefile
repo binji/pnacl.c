@@ -54,13 +54,8 @@ out/pnacl-32: pnacl.c | out
 
 .PHONY: test
 test: out/pnacl out/pnacl-asan
-	@make -C test/res
+	@make -C test
 	@python test/run-tests.py
-
-.PHONY: reset-golden
-reset-golden: out/pnacl out/pnacl-asan
-	@make -C test/res
-	@python test/run-tests.py -r
 
 #### FUZZ ####
 

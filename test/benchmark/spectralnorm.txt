@@ -1,0 +1,5 @@
+# FLAGS: -r
+# FILE: benchmark/res/spectralnorm.pexe
+# ARGS: 100
+# STDOUT:
+1.274219991

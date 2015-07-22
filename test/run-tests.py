@@ -13,6 +13,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -24,23 +25,13 @@ class Error(Exception):
   pass
 
 
-def LinesMatch(expected_lines, actual_lines):
-  if len(actual_lines) != len(expected_lines):
-    return False
-
-  num_lines = len(expected_lines)
-  for n in range(num_lines):
-    if actual_lines[n] != expected_lines[n]:
-      return False
-
-  return True
-
-
 def Indent(s, spaces):
   return ''.join(' '*spaces + l for l in s.splitlines(1))
 
 
-def DiffLines(expected_lines, actual_lines):
+def DiffLines(expected, actual):
+  expected_lines = expected.splitlines(1)
+  actual_lines = actual.splitlines(1)
   return list(difflib.unified_diff(expected_lines, actual_lines,
                                    fromfile='expected', tofile='actual'))
 
@@ -49,14 +40,16 @@ class TestInfo(object):
   def __init__(self):
     self.name = ''
     self.header_lines = []
-    self.expected_stdout_lines = []
-    self.expected_stderr_lines = []
+    self.stdout_file = None
+    self.expected_stdout = ''
+    self.expected_stderr = ''
     self.exe = '../out/pnacl'
     self.pexe = ''
     self.flags = []
     self.args = []
     self.expected_error = 0
     self.cmd = []
+    self.slow = False
 
   def Parse(self, filename):
     self.name = filename
@@ -65,6 +58,9 @@ class TestInfo(object):
       seen_keys = set()
       state = 'header'
       empty = True
+      header_lines = []
+      stdout_lines = []
+      stderr_lines = []
       for line in f.readlines():
         empty = False
         m = re.match(r'\s*#(.*)$', line)
@@ -74,6 +70,8 @@ class TestInfo(object):
 
           directive = m.group(1).strip()
           if directive.lower() == 'stdout:':
+            if 'stdout_file' in seen_keys:
+              raise Error('can\'t have stdout section and stdout file')
             state = 'stdout'
             continue
 
@@ -81,34 +79,45 @@ class TestInfo(object):
             raise Error('unexpected directive: %s' % line)
 
           key, value = directive.split(':')
-          key = key.strip()
+          key = key.strip().lower()
           value = value.strip()
           if key in seen_keys:
             raise Error('%s already set' % key)
           seen_keys.add(key)
-          if key.lower() == 'exe':
+          if key == 'exe':
             self.exe = value
-          elif key.lower() == 'flags':
+          elif key == 'flags':
             self.flags = shlex.split(value)
-          elif key.lower() == 'file':
+          elif key == 'file':
             self.pexe = value
-          elif key.lower() == 'error':
+          elif key == 'error':
             self.expected_error = int(value)
-          elif key.lower() == 'args':
+          elif key == 'args':
             self.args = shlex.split(value)
+          elif key == 'stdout_file':
+            self.stdout_file = value
+            with open(self.stdout_file) as s:
+              self.expected_stdout = s.read()
+          elif key == 'slow':
+            self.slow = True
           else:
             raise Error('Unknown directive: %s' % key)
         elif state == 'header':
           state = 'stderr'
 
         if state == 'header':
-          self.header_lines.append(line)
+          header_lines.append(line)
         elif state == 'stderr':
-          self.expected_stderr_lines.append(line)
+          stderr_lines.append(line)
         elif state == 'stdout':
-          self.expected_stdout_lines.append(line)
+          stdout_lines.append(line)
     if empty:
       raise Error('empty test file')
+
+    self.header = ''.join(header_lines)
+    if not self.stdout_file:
+      self.expected_stdout = ''.join(stdout_lines)
+    self.expected_stderr = ''.join(stderr_lines)
 
   def Run(self, options):
     if options.executable:
@@ -128,9 +137,11 @@ class TestInfo(object):
     # bug. So it should display the executable that was actually run.
     self.cmd = [exe] + cmd[1:]
     try:
+      start_time = time.time()
       process = subprocess.Popen(cmd, executable=exe, stdout=subprocess.PIPE,
                                                       stderr=subprocess.PIPE)
       stdout, stderr = process.communicate()
+      duration = time.time() - start_time
     except OSError as e:
       raise Error(str(e))
 
@@ -138,15 +149,36 @@ class TestInfo(object):
       raise Error('expected error code %d, got %d.' % (self.expected_error,
                                                        process.returncode))
 
-    return stdout.splitlines(1), stderr.splitlines(1)
+    return stdout, stderr, duration
 
-  def Rebase(self, stdout_lines, stderr_lines):
+  def Rebase(self, stdout, stderr):
     with open(self.name, 'w') as f:
-      f.writelines(self.header_lines)
-      f.writelines(stderr_lines)
-      if stdout_lines:
+      f.write(self.header)
+      f.write(stderr)
+      if self.stdout_file:
+        with open(self.stdout_file, 'w') as s:
+          s.write(stdout)
+      elif stdout:
         f.write('# STDOUT:\n')
-        f.writelines(stdout_lines)
+        f.write(stdout)
+
+
+def PrintStatus(passed, failed, start_time, incremental):
+  total_duration = time.time() - start_time
+  if incremental:
+    sys.stderr.write('\r')
+  status = '[+%d|-%d] (%.2fs)' % (passed, failed, total_duration)
+  PrintStatus.last_status_length = len(status)
+  sys.stderr.write(status)
+  if not incremental:
+    sys.stderr.write('\n')
+  sys.stderr.flush()
+
+PrintStatus.last_status_length = 0
+
+
+def ClearStatus():
+  sys.stderr.write('\r%s\r' % (' ' * PrintStatus.last_status_length))
 
 
 def main(args):
@@ -158,6 +190,8 @@ def main(args):
                       action='store_true')
   parser.add_argument('-r', '--rebase',
                       help='rebase a test to its current output.',
+                      action='store_true')
+  parser.add_argument('-s', '--slow', help='run slow tests.',
                       action='store_true')
   parser.add_argument('patterns', metavar='pattern', nargs='*',
                       help='test patterns.')
@@ -191,8 +225,12 @@ def main(args):
 
   os.chdir(SCRIPT_DIR)
 
-  passed_tests = []
-  failed_tests = []
+  isatty = os.isatty(1)
+  short_display = not logger.isEnabledFor(logging.INFO)
+
+  passed = 0
+  failed = 0
+  start_time = time.time()
   for test in tests:
     if not re.match(pattern_re, test):
       continue
@@ -200,32 +238,46 @@ def main(args):
     info = TestInfo()
     try:
       info.Parse(test)
-      stdout_lines, stderr_lines = info.Run(options)
+      if not options.slow and info.slow:
+        logger.info('. %s (skipped)' % info.name)
+        continue
+
+      stdout, stderr, duration = info.Run(options)
       if options.rebase:
-        info.Rebase(stdout_lines, stderr_lines)
+        info.Rebase(stdout, stderr)
       else:
-        stderr_matched = LinesMatch(info.expected_stderr_lines, stderr_lines)
-        if not stderr_matched:
-          diff_lines = DiffLines(info.expected_stderr_lines, stderr_lines)
+        if info.expected_stderr != stderr:
+          diff_lines = DiffLines(info.expected_stderr, stderr)
           raise Error('stderr mismatch:\n' + ''.join(diff_lines))
 
-        stdout_matched = LinesMatch(info.expected_stdout_lines, stdout_lines)
-        if not stdout_matched:
-          diff_lines = DiffLines(info.expected_stdout_lines, stdout_lines)
-          raise Error('stdout mismatch:\n' + ''.join(diff_lines))
+        if info.expected_stdout != stdout:
+          if info.stdout_file:
+            raise Error('stdout binary mismatch')
+          else:
+            diff_lines = DiffLines(info.expected_stdout, stdout)
+            raise Error('stdout mismatch:\n' + ''.join(diff_lines))
 
-      passed_tests.append(info)
-      logger.info('+ %s' % info.name)
+      passed += 1
+      logger.info('+ %s (%.3fs)' % (info.name, duration))
     except Error as e:
-      failed_tests.append(info)
+      failed += 1
       msg = ''
       if logger.isEnabledFor(logging.DEBUG) and info.cmd:
         msg += Indent('cmd = %s\n' % ' '.join(info.cmd), 2)
       msg += Indent(str(e), 2)
+      if short_display:
+        ClearStatus()
       logger.error('- %s\n%s' % (info.name, msg))
 
-  logger.warning('[+%d|-%d]' % (len(passed_tests), len(failed_tests)))
-  if failed_tests:
+    if short_display:
+      PrintStatus(passed, failed, start_time, True)
+
+  if not short_display:
+    PrintStatus(passed, failed, start_time, False)
+  else:
+    sys.stderr.write('\n')
+
+  if failed:
     return 1
   return 0
 

@@ -1,0 +1,6 @@
+# FLAGS: -r
+# FILE: benchmark/res/nbody.pexe
+# ARGS: 1000
+# STDOUT:
+-0.169075164
+-0.169087605

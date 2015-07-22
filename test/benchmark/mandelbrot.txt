@@ -1,0 +1,4 @@
+# FLAGS: -r
+# FILE: benchmark/res/mandelbrot.pexe
+# ARGS: 200
+# STDOUT_FILE: benchmark/mandelbrot.txt.output
