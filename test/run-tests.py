@@ -110,17 +110,26 @@ class TestInfo(object):
     if empty:
       raise Error('empty test file')
 
-  def Run(self):
-    self.cmd = [self.exe]
+  def Run(self, options):
+    if options.executable:
+      exe = options.executable
+    else:
+      exe = self.exe
+
+    cmd = ['pnacl']
     if self.flags:
-      self.cmd += self.flags
+      cmd += self.flags
     if self.pexe:
-      self.cmd += [self.pexe]
+      cmd += [self.pexe]
     if self.args:
-      self.cmd += ['--'] + self.args
+      cmd += ['--'] + self.args
+
+    # self.cmd is displayed to the user as a command that can reproduce the
+    # bug. So it should display the executable that was actually run.
+    self.cmd = [exe] + cmd[1:]
     try:
-      process = subprocess.Popen(self.cmd, stdout=subprocess.PIPE,
-                                           stderr=subprocess.PIPE)
+      process = subprocess.Popen(cmd, executable=exe, stdout=subprocess.PIPE,
+                                                      stderr=subprocess.PIPE)
       stdout, stderr = process.communicate()
     except OSError as e:
       raise Error(str(e))
@@ -135,12 +144,14 @@ class TestInfo(object):
     with open(self.name, 'w') as f:
       f.writelines(self.header_lines)
       f.writelines(stderr_lines)
-      f.write('# STDOUT:\n')
-      f.writelines(stdout_lines)
+      if stdout_lines:
+        f.write('# STDOUT:\n')
+        f.writelines(stdout_lines)
 
 
 def main(args):
   parser = argparse.ArgumentParser()
+  parser.add_argument('-e', '--executable', help='override executable.')
   parser.add_argument('-v', '--verbose', help='print more diagnotic messages. '
                       'Use more than once for more info.', action='count')
   parser.add_argument('-l', '--list', help='list all tests.',
@@ -189,7 +200,7 @@ def main(args):
     info = TestInfo()
     try:
       info.Parse(test)
-      stdout_lines, stderr_lines = info.Run()
+      stdout_lines, stderr_lines = info.Run(options)
       if options.rebase:
         info.Rebase(stdout_lines, stderr_lines)
       else:

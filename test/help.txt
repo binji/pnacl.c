@@ -1,5 +1,5 @@
 # FLAGS: -h
-usage: ../out/pnacl [option] filename
+usage: pnacl [option] filename
 options:
   -v, --verbose
   -h, --help
