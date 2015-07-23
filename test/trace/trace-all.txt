@@ -153,14 +153,49 @@ global var count: 23
     write.u32 [    1404] <= 2488
 *** END BLOCK
 *** SUBBLOCK VALUE_SYMTAB (14)
+  entry: id:32 name:"environ"
+  entry: id:17 name:"__libnacl_irt_fdio"
+  entry: id:21 name:"__libnacl_irt_basic"
+  entry: id:3 name:"__libnacl_mandatory_irt_query"
+  entry: id:7 name:"stub_seek"
   entry: id:15 name:"llvm.nacl.read.tp"
     intrinsic "llvm.nacl.read.tp" (28)
+  entry: id:19 name:".str"
+  entry: id:25 name:".str18"
+  entry: id:37 name:".str37"
+  entry: id:33 name:"cached_tls_info.0"
+  entry: id:34 name:"cached_tls_info.1"
+  entry: id:35 name:"cached_tls_info.3"
+  entry: id:10 name:"stub_dup2"
+  entry: id:20 name:".str1"
+  entry: id:22 name:"__libnacl_irt_memory"
+  entry: id:27 name:".str3"
+  entry: id:29 name:".str5"
+  entry: id:30 name:".str6"
+  entry: id:28 name:".str4"
+  entry: id:26 name:".str2"
+  entry: id:6 name:"stub_fstat"
+  entry: id:24 name:".str7"
+  entry: id:23 name:"__libnacl_irt_tls"
+  entry: id:38 name:"__tls_template_start"
+  entry: id:11 name:"stub_dup"
+  entry: id:31 name:"__env"
+  entry: id:16 name:"__nacl_initial_thread_stack_end"
+  entry: id:8 name:"stub_write"
   entry: id:1 name:"llvm.trap"
     intrinsic "llvm.trap" (34)
   entry: id:2 name:"_start"
     intrinsic "_start" (35)
   entry: id:0 name:"llvm.memcpy.p0i8.p0i8.i32"
     intrinsic "llvm.memcpy.p0i8.p0i8.i32" (8)
+  entry: id:13 name:"__libnacl_irt_mprotect"
+  entry: id:12 name:"stub_close"
+  entry: id:9 name:"stub_read"
+  entry: id:4 name:"__libnacl_fatal"
+  entry: id:5 name:"stub_getdents"
+  entry: id:14 name:"__libc_fini_array"
+  entry: id:36 name:"global_impure_data"
+  entry: id:18 name:"__nacl_irt_query"
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
 function %2 (_start)
@@ -243,7 +278,7 @@ bb:4 (succs: 5 6)
   %90(int1). cmp2 op:icmp_eq(32) %89(int32) %40(int32)
   br %90(int1) ? 5 : 6
 bb:5 (succs:)
-  call %4(void(int32)) args: %19(int32)
+  call %4(void(int32))(__libnacl_fatal) args: %19(int32)
   unreachable
 bb:6 (succs: 10 7)
  defs: [%91,%92]
@@ -256,7 +291,7 @@ bb:7 (succs: 8 9)
   %94(int1). cmp2 op:icmp_eq(32) %93(int32) %40(int32)
   br %94(int1) ? 8 : 9
 bb:8 (succs:)
-  call %4(void(int32)) args: %19(int32)
+  call %4(void(int32))(__libnacl_fatal) args: %19(int32)
   unreachable
 bb:9 (succs: 10)
  defs: [%95,%95]
@@ -264,12 +299,12 @@ bb:9 (succs: 10)
   br 10
 bb:10 (succs: 11 12)
  defs: [%96,%97]
-  call %3(void(int32,int32,int32)) args: %26(int32) %21(int32) %56(int32)
+  call %3(void(int32,int32,int32))(__libnacl_mandatory_irt_query) args: %26(int32) %21(int32) %56(int32)
   %96(int32). load src:%18(int32) align=1
   %97(int1). cmp2 op:icmp_eq(32) %96(int32) %40(int32)
   br %97(int1) ? 11 : 12
 bb:11 (succs:)
-  call %4(void(int32)) args: %19(int32)
+  call %4(void(int32))(__libnacl_fatal) args: %19(int32)
   unreachable
 bb:12 (succs: 18 13)
  defs: [%98,%99]
@@ -282,7 +317,7 @@ bb:13 (succs: 14 15)
   %101(int1). cmp2 op:icmp_eq(32) %100(int32) %40(int32)
   br %101(int1) ? 14 : 15
 bb:14 (succs:)
-  call %4(void(int32)) args: %19(int32)
+  call %4(void(int32))(__libnacl_fatal) args: %19(int32)
   unreachable
 bb:15 (succs: 17 16)
  defs: [%102,%103]
@@ -291,7 +326,7 @@ bb:15 (succs: 17 16)
   br %103(int1) ? 17 : 16
 bb:16 (succs: 17)
  defs: [%104,%104]
-  call %3(void(int32,int32,int32)) args: %29(int32) %70(int32) %48(int32)
+  call %3(void(int32,int32,int32))(__libnacl_mandatory_irt_query) args: %29(int32) %70(int32) %48(int32)
   %104(int32). binop op:add(0) %22(int32) %42(int32) (flags:0)
   store dest:%104(int32) value:%13(int32(int32,int32,int32)) align=1
   br 17
@@ -307,7 +342,7 @@ bb:17 (succs: 18)
   br 18
 bb:18 (succs: 23 19)
  defs: [%110,%110]
-  call %3(void(int32,int32,int32)) args: %30(int32) %23(int32) %42(int32)
+  call %3(void(int32,int32,int32))(__libnacl_mandatory_irt_query) args: %30(int32) %23(int32) %42(int32)
   %110(int1). cmp2 op:icmp_eq(32) %72(int32) %40(int32)
   br %110(int1) ? 23 : 19
 bb:19 (succs: 20 21)
@@ -557,7 +592,7 @@ bb:56 (succs:)
   unreachable
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %3
+function %3 (__libnacl_mandatory_irt_query)
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
@@ -572,7 +607,7 @@ bb:0 (succs: 1 2)
   %44(int1). cmp2 op:icmp_eq(32) %43(int32) %42(int32)
   br %44(int1) ? 1 : 2
 bb:1 (succs:)
-  call %4(void(int32)) args: %19(int32)
+  call %4(void(int32))(__libnacl_fatal) args: %19(int32)
   unreachable
 bb:2 (succs: 4 3)
  defs: [%45,%46]
@@ -580,13 +615,13 @@ bb:2 (succs: 4 3)
   %46(int1). cmp2 op:icmp_eq(32) %45(int32) %41(int32)
   br %46(int1) ? 4 : 3
 bb:3 (succs:)
-  call %4(void(int32)) args: %20(int32)
+  call %4(void(int32))(__libnacl_fatal) args: %20(int32)
   unreachable
 bb:4 (succs:)
   ret
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %4
+function %4 (__libnacl_fatal)
   %39. function arg 0
 num bbs:5
 *** SUBBLOCK CONSTANTS (11)
@@ -632,7 +667,7 @@ bb:4 (succs:)
   unreachable
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %5
+function %5 (stub_getdents)
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
@@ -646,7 +681,7 @@ bb:0 (succs:)
   ret %43(int32)
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %6
+function %6 (stub_fstat)
   %39. function arg 0
   %40. function arg 1
 num bbs:1
@@ -658,7 +693,7 @@ bb:0 (succs:)
   ret %41(int32)
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %7
+function %7 (stub_seek)
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
@@ -672,7 +707,7 @@ bb:0 (succs:)
   ret %43(int32)
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %8
+function %8 (stub_write)
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
@@ -686,7 +721,7 @@ bb:0 (succs:)
   ret %43(int32)
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %9
+function %9 (stub_read)
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
@@ -700,7 +735,7 @@ bb:0 (succs:)
   ret %43(int32)
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %10
+function %10 (stub_dup2)
   %39. function arg 0
   %40. function arg 1
 num bbs:1
@@ -712,7 +747,7 @@ bb:0 (succs:)
   ret %41(int32)
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %11
+function %11 (stub_dup)
   %39. function arg 0
   %40. function arg 1
 num bbs:1
@@ -724,7 +759,7 @@ bb:0 (succs:)
   ret %41(int32)
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %12
+function %12 (stub_close)
   %39. function arg 0
 num bbs:1
 *** SUBBLOCK CONSTANTS (11)
@@ -735,7 +770,7 @@ bb:0 (succs:)
   ret %40(int32)
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %13
+function %13 (__libnacl_irt_mprotect)
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
@@ -748,7 +783,7 @@ bb:0 (succs:)
   ret %42(int32)
 *** END BLOCK
 *** SUBBLOCK FUNCTION (12)
-function %14
+function %14 (__libc_fini_array)
 num bbs:1
 bb:0 (succs:)
   ret

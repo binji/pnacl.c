@@ -17,8 +17,8 @@ TEST_PEXES = $(TESTS:%=%.pexe)
 .PHONY: all
 all: $(TEST_PEXES)
 
-%.bc: %.c
-	`$(NACL_SDK_ROOT)/tools/nacl_config.py --tool cc -t pnacl` -std=c99 -O2 -o $@ $^
+%.bc: %.c Makefile
+	`$(NACL_SDK_ROOT)/tools/nacl_config.py --tool cc -t pnacl` -std=c99 -O2 -o $@ $<
 
-%.pexe: %.bc
-	`$(NACL_SDK_ROOT)/tools/nacl_config.py --tool finalize -t pnacl` -o $@ $^
+%.pexe: %.bc Makefile
+	`$(NACL_SDK_ROOT)/tools/nacl_config.py --tool finalize -t pnacl` --no-strip-syms -o $@ $<

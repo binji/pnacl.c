@@ -86,7 +86,7 @@ bb = 6
   br %92(int1) ? 10 : 7
     %92 = 1
 bb = 10
-  call %3(void(int32,int32,int32)) args: %26(int32) %21(int32) %56(int32)
+  call %3(void(int32,int32,int32))(__libnacl_mandatory_irt_query) args: %26(int32) %21(int32) %56(int32)
     %26 = 1236  %21 = 1152  %56 = 24  
 function = 3 bb = 0
   %43(int32). load src:%18(int32) align=1
@@ -119,7 +119,7 @@ bb = 12
   br %99(int1) ? 18 : 13
     %99 = 1
 bb = 18
-  call %3(void(int32,int32,int32)) args: %30(int32) %23(int32) %42(int32)
+  call %3(void(int32,int32,int32))(__libnacl_mandatory_irt_query) args: %30(int32) %23(int32) %42(int32)
     %30 = 1315  %23 = 1188  %42 = 8  
 function = 3 bb = 0
   %43(int32). load src:%18(int32) align=1

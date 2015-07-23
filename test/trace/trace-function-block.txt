@@ -5,19 +5,19 @@ function %2 (_start)
 num bbs:57
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %3
+function %3 (__libnacl_mandatory_irt_query)
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
 num bbs:5
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %4
+function %4 (__libnacl_fatal)
   %39. function arg 0
 num bbs:5
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %5
+function %5 (stub_getdents)
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
@@ -25,21 +25,13 @@ function %5
 num bbs:1
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %6
+function %6 (stub_fstat)
   %39. function arg 0
   %40. function arg 1
 num bbs:1
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %7
-  %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-  %42. function arg 3
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-*** END BLOCK
-function %8
+function %7 (stub_seek)
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
@@ -47,7 +39,7 @@ function %8
 num bbs:1
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %9
+function %8 (stub_write)
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
@@ -55,30 +47,38 @@ function %9
 num bbs:1
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %10
+function %9 (stub_read)
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+  %42. function arg 3
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+*** END BLOCK
+function %10 (stub_dup2)
   %39. function arg 0
   %40. function arg 1
 num bbs:1
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %11
+function %11 (stub_dup)
   %39. function arg 0
   %40. function arg 1
 num bbs:1
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %12
+function %12 (stub_close)
   %39. function arg 0
 num bbs:1
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %13
+function %13 (__libnacl_irt_mprotect)
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
 num bbs:1
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %14
+function %14 (__libc_fini_array)
 num bbs:1
 *** END BLOCK
