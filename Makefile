@@ -50,6 +50,9 @@ out/pnacl-asan: pnacl.c | out
 out/pnacl-32: pnacl.c | out
 	$(CC) $(CFLAGS) -m32 -o $@ $^
 
+out/pnacl-prof: pnacl.c | out
+	$(CC) $(CFLAGS) -lprofiler -O3 -o $@ $^
+
 #### TESTS ####
 
 .PHONY: test
