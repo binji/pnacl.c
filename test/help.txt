@@ -26,4 +26,5 @@ options:
   -p, --print-all
       --print-named-functions
       --print-time
+      --print-opcode-counts
       --print-stats
