@@ -4,6 +4,8 @@ TESTS = \
 	res/puts \
 	res/setjmp \
 	res/printf \
+
+BENCHMARKS = \
 	benchmark/res/nbody \
 	benchmark/res/fannkuchredux \
 	benchmark/res/meteor \
@@ -14,11 +16,27 @@ TESTS = \
 
 TEST_PEXES = $(TESTS:%=%.pexe)
 
+BENCHMARK_PEXES = $(BENCHMARKS:%=%.pexe)
+BENCHMARK_O0_X86_64_NEXES = $(BENCHMARKS:%=%.O0.x86-64.nexe)
+BENCHMARK_O2_X86_64_NEXES = $(BENCHMARKS:%=%.O2.x86-64.nexe)
+
 .PHONY: all
-all: $(TEST_PEXES)
+all: $(TEST_PEXES) $(BENCHMARK_PEXES) \
+	$(BENCHMARK_O0_X86_64_NEXES) $(BENCHMARK_O2_X86_64_NEXES)
+
+NACL_CONFIG = $(NACL_SDK_ROOT)/tools/nacl_config.py
+PNACL_CC = $(shell $(NACL_CONFIG) --tool cc -t pnacl)
+PNACL_FINALIZE = $(shell $(NACL_CONFIG) --tool finalize -t pnacl)
+PNACL_TRANSLATE = $(shell $(NACL_CONFIG) --tool translate -t pnacl)
 
 %.bc: %.c Makefile
-	`$(NACL_SDK_ROOT)/tools/nacl_config.py --tool cc -t pnacl` -std=c99 -O2 -o $@ $<
+	$(PNACL_CC) -std=c99 -O2 -o $@ $<
 
 %.pexe: %.bc Makefile
-	`$(NACL_SDK_ROOT)/tools/nacl_config.py --tool finalize -t pnacl` --no-strip-syms -o $@ $<
+	$(PNACL_FINALIZE) --no-strip-syms -o $@ $<
+
+%.O0.x86-64.nexe: %.pexe
+	$(PNACL_TRANSLATE) -O0 -arch x86-64 -o $@ $<
+
+%.O2.x86-64.nexe: %.pexe
+	$(PNACL_TRANSLATE) -O2 -arch x86-64 -o $@ $<

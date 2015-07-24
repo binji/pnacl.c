@@ -1,0 +1,3 @@
+# FLAGS: -r
+# FILE: benchmark/res/spectralnorm.pexe
+# ARGS: 100

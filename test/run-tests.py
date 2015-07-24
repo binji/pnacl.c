@@ -4,7 +4,6 @@
 # found in the LICENSE file.
 
 import argparse
-import cStringIO
 import difflib
 import fnmatch
 import logging
@@ -25,6 +24,15 @@ class Error(Exception):
   pass
 
 
+def AsList(value):
+  if value is None:
+    return []
+  elif type(value) is list:
+    return value
+  else:
+    return [value]
+
+
 def Indent(s, spaces):
   return ''.join(' '*spaces + l for l in s.splitlines(1))
 
@@ -36,6 +44,17 @@ def DiffLines(expected, actual):
                                    fromfile='expected', tofile='actual'))
 
 
+def FindTestFiles(directory, ext, filter_pattern_re):
+  tests = []
+  for root, dirs, files in os.walk(directory):
+    for f in files:
+      path = os.path.join(root, f)
+      if os.path.splitext(f)[1] == ext:
+        tests.append(os.path.relpath(path, SCRIPT_DIR))
+  tests.sort()
+  return [test for test in tests if re.match(filter_pattern_re, test)]
+
+
 class TestInfo(object):
   def __init__(self):
     self.name = ''
@@ -43,7 +62,7 @@ class TestInfo(object):
     self.stdout_file = None
     self.expected_stdout = ''
     self.expected_stderr = ''
-    self.exe = '../out/pnacl'
+    self.exe = ''
     self.pexe = ''
     self.flags = []
     self.args = []
@@ -119,19 +138,20 @@ class TestInfo(object):
       self.expected_stdout = ''.join(stdout_lines)
     self.expected_stderr = ''.join(stderr_lines)
 
-  def Run(self, options):
-    if options.executable:
-      exe = options.executable
-    else:
-      exe = self.exe
+  def GetWithOverride(self, name, override, default=None):
+    value = default
+    if name in override:
+      value = override[name]
+    elif getattr(self, name):
+      value = getattr(self, name)
+    return value
 
+  def Run(self, override):
     cmd = ['pnacl']
-    if self.flags:
-      cmd += self.flags
-    if self.pexe:
-      cmd += [self.pexe]
-    if self.args:
-      cmd += ['--'] + self.args
+    cmd += self.GetWithOverride('flags', override)
+    cmd += AsList(self.GetWithOverride('pexe', override))
+    cmd += ['--'] + AsList(self.GetWithOverride('args', override))
+    exe = self.GetWithOverride('exe', override, self.exe)
 
     # self.cmd is displayed to the user as a command that can reproduce the
     # bug. So it should display the executable that was actually run.
@@ -162,6 +182,18 @@ class TestInfo(object):
         f.write('# STDOUT:\n')
         f.write(stdout)
 
+  def Diff(self, stdout, stderr):
+    if self.expected_stderr != stderr:
+      diff_lines = DiffLines(self.expected_stderr, stderr)
+      raise Error('stderr mismatch:\n' + ''.join(diff_lines))
+
+    if self.expected_stdout != stdout:
+      if self.stdout_file:
+        raise Error('stdout binary mismatch')
+      else:
+        diff_lines = DiffLines(self.expected_stdout, stdout)
+        raise Error('stdout mismatch:\n' + ''.join(diff_lines))
+
 
 def PrintStatus(passed, failed, start_time, incremental):
   total_duration = time.time() - start_time
@@ -183,7 +215,8 @@ def ClearStatus():
 
 def main(args):
   parser = argparse.ArgumentParser()
-  parser.add_argument('-e', '--executable', help='override executable.')
+  parser.add_argument('-e', '--executable', help='override executable.',
+                      default='out/pnacl-opt-assert')
   parser.add_argument('-v', '--verbose', help='print more diagnotic messages. '
                       'Use more than once for more info.', action='count')
   parser.add_argument('-l', '--list', help='list all tests.',
@@ -211,17 +244,20 @@ def main(args):
     level=logging.WARNING
   logging.basicConfig(level=level, format='%(message)s')
 
-  tests = []
-  for root, dirs, files in os.walk(SCRIPT_DIR):
-    for f in files:
-      path = os.path.join(root, f)
-      if os.path.splitext(f)[1] == '.txt':
-        tests.append(os.path.relpath(path, SCRIPT_DIR))
-
+  tests = FindTestFiles(SCRIPT_DIR, '.txt', pattern_re)
   if options.list:
     for test in tests:
       print test
-    return 1
+    return 0
+
+  override = {}
+  if options.executable:
+    if not os.path.exists(options.executable):
+      parser.error('executable %s does not exist' % options.executable)
+    # We always run from SCRIPT_DIR, but allow the user to pass in executables
+    # with a relative path from where they ran run-tests.py
+    override['exe'] = os.path.relpath(
+        os.path.join(os.getcwd(), options.executable), SCRIPT_DIR)
 
   os.chdir(SCRIPT_DIR)
 
@@ -232,9 +268,6 @@ def main(args):
   failed = 0
   start_time = time.time()
   for test in tests:
-    if not re.match(pattern_re, test):
-      continue
-
     info = TestInfo()
     try:
       info.Parse(test)
@@ -242,20 +275,11 @@ def main(args):
         logger.info('. %s (skipped)' % info.name)
         continue
 
-      stdout, stderr, duration = info.Run(options)
+      stdout, stderr, duration = info.Run(override)
       if options.rebase:
         info.Rebase(stdout, stderr)
       else:
-        if info.expected_stderr != stderr:
-          diff_lines = DiffLines(info.expected_stderr, stderr)
-          raise Error('stderr mismatch:\n' + ''.join(diff_lines))
-
-        if info.expected_stdout != stdout:
-          if info.stdout_file:
-            raise Error('stdout binary mismatch')
-          else:
-            diff_lines = DiffLines(info.expected_stdout, stdout)
-            raise Error('stdout mismatch:\n' + ''.join(diff_lines))
+        info.Diff(stdout, stderr)
 
       passed += 1
       logger.info('+ %s (%.3fs)' % (info.name, duration))

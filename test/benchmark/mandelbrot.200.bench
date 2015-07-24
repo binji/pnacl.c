@@ -1,0 +1,3 @@
+# FLAGS: -r
+# FILE: benchmark/res/mandelbrot.pexe
+# ARGS: 200

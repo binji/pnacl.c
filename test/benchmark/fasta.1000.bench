@@ -1,0 +1,3 @@
+# FLAGS: -r
+# FILE: benchmark/res/fasta.pexe
+# ARGS: 1000

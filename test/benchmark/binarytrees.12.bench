@@ -1,0 +1,3 @@
+# FLAGS: -r
+# FILE: benchmark/res/binarytrees.pexe
+# ARGS: 12
