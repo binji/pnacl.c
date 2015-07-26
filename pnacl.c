@@ -5727,6 +5727,26 @@ static void pn_executor_value_trace(PNExecutor* executor,
     }
   }
 }
+
+static void pn_executor_backtrace(PNExecutor* executor) {
+  PNModule* module = executor->module;
+  PNCallFrame* frame = executor->current_call_frame;
+  int n = 0;
+  while (frame != &executor->sentinel_frame) {
+    PNLocation* location = &frame->location;
+    PNFunction* function = &module->functions[location->function_id];
+    if (function->name && function->name[0]) {
+      PN_PRINT("%d. %s(%d) %d %d\n", n, function->name, location->function_id,
+               location->bb_id, location->instruction_id);
+    } else {
+      PN_PRINT("%d. %d %d %d\n", n, location->function_id, location->bb_id,
+               location->instruction_id);
+    }
+
+    frame = frame->parent;
+    n++;
+  }
+}
 #else
 static void pn_executor_value_trace(PNExecutor* executor,
                                     PNFunction* function,
@@ -5734,6 +5754,8 @@ static void pn_executor_value_trace(PNExecutor* executor,
                                     PNRuntimeValue value,
                                     const char* prefix,
                                     const char* postfix) {}
+
+static void pn_executor_backtrace(PNExecutor* executor) {}
 #endif
 
 #define PN_BUILTIN_ARG(name, n, ty)                                      \
