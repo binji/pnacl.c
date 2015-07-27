@@ -56,7 +56,7 @@ out/pnacl-prof: pnacl.c | out
 #### TESTS ####
 
 .PHONY: test
-test: out/pnacl out/pnacl-asan
+test: out/pnacl out/pnacl-asan out/pnacl-opt-assert
 	@make -C test
 	@python test/run-tests.py
 

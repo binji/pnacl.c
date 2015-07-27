@@ -822,7 +822,6 @@ typedef struct PNAllocatorMark {
 } PNAllocatorMark;
 
 typedef struct PNBitSet {
-  uint32_t num_bits_set;
   uint32_t num_words;
   uint32_t* words;
 } PNBitSet;
@@ -1315,6 +1314,51 @@ static inline PNBool pn_is_aligned_pointer(void* p, uint32_t align) {
   return ((intptr_t)p & (intptr_t)(align - 1)) == 0;
 }
 
+static inline uint32_t pn_ctz(uint32_t x) {
+#if defined(__clang__) || defined(__GNUC__)
+  return __builtin_ctz(x);
+#else
+  /* See https://en.wikipedia.org/wiki/Find_first_set */
+  if (x == 0) return 32;
+  uint32_t n = 0;
+  if ((x & 0xffff) == 0) { n += 16; x >>= 16; }
+  if ((x & 0x00ff) == 0) { n += 8;  x >>= 8; }
+  if ((x & 0x000f) == 0) { n += 4;  x >>= 4; }
+  if ((x & 0x0003) == 0) { n += 2;  x >>= 2; }
+  if ((x & 0x0001) == 0) { n += 1; }
+  return n;
+#endif
+}
+
+static inline uint32_t pn_clz(uint32_t x) {
+#if defined(__clang__) || defined(__GNUC__)
+  return __builtin_clz(x);
+#else
+  /* See https://en.wikipedia.org/wiki/Find_first_set */
+  if (x == 0) return 32;
+  uint32_t n = 0;
+  if ((x & 0xffff0000) == 0) { n += 16; x <<= 16; }
+  if ((x & 0xff000000) == 0) { n += 8;  x <<= 8; }
+  if ((x & 0xf0000000) == 0) { n += 4;  x <<= 4; }
+  if ((x & 0xc0000000) == 0) { n += 2;  x <<= 2; }
+  if ((x & 0x80000000) == 0) { n += 1; }
+  return n;
+#endif
+}
+
+static inline uint32_t pn_popcount(uint32_t x) {
+#if defined(__clang__) || defined(__GNUC__)
+  return __builtin_popcount(x);
+#else
+/* See
+ * http://stackoverflow.com/questions/109023/how-to-count-the-number-of-set-bits-in-a-32-bit-integer
+ */
+  x = x - ((x >> 1) & 0x55555555);
+  x = (x & 0x33333333) + ((x >> 2) & 0x33333333);
+  return (((x + (x >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
+#endif
+}
+
 static void pn_allocator_init(PNAllocator* allocator,
                               size_t min_chunk_size,
                               const char* name) {
@@ -1470,7 +1514,6 @@ static void pn_allocator_reset_to_mark(PNAllocator* allocator,
 static void pn_bitset_init(PNAllocator* allocator,
                            PNBitSet* bitset,
                            int32_t size) {
-  bitset->num_bits_set = 0;
   bitset->num_words = (size + 31) >> 5;
   bitset->words = pn_allocator_allocz(
       allocator, sizeof(uint32_t) * bitset->num_words, sizeof(uint32_t));
@@ -1481,20 +1524,10 @@ static void pn_bitset_set(PNBitSet* bitset, uint32_t bit, PNBool set) {
   uint32_t mask = 1 << (bit & 31);
   assert(word < bitset->num_words);
 
-  PNBool was_set = (bitset->words[word] & mask) != 0;
-
   if (set) {
     bitset->words[word] |= mask;
   } else {
     bitset->words[word] &= ~mask;
-  }
-
-  if (set != was_set) {
-    if (set) {
-      bitset->num_bits_set++;
-    } else {
-      bitset->num_bits_set--;
-    }
   }
 }
 
@@ -1504,6 +1537,15 @@ static PNBool pn_bitset_is_set(PNBitSet* bitset, uint32_t bit) {
   assert(word < bitset->num_words);
 
   return (bitset->words[word] & mask) != 0;
+}
+
+static uint32_t pn_bitset_num_bits_set(PNBitSet* bitset) {
+  uint32_t i;
+  uint32_t result = 0;
+  for (i = 0; i < bitset->num_words; ++i) {
+    result += pn_popcount(bitset->words[i]);
+  }
+  return result;
 }
 
 static uint32_t pn_decode_char6(uint32_t value) {
@@ -3201,26 +3243,18 @@ static void pn_function_calculate_opcodes(PNModule* module,
   PN_END_TIME(CALCULATE_OPCODES);
 }
 
-#if PN_CALCULATE_LIVENESS
-static void pn_basic_block_set_value_use(PNModule* module,
-                                         PNFunction* function,
-                                         PNBitSet* uses,
-                                         PNValueId value_id) {
-  if (value_id >= module->num_values) {
-    value_id -= module->num_values;
-    if (value_id >= function->num_args + function->num_constants) {
-      pn_bitset_set(uses, value_id, PN_TRUE);
-    }
-  }
-}
-
 static void pn_basic_block_calculate_uses(PNModule* module,
                                           PNFunction* function,
                                           PNBasicBlock* bb) {
-  PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
+  PNValueId first_function_value_id =
+      module->num_values + function->num_args + function->num_constants;
   PNBitSet uses;
-
   pn_bitset_init(&module->temp_allocator, &uses, function->num_values);
+
+#define PN_SET_VALUE_USE(value_id)                                \
+  if (value_id >= first_function_value_id) {                      \
+    pn_bitset_set(&uses, value_id - module->num_values, PN_TRUE); \
+  }
 
   uint32_t n;
   for (n = 0; n < bb->num_instructions; ++n) {
@@ -3228,21 +3262,21 @@ static void pn_basic_block_calculate_uses(PNModule* module,
     switch (inst->code) {
       case PN_FUNCTION_CODE_INST_BINOP: {
         PNInstructionBinop* i = (PNInstructionBinop*)inst;
-        pn_basic_block_set_value_use(module, function, &uses, i->value0_id);
-        pn_basic_block_set_value_use(module, function, &uses, i->value1_id);
+        PN_SET_VALUE_USE(i->value0_id);
+        PN_SET_VALUE_USE(i->value1_id);
         break;
       }
 
       case PN_FUNCTION_CODE_INST_CAST: {
         PNInstructionCast* i = (PNInstructionCast*)inst;
-        pn_basic_block_set_value_use(module, function, &uses, i->value_id);
+        PN_SET_VALUE_USE(i->value_id);
         break;
       }
 
       case PN_FUNCTION_CODE_INST_RET: {
         PNInstructionRet* i = (PNInstructionRet*)inst;
         if (i->value_id != PN_INVALID_VALUE_ID) {
-          pn_basic_block_set_value_use(module, function, &uses, i->value_id);
+          PN_SET_VALUE_USE(i->value_id);
         }
         break;
       }
@@ -3250,14 +3284,14 @@ static void pn_basic_block_calculate_uses(PNModule* module,
       case PN_FUNCTION_CODE_INST_BR: {
         PNInstructionBr* i = (PNInstructionBr*)inst;
         if (i->value_id != PN_INVALID_VALUE_ID) {
-          pn_basic_block_set_value_use(module, function, &uses, i->value_id);
+          PN_SET_VALUE_USE(i->value_id);
         }
         break;
       }
 
       case PN_FUNCTION_CODE_INST_SWITCH: {
         PNInstructionSwitch* i = (PNInstructionSwitch*)inst;
-        pn_basic_block_set_value_use(module, function, &uses, i->value_id);
+        PN_SET_VALUE_USE(i->value_id);
         break;
       }
 
@@ -3275,36 +3309,35 @@ static void pn_basic_block_calculate_uses(PNModule* module,
 
       case PN_FUNCTION_CODE_INST_ALLOCA: {
         PNInstructionAlloca* i = (PNInstructionAlloca*)inst;
-        pn_basic_block_set_value_use(module, function, &uses, i->size_id);
+        PN_SET_VALUE_USE(i->size_id);
         break;
       }
 
       case PN_FUNCTION_CODE_INST_LOAD: {
         PNInstructionLoad* i = (PNInstructionLoad*)inst;
-        pn_basic_block_set_value_use(module, function, &uses, i->src_id);
+        PN_SET_VALUE_USE(i->src_id);
         break;
       }
 
       case PN_FUNCTION_CODE_INST_STORE: {
         PNInstructionStore* i = (PNInstructionStore*)inst;
-        pn_basic_block_set_value_use(module, function, &uses, i->dest_id);
-        pn_basic_block_set_value_use(module, function, &uses, i->value_id);
+        PN_SET_VALUE_USE(i->dest_id);
+        PN_SET_VALUE_USE(i->value_id);
         break;
       }
 
       case PN_FUNCTION_CODE_INST_CMP2: {
         PNInstructionCmp2* i = (PNInstructionCmp2*)inst;
-        pn_basic_block_set_value_use(module, function, &uses, i->value0_id);
-        pn_basic_block_set_value_use(module, function, &uses, i->value1_id);
+        PN_SET_VALUE_USE(i->value0_id);
+        PN_SET_VALUE_USE(i->value1_id);
         break;
       }
 
       case PN_FUNCTION_CODE_INST_VSELECT: {
         PNInstructionVselect* i = (PNInstructionVselect*)inst;
-        pn_basic_block_set_value_use(module, function, &uses, i->cond_id);
-        pn_basic_block_set_value_use(module, function, &uses, i->true_value_id);
-        pn_basic_block_set_value_use(module, function, &uses,
-                                     i->false_value_id);
+        PN_SET_VALUE_USE(i->cond_id);
+        PN_SET_VALUE_USE(i->true_value_id);
+        PN_SET_VALUE_USE(i->false_value_id);
         break;
       }
 
@@ -3312,12 +3345,12 @@ static void pn_basic_block_calculate_uses(PNModule* module,
       case PN_FUNCTION_CODE_INST_CALL_INDIRECT: {
         PNInstructionCall* i = (PNInstructionCall*)inst;
         if (i->is_indirect) {
-          pn_basic_block_set_value_use(module, function, &uses, i->callee_id);
+          PN_SET_VALUE_USE(i->callee_id);
         }
 
         uint32_t m;
         for (m = 0; m < i->num_args; ++m) {
-          pn_basic_block_set_value_use(module, function, &uses, i->arg_ids[m]);
+          PN_SET_VALUE_USE(i->arg_ids[m]);
         }
         break;
       }
@@ -3332,25 +3365,38 @@ static void pn_basic_block_calculate_uses(PNModule* module,
     }
   }
 
-  bb->uses = pn_allocator_alloc(&module->allocator,
-                                sizeof(PNValueId) * uses.num_bits_set,
-                                sizeof(PNValueId));
+  bb->uses = pn_allocator_alloc(
+      &module->allocator, sizeof(PNValueId) * pn_bitset_num_bits_set(&uses),
+      sizeof(PNValueId));
 
-  for (n = 0; n < function->num_values; ++n) {
-    if (pn_bitset_is_set(&uses, n)) {
-      bb->uses[bb->num_uses++] = module->num_values + n;
+  uint32_t w;
+  for (w = 0; w < uses.num_words; ++w) {
+    uint32_t word = uses.words[w];
+    if (!word) {
+      continue;
+    }
+
+    uint32_t b;
+    uint32_t first_bit = pn_ctz(word);
+    uint32_t last_bit = 32 - pn_clz(word);
+    for (b = first_bit; b <= last_bit; ++b) {
+      if (word & (1 << b)) {
+        bb->uses[bb->num_uses++] = module->num_values + (w << 5) + b;
+      }
     }
   }
 
-  pn_allocator_reset_to_mark(&module->temp_allocator, mark);
+#undef PN_SET_VALUE_USE
 }
 
 static void pn_function_calculate_uses(PNModule* module, PNFunction* function) {
   PN_BEGIN_TIME(CALCULATE_USES);
+  PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
   uint32_t n;
   for (n = 0; n < function->num_bbs; ++n) {
     pn_basic_block_calculate_uses(module, function, &function->bbs[n]);
   }
+  pn_allocator_reset_to_mark(&module->temp_allocator, mark);
   PN_END_TIME(CALCULATE_USES);
 }
 
@@ -3389,6 +3435,7 @@ static void pn_function_calculate_pred_bbs(PNModule* module,
   PN_END_TIME(CALCULATE_PRED_BBS);
 }
 
+#if PN_CALCULATE_LIVENESS
 static void pn_basic_block_calculate_liveness_per_value(
     PNModule* module,
     PNFunction* function,
@@ -3492,10 +3539,12 @@ static void pn_function_calculate_liveness(PNModule* module,
     PNBasicBlock* bb = &function->bbs[n];
     uint32_t m;
 
-    if (state.livein[n].num_bits_set) {
+    uint32_t livein_bits_set =
+        pn_bitset_num_bits_set(&state.livein[n].num_bits_set);
+    if (livein_bits_set) {
       bb->num_livein = 0;
       bb->livein = pn_allocator_alloc(
-          &module->allocator, sizeof(PNValueId) * state.livein[n].num_bits_set,
+          &module->allocator, sizeof(PNValueId) * livein_bits_set,
           sizeof(PNValueId));
 
       for (m = 0; m < function->num_values; ++m) {
@@ -3522,6 +3571,7 @@ static void pn_function_calculate_liveness(PNModule* module,
   pn_allocator_reset_to_mark(&module->temp_allocator, mark);
   PN_END_TIME(CALCULATE_LIVENESS);
 }
+#endif /* PN_CALCULATE_LIVENESS */
 
 static void pn_function_calculate_phi_assigns(PNModule* module,
                                               PNFunction* function) {
@@ -3563,7 +3613,6 @@ static void pn_function_calculate_phi_assigns(PNModule* module,
   }
   PN_END_TIME(CALCULATE_PHI_ASSIGNS);
 }
-#endif /* PN_CALCULATE_LIVENESS */
 
 static void pn_record_reader_init(PNRecordReader* reader,
                                   PNBitStream* bs,
@@ -4794,10 +4843,10 @@ static void pn_function_block_read(PNModule* module,
         PN_CHECK(num_bbs == function->num_bbs);
         pn_function_calculate_result_value_types(module, function);
         pn_function_calculate_opcodes(module, function);
-#if PN_CALCULATE_LIVENESS
         pn_function_calculate_uses(module, function);
         pn_function_calculate_pred_bbs(module, function);
         pn_function_calculate_phi_assigns(module, function);
+#if PN_CALCULATE_LIVENESS
         pn_function_calculate_liveness(module, function);
 #endif
 #if PN_TRACING
