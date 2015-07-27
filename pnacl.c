@@ -1984,12 +1984,12 @@ static void* pn_basic_block_append_instruction(
 #define PN_BASIC_BLOCK_APPEND_INSTRUCTION(type, module, bb, id) \
   (type*) pn_basic_block_append_instruction(module, bb, sizeof(type), id)
 
-static void pn_basic_block_list_append(PNAllocator* allocator,
+static void pn_basic_block_list_append(PNModule* module,
                                        PNBasicBlockId** bb_list,
                                        uint32_t* num_els,
                                        PNBasicBlockId bb_id) {
-  pn_allocator_realloc_add(allocator, (void**)bb_list, sizeof(PNBasicBlockId),
-                           sizeof(PNBasicBlockId));
+  pn_allocator_realloc_add(&module->allocator, (void**)bb_list,
+                           sizeof(PNBasicBlockId), sizeof(PNBasicBlockId));
   (*bb_list)[(*num_els)++] = bb_id;
 }
 
@@ -3554,11 +3554,13 @@ static void pn_function_calculate_liveness(PNModule* module,
       }
     }
 
-    if (state.liveout[n].num_bits_set) {
+    uint32_t liveout_bits_set =
+        pn_bitset_num_bits_set(&state.liveout[n].num_bits_set);
+    if (liveout_bits_set) {
       bb->num_liveout = 0;
-      bb->liveout = pn_allocator_alloc(
-          &module->allocator, sizeof(PNValueId) * state.liveout[n].num_bits_set,
-          sizeof(PNValueId));
+      bb->liveout = pn_allocator_alloc(&module->allocator,
+                                       sizeof(PNValueId) * liveout_bits_set,
+                                       sizeof(PNValueId));
 
       for (m = 0; m < function->num_values; ++m) {
         if (pn_bitset_is_set(&state.liveout[n], m)) {
@@ -4997,16 +4999,16 @@ static void pn_function_block_read(PNModule* module,
             inst->true_bb_id = pn_record_read_uint32(&reader, "true_bb");
             inst->false_bb_id = PN_INVALID_BB_ID;
 
-            pn_basic_block_list_append(&module->allocator, &cur_bb->succ_bb_ids,
+            pn_basic_block_list_append(module, &cur_bb->succ_bb_ids,
                                        &cur_bb->num_succ_bbs, inst->true_bb_id);
 
             if (pn_record_try_read_uint16(&reader, &inst->false_bb_id)) {
               inst->value_id = pn_record_read_uint32(&reader, "value");
               pn_context_fix_value_ids(context, rel_id, 1, &inst->value_id);
 
-              pn_basic_block_list_append(
-                  &module->allocator, &cur_bb->succ_bb_ids,
-                  &cur_bb->num_succ_bbs, inst->false_bb_id);
+              pn_basic_block_list_append(module, &cur_bb->succ_bb_ids,
+                                         &cur_bb->num_succ_bbs,
+                                         inst->false_bb_id);
             } else {
               inst->value_id = PN_INVALID_VALUE_ID;
             }
@@ -5024,7 +5026,7 @@ static void pn_function_block_read(PNModule* module,
             inst->value_id = pn_record_read_uint32(&reader, "value");
             inst->default_bb_id = pn_record_read_uint32(&reader, "default bb");
 
-            pn_basic_block_list_append(&module->allocator, &cur_bb->succ_bb_ids,
+            pn_basic_block_list_append(module, &cur_bb->succ_bb_ids,
                                        &cur_bb->num_succ_bbs,
                                        inst->default_bb_id);
 
@@ -5069,8 +5071,7 @@ static void pn_function_block_read(PNModule* module,
 
               total_values += num_case_values;
 
-              pn_basic_block_list_append(&module->allocator,
-                                         &cur_bb->succ_bb_ids,
+              pn_basic_block_list_append(module, &cur_bb->succ_bb_ids,
                                          &cur_bb->num_succ_bbs, bb_id);
             }
 
