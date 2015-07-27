@@ -5128,6 +5128,7 @@ static void pn_function_block_read(PNModule* module,
 
             value->type_id = inst->type_id;
 
+            uint32_t i;
             while (1) {
               PNBasicBlockId bb;
               PNValueId value;
@@ -5142,12 +5143,31 @@ static void pn_function_block_read(PNModule* module,
                 PN_FATAL("unable to read phi bb index\n");
               }
 
-              pn_allocator_realloc_add(&module->instruction_allocator,
-                                       (void**)&inst->incoming,
-                                       sizeof(PNPhiIncoming), PN_DEFAULT_ALIGN);
-              PNPhiIncoming* incoming = &inst->incoming[inst->num_incoming++];
-              incoming->bb_id = bb;
-              incoming->value_id = value;
+              /* Dedupe incoming branches */
+              PNBool found = PN_FALSE;
+              for (i = 0; i < inst->num_incoming; ++i) {
+                if (inst->incoming[i].bb_id == bb) {
+                  if (inst->incoming[i].value_id == value) {
+                    found = PN_TRUE;
+                  } else {
+                    /* Found, but values don't match */
+                    PN_FATAL(
+                        "phi duplicated with matching bb %d but different "
+                        "values %d != %d\n",
+                        bb, inst->incoming[i].value_id, value);
+                  }
+                  break;
+                }
+              }
+
+              if (!found) {
+                pn_allocator_realloc_add(
+                    &module->instruction_allocator, (void**)&inst->incoming,
+                    sizeof(PNPhiIncoming), PN_DEFAULT_ALIGN);
+                PNPhiIncoming* incoming = &inst->incoming[inst->num_incoming++];
+                incoming->bb_id = bb;
+                incoming->value_id = value;
+              }
             }
             break;
           }

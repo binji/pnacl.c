@@ -4,6 +4,7 @@ TESTS = \
 	res/puts \
 	res/setjmp \
 	res/printf \
+	res/dedupe_incoming \
 
 BENCHMARKS = \
 	benchmark/res/nbody \

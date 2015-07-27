@@ -1,0 +1,76 @@
+# FLAGS: --trace-function-filter=main
+# FILE: res/dedupe_incoming.pexe
+function %1 (main)
+bb:0 (succs: 2 5 5 5 5 1 1 1 1)
+ defs: [%117,%122]
+ uses: %117 %122
+ phi assigns: %146<=%106
+  %117(int8). cast op:trunc(0) %105(int32)
+  %118(int32). alloca %111(int32) align=4
+  %119(int32). alloca %108(int32) align=4
+  %120(int32). alloca %111(int32) align=4
+  %121(int32). alloca %109(int32) align=8
+  %122(int32). cast op:sext(2) %117(int8)
+  switch value:%122(int32) [default:2] [97 => bb:5] [101 => bb:5] [103 => bb:5] [48 => bb:5] [99 => bb:1] [102 => bb:1] [122 => bb:1] [57 => bb:1]
+bb:1 (succs: 5)
+ phi assigns: %146<=%113
+  br 5
+bb:2 (succs: 3 4)
+ defs: [%123,%139]
+ uses: %119 %120 %123 %124 %125 %126 %127 %128 %129 %130 %131 %132 %133 %134 %135 %136 %137 %138 %139
+  %123(int32). call %49(int32())(llvm.nacl.read.tp) args:
+  %124(int32). binop op:add(0) %123(int32) %112(int32) (flags:0)
+  %125(int32). load src:%124(int32) align=1
+  %126(int32). call %19(int32(int32))(strlen) args: %54(int32)
+  store dest:%120(int32) value:%54(int32) align=1
+  %127(int32). binop op:add(0) %120(int32) %109(int32) (flags:0)
+  store dest:%127(int32) value:%126(int32) align=1
+  %128(int32). binop op:add(0) %120(int32) %107(int32) (flags:0)
+  store dest:%128(int32) value:%78(int32) align=1
+  %129(int32). binop op:add(0) %120(int32) %108(int32) (flags:0)
+  store dest:%129(int32) value:%106(int32) align=1
+  %130(int32). binop op:add(0) %126(int32) %106(int32) (flags:0)
+  %131(int32). binop op:add(0) %119(int32) %107(int32) (flags:0)
+  store dest:%131(int32) value:%130(int32) align=1
+  store dest:%119(int32) value:%120(int32) align=1
+  %132(int32). binop op:add(0) %119(int32) %109(int32) (flags:0)
+  store dest:%132(int32) value:%113(int32) align=1
+  %133(int32). binop op:add(0) %125(int32) %107(int32) (flags:0)
+  %134(int32). load src:%133(int32) align=1
+  %135(int32). binop op:add(0) %134(int32) %108(int32) (flags:0)
+  %136(int16). load src:%135(int32) align=1
+  %137(int32). cast op:sext(2) %136(int16)
+  %138(int32). binop op:and(10) %137(int32) %114(int32) (flags:0)
+  %139(int1). cmp2 op:icmp_eq(32) %138(int32) %110(int32)
+  br %139(int1) ? 3 : 4
+bb:3 (succs: 4)
+ defs: [%140,%144]
+ uses: %134 %135 %137 %140 %141 %142 %143 %144
+  %140(int32). binop op:or(11) %137(int32) %114(int32) (flags:0)
+  %141(int16). cast op:trunc(0) %140(int32)
+  store dest:%135(int32) value:%141(int16) align=1
+  %142(int32). binop op:add(0) %134(int32) %115(int32) (flags:0)
+  %143(int32). load src:%142(int32) align=1
+  %144(int32). binop op:and(10) %143(int32) %116(int32) (flags:0)
+  store dest:%142(int32) value:%144(int32) align=1
+  br 4
+bb:4 (succs: 5)
+ defs: [%145,%145]
+ uses: %119 %125 %134
+ phi assigns: %146<=%110
+  %145(int32). call %29(int32(int32,int32,int32))(__sfvwrite_r) args: %125(int32) %134(int32) %119(int32)
+  br 5
+bb:5 (succs:)
+ defs: [%146,%152]
+ uses: %118 %121 %146 %147 %148 %149 %150 %151
+ phi uses: bb:4=>%110 bb:1=>%113 bb:0=>%106
+  %146(int32). phi bb:4=>%110(int32) bb:1=>%113(int32) bb:0=>%106(int32)
+  store dest:%121(int32) value:%146(int32) align=1
+  %147(int32). call %49(int32())(llvm.nacl.read.tp) args:
+  %148(int32). binop op:add(0) %147(int32) %112(int32) (flags:0)
+  %149(int32). load src:%148(int32) align=1
+  store dest:%118(int32) value:%121(int32) align=1
+  %150(int32). binop op:add(0) %149(int32) %107(int32) (flags:0)
+  %151(int32). load src:%150(int32) align=1
+  %152(int32). call %20(int32(int32,int32,int32,int32))(_vfprintf_r) args: %149(int32) %151(int32) %55(int32) %118(int32)
+  ret %110(int32)
