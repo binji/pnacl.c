@@ -173,6 +173,7 @@ static PNBool g_pn_print_named_functions;
 static PNBool g_pn_print_stats;
 static PNBool g_pn_print_opcode_counts;
 static PNBool g_pn_run;
+static const char* g_pn_trace_function_filter;
 
 #if PN_TIMERS
 static PNBool g_pn_print_time;
@@ -2117,7 +2118,7 @@ static void pn_instruction_trace(PNModule* module,
                                  PNFunction* function,
                                  PNInstruction* inst,
                                  PNBool force) {
-  if (!PN_IS_TRACE(INSTRUCTIONS) && !force) {
+  if (!(PN_IS_TRACE(INSTRUCTIONS) || force)) {
     return;
   }
 
@@ -2298,8 +2299,9 @@ static void pn_instruction_trace(PNModule* module,
 static void pn_basic_block_trace(PNModule* module,
                                  PNFunction* function,
                                  PNBasicBlock* bb,
-                                 PNBasicBlockId bb_id) {
-  if (!PN_IS_TRACE(BASIC_BLOCKS)) {
+                                 PNBasicBlockId bb_id,
+                                 PNBool force) {
+  if (!(PN_IS_TRACE(BASIC_BLOCKS) || force)) {
     return;
   }
 
@@ -2360,7 +2362,7 @@ static void pn_basic_block_trace(PNModule* module,
 
   uint32_t i;
   for (i = 0; i < bb->num_instructions; ++i) {
-    pn_instruction_trace(module, function, bb->instructions[i], PN_FALSE);
+    pn_instruction_trace(module, function, bb->instructions[i], force);
   }
 }
 
@@ -2379,7 +2381,25 @@ static void pn_function_trace(PNModule* module,
                               PNBool print_header) {
   PN_BEGIN_TIME(FUNCTION_TRACE);
 
-  if (!PN_IS_TRACE(FUNCTION_BLOCK)) {
+  PNBool force = PN_FALSE;
+  if (g_pn_trace_function_filter && g_pn_trace_function_filter[0] != 0) {
+    char first = g_pn_trace_function_filter[0];
+    if (first >= '0' && first <= '9') {
+      /* Filter based on function id */
+      PNFunctionId filter_id = atoi(g_pn_trace_function_filter);
+      if (filter_id != function_id) {
+        return;
+      }
+    } else {
+      /* Filter based on function name */
+      if (strcmp(function->name, g_pn_trace_function_filter) != 0) {
+        return;
+      }
+    }
+    force = PN_TRUE;
+  }
+
+  if (!(PN_IS_TRACE(FUNCTION_BLOCK) || force)) {
     return;
   }
 
@@ -2389,7 +2409,7 @@ static void pn_function_trace(PNModule* module,
 
   uint32_t i;
   for (i = 0; i < function->num_bbs; ++i) {
-    pn_basic_block_trace(module, function, &function->bbs[i], i);
+    pn_basic_block_trace(module, function, &function->bbs[i], i, force);
   }
   PN_END_TIME(FUNCTION_TRACE);
 }
@@ -7567,6 +7587,7 @@ enum {
 #define PN_TRACE_FLAGS(name, flag) PN_FLAG_TRACE_##name,
   PN_FOREACH_TRACE(PN_TRACE_FLAGS)
 #undef PN_TRACE_FLAGS
+  PN_FLAG_TRACE_FUNCTION_FILTER,
 #endif /* PN_TRACING */
   PN_FLAG_PRINT_ALL,
   PN_FLAG_PRINT_NAMED_FUNCTIONS,
@@ -7578,7 +7599,7 @@ enum {
   PN_NUM_FLAGS
 };
 
-static struct option long_options[] = {
+static struct option g_pn_long_options[] = {
     {"verbose", no_argument, NULL, 'v'},
     {"help", no_argument, NULL, 'h'},
     {"memory-size", required_argument, NULL, 'm'},
@@ -7592,6 +7613,7 @@ static struct option long_options[] = {
     { "trace-" flag, no_argument, NULL, 0 },
     PN_FOREACH_TRACE(PN_TRACE_FLAGS)
 #undef PN_TRACE_FLAGS
+    {"trace-function-filter", required_argument, NULL, 0},
 #endif /* PN_TRACING */
     {"print-all", no_argument, NULL, 'p'},
     {"print-named-functions", no_argument, NULL, 0},
@@ -7603,18 +7625,59 @@ static struct option long_options[] = {
     {NULL, 0, NULL, 0},
 };
 
-PN_STATIC_ASSERT(PN_NUM_FLAGS + 1 == PN_ARRAY_SIZE(long_options));
+PN_STATIC_ASSERT(PN_NUM_FLAGS + 1 == PN_ARRAY_SIZE(g_pn_long_options));
+
+typedef struct PNOptionHelp {
+  int flag;
+  const char* metavar;
+  const char* help;
+} PNOptionHelp;
+
+static PNOptionHelp g_pn_option_help[] = {
+    {PN_FLAG_MEMORY_SIZE, "SIZE",
+     "size of runtime memory. suffixes k=1024, m=1024*1024"},
+    {PN_FLAG_ENV, "KEY=VALUE", "set runtime environment variable KEY to VALUE"},
+    {PN_FLAG_TRACE_FUNCTION_FILTER, "NAME",
+     "only trace function with given name or id"},
+    {PN_NUM_FLAGS, NULL},
+};
 
 static void pn_usage(const char* prog) {
   PN_PRINT("usage: %s [option] filename\n", prog);
   PN_PRINT("options:\n");
+  struct option* opt = &g_pn_long_options[0];
   int i = 0;
-  for (; long_options[i].name; ++i) {
-    if (long_options[i].val) {
-      PN_PRINT("  -%c, --%s\n", long_options[i].val, long_options[i].name);
-    } else {
-      PN_PRINT("      --%s\n", long_options[i].name);
+  for (; opt->name; ++i, ++opt) {
+    PNOptionHelp* help = NULL;
+
+    int n = 0;
+    while (g_pn_option_help[n].help) {
+      if (i == g_pn_option_help[n].flag) {
+        help = &g_pn_option_help[n];
+        break;
+      }
+      n++;
     }
+
+    if (opt->val) {
+      PN_PRINT("  -%c, ", opt->val);
+    } else {
+      PN_PRINT("      ");
+    }
+
+    if (help && help->metavar) {
+      char buf[100];
+      snprintf(buf, 100, "%s=%s", opt->name, help->metavar);
+      PN_PRINT("--%-30s", buf);
+    } else {
+      PN_PRINT("--%-30s", opt->name);
+    }
+
+    if (help) {
+      PN_PRINT("%s", help->help);
+    }
+
+    PN_PRINT("\n");
   }
   exit(0);
 }
@@ -7697,7 +7760,7 @@ static void pn_options_parse(int argc, char** argv, char** env) {
   char** environ_copy = pn_environ_copy(env);
 
   while (1) {
-    c = getopt_long(argc, argv, "vm:re:Ehtp", long_options, &option_index);
+    c = getopt_long(argc, argv, "vm:re:Ehtp", g_pn_long_options, &option_index);
     if (c == -1) {
       break;
     }
@@ -7705,7 +7768,7 @@ static void pn_options_parse(int argc, char** argv, char** env) {
   redo_switch:
     switch (c) {
       case 0:
-        c = long_options[option_index].val;
+        c = g_pn_long_options[option_index].val;
         if (c) {
           goto redo_switch;
         }
@@ -7741,6 +7804,10 @@ static void pn_options_parse(int argc, char** argv, char** env) {
     break;
             PN_FOREACH_TRACE(PN_TRACE_OPTIONS);
 #undef PN_TRACE_OPTIONS
+
+          case PN_FLAG_TRACE_FUNCTION_FILTER:
+            g_pn_trace_function_filter = optarg;
+            break;
 
 #endif /* PN_TRACING */
 
@@ -8083,7 +8150,7 @@ int main(int argc, char** argv, char** envp) {
     for (i = 0; i < module.num_functions; ++i) {
       PNFunction* function = &module.functions[i];
       if (function->name) {
-        PN_PRINT("%s\n", function->name);
+        PN_PRINT("%d. %s\n", i, function->name);
       }
     }
   }

@@ -1,0 +1,23 @@
+# FLAGS: --trace-function-filter=3
+# FILE: res/main.pexe
+function %3 (__libnacl_mandatory_irt_query)
+bb:0 (succs: 1 2)
+ defs: [%43,%44]
+ uses: %43 %44
+  %43(int32). load src:%18(int32) align=1
+  %44(int1). cmp2 op:icmp_eq(32) %43(int32) %42(int32)
+  br %44(int1) ? 1 : 2
+bb:1 (succs:)
+  call %4(void(int32))(__libnacl_fatal) args: %19(int32)
+  unreachable
+bb:2 (succs: 4 3)
+ defs: [%45,%46]
+ uses: %43 %45 %46
+  %45(int32). call indirect %43(int32) args: %39(int32) %40(int32) %41(int32)
+  %46(int1). cmp2 op:icmp_eq(32) %45(int32) %41(int32)
+  br %46(int1) ? 4 : 3
+bb:3 (succs:)
+  call %4(void(int32))(__libnacl_fatal) args: %20(int32)
+  unreachable
+bb:4 (succs:)
+  ret
