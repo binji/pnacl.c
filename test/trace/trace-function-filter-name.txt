@@ -4,7 +4,7 @@ function %2 (_start)
 bb:0 (succs: 1)
  defs: [%69,%83]
  uses: %71 %73 %74 %75 %76 %77 %78 %79 %80 %81 %82
- phi assigns: %84<=%83
+ phi assigns: bb:1,%84<=%83
   %69(int32). alloca %41(int32) align=4
   %70(int32). alloca %46(int32) align=4
   %71(int32). alloca %41(int32) align=4
@@ -42,7 +42,7 @@ bb:2 (succs: 3)
 bb:3 (succs: 1)
  defs: [%88,%88]
  uses: %84
- phi assigns: %84<=%88
+ phi assigns: bb:1,%84<=%88
   %88(int32). binop op:add(0) %84(int32) %42(int32) (flags:0)
   br 1
 bb:4 (succs: 5 6)
@@ -132,7 +132,7 @@ bb:18 (succs: 23 19)
 bb:19 (succs: 20 21)
  defs: [%111,%113]
  uses: %111 %112 %113
- phi assigns: %117<=%112
+ phi assigns: bb:21,%117<=%112
   %111(int32). binop op:add(0) %36(int32) %43(int32) (flags:0)
   %112(int32). load src:%111(int32) align=1
   %113(int1). cmp2 op:icmp_eq(32) %112(int32) %40(int32)
@@ -140,7 +140,7 @@ bb:19 (succs: 20 21)
 bb:20 (succs: 21)
  defs: [%114,%116]
  uses: %114 %115
- phi assigns: %117<=%116
+ phi assigns: bb:21,%117<=%116
   %114(int32). binop op:add(0) %36(int32) %45(int32) (flags:0)
   %115(int32). binop op:add(0) %36(int32) %43(int32) (flags:0)
   store dest:%115(int32) value:%114(int32) align=1
@@ -168,7 +168,7 @@ bb:22 (succs: 23)
 bb:23 (succs: 24 25)
  defs: [%125,%127]
  uses: %125 %126 %127
- phi assigns: %131<=%126
+ phi assigns: bb:25,%131<=%126
   %125(int32). binop op:add(0) %36(int32) %43(int32) (flags:0)
   %126(int32). load src:%125(int32) align=1
   %127(int1). cmp2 op:icmp_eq(32) %126(int32) %40(int32)
@@ -176,7 +176,7 @@ bb:23 (succs: 24 25)
 bb:24 (succs: 25)
  defs: [%128,%130]
  uses: %128 %129
- phi assigns: %131<=%130
+ phi assigns: bb:25,%131<=%130
   %128(int32). binop op:add(0) %36(int32) %45(int32) (flags:0)
   %129(int32). binop op:add(0) %36(int32) %43(int32) (flags:0)
   store dest:%129(int32) value:%128(int32) align=1
@@ -210,14 +210,14 @@ bb:27 (succs: 28 29)
 bb:28 (succs: 30)
  defs: [%141,%142]
  uses: %141
- phi assigns: %145<=%142
+ phi assigns: bb:30,%145<=%142
   %141(int8). load src:%34(int32) align=1
   %142(int1). cast op:trunc(0) %141(int8)
   br 30
 bb:29 (succs: 30)
  defs: [%143,%144]
  uses: %143 %144
- phi assigns: %145<=%66
+ phi assigns: bb:30,%145<=%66
   %143(int8). cast op:zext(1) %66(int1)
   store dest:%35(int32) value:%143(int8) align=1
   store dest:%33(int32) value:%38(int32) align=1
@@ -238,7 +238,7 @@ bb:30 (succs: 32 31)
 bb:31 (succs: 33)
  defs: [%150,%152]
  uses: %148 %150 %151 %152
- phi assigns: %154<=%49
+ phi assigns: bb:33,%154<=%49
   %150(int32). call %15(int32())(llvm.nacl.read.tp) args:
   %151(int32). binop op:add(0) %150(int32) %53(int32) (flags:0)
   %152(int32). load src:%151(int32) align=1
@@ -247,7 +247,7 @@ bb:31 (succs: 33)
 bb:32 (succs: 33)
  defs: [%153,%153]
  uses: %69
- phi assigns: %154<=%153
+ phi assigns: bb:33,%154<=%153
   %153(int32). load src:%69(int32) align=1
   br 33
 bb:33 (succs: 34 35)
@@ -261,14 +261,14 @@ bb:33 (succs: 34 35)
 bb:34 (succs: 36)
  defs: [%157,%158]
  uses: %157
- phi assigns: %161<=%158
+ phi assigns: bb:36,%161<=%158
   %157(int8). load src:%34(int32) align=1
   %158(int1). cast op:trunc(0) %157(int8)
   br 36
 bb:35 (succs: 36)
  defs: [%159,%160]
  uses: %159 %160
- phi assigns: %161<=%66
+ phi assigns: bb:36,%161<=%66
   %159(int8). cast op:zext(1) %66(int1)
   store dest:%35(int32) value:%159(int8) align=1
   store dest:%33(int32) value:%38(int32) align=1
@@ -296,7 +296,7 @@ bb:37 (succs:)
 bb:38 (succs: 54 40)
  defs: [%171,%179]
  uses: %166 %167 %168 %171 %172 %174 %175 %176 %177 %178 %179
- phi assigns: %181<=%178
+ phi assigns: bb:40,%181<=%178
   %171(int32). load src:%33(int32) align=1
   call %0(void(int32,int32,int32,int32,int1))(llvm.memcpy.p0i8.p0i8.i32) args: %166(int32) %171(int32) %168(int32) %44(int32) %67(int1)
   store dest:%167(int32) value:%167(int32) align=1
@@ -313,7 +313,7 @@ bb:38 (succs: 54 40)
 bb:39 (succs: 54 40)
  defs: [%180,%180]
  uses: %180 %213
- phi assigns: %181<=%213
+ phi assigns: bb:40,%181<=%213
   forwardtyperef %213(int32) int32
   %180(int1). cmp2 op:icmp_eq(32) %213(int32) %40(int32)
   br %180(int1) ? 54 : 40
@@ -329,7 +329,7 @@ bb:40 (succs: 41 54)
 bb:41 (succs: 42)
  defs: [%185,%186]
  uses: %181
- phi assigns: %187<=%183 %188<=%183
+ phi assigns: bb:42,%187<=%183 bb:42,%188<=%183
   %185(int32). binop op:add(0) %181(int32) %62(int32) (flags:0)
   %186(int32). binop op:add(0) %181(int32) %63(int32) (flags:0)
   br 42
@@ -357,7 +357,7 @@ bb:43 (succs: 44 54)
 bb:44 (succs: 42)
  defs: [%197,%197]
  uses: %182
- phi assigns: %187<=%197 %188<=%189
+ phi assigns: bb:42,%187<=%197 bb:42,%188<=%189
   %197(int32). load src:%182(int32) align=1
   br 42
 bb:45 (succs: 47)

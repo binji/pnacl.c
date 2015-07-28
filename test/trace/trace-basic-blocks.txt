@@ -7,7 +7,7 @@ num bbs:57
 bb:0 (succs: 1)
  defs: [%69,%83]
  uses: %71 %73 %74 %75 %76 %77 %78 %79 %80 %81 %82
- phi assigns: %84<=%83
+ phi assigns: bb:1,%84<=%83
 bb:1 (succs: 3 4 2)
  defs: [%84,%85]
  uses: %84 %85
@@ -18,7 +18,7 @@ bb:2 (succs: 3)
 bb:3 (succs: 1)
  defs: [%88,%88]
  uses: %84
- phi assigns: %84<=%88
+ phi assigns: bb:1,%84<=%88
 bb:4 (succs: 5 6)
  defs: [%89,%90]
  uses: %89 %90
@@ -59,11 +59,11 @@ bb:18 (succs: 23 19)
 bb:19 (succs: 20 21)
  defs: [%111,%113]
  uses: %111 %112 %113
- phi assigns: %117<=%112
+ phi assigns: bb:21,%117<=%112
 bb:20 (succs: 21)
  defs: [%114,%116]
  uses: %114 %115
- phi assigns: %117<=%116
+ phi assigns: bb:21,%117<=%116
 bb:21 (succs: 23 22)
  defs: [%117,%120]
  uses: %117 %118 %119 %120
@@ -74,11 +74,11 @@ bb:22 (succs: 23)
 bb:23 (succs: 24 25)
  defs: [%125,%127]
  uses: %125 %126 %127
- phi assigns: %131<=%126
+ phi assigns: bb:25,%131<=%126
 bb:24 (succs: 25)
  defs: [%128,%130]
  uses: %128 %129
- phi assigns: %131<=%130
+ phi assigns: bb:25,%131<=%130
 bb:25 (succs: 27 26)
  defs: [%131,%134]
  uses: %131 %132 %133 %134
@@ -92,11 +92,11 @@ bb:27 (succs: 28 29)
 bb:28 (succs: 30)
  defs: [%141,%142]
  uses: %141
- phi assigns: %145<=%142
+ phi assigns: bb:30,%145<=%142
 bb:29 (succs: 30)
  defs: [%143,%144]
  uses: %143 %144
- phi assigns: %145<=%66
+ phi assigns: bb:30,%145<=%66
 bb:30 (succs: 32 31)
  defs: [%145,%149]
  uses: %69 %145 %146 %147 %148 %149
@@ -104,11 +104,11 @@ bb:30 (succs: 32 31)
 bb:31 (succs: 33)
  defs: [%150,%152]
  uses: %148 %150 %151 %152
- phi assigns: %154<=%49
+ phi assigns: bb:33,%154<=%49
 bb:32 (succs: 33)
  defs: [%153,%153]
  uses: %69
- phi assigns: %154<=%153
+ phi assigns: bb:33,%154<=%153
 bb:33 (succs: 34 35)
  defs: [%154,%156]
  uses: %155 %156
@@ -116,11 +116,11 @@ bb:33 (succs: 34 35)
 bb:34 (succs: 36)
  defs: [%157,%158]
  uses: %157
- phi assigns: %161<=%158
+ phi assigns: bb:36,%161<=%158
 bb:35 (succs: 36)
  defs: [%159,%160]
  uses: %159 %160
- phi assigns: %161<=%66
+ phi assigns: bb:36,%161<=%66
 bb:36 (succs: 37 38)
  defs: [%161,%170]
  uses: %154 %161 %162 %163 %164 %165 %166 %168 %169 %170
@@ -129,11 +129,11 @@ bb:37 (succs:)
 bb:38 (succs: 54 40)
  defs: [%171,%179]
  uses: %166 %167 %168 %171 %172 %174 %175 %176 %177 %178 %179
- phi assigns: %181<=%178
+ phi assigns: bb:40,%181<=%178
 bb:39 (succs: 54 40)
  defs: [%180,%180]
  uses: %180 %213
- phi assigns: %181<=%213
+ phi assigns: bb:40,%181<=%213
 bb:40 (succs: 41 54)
  defs: [%181,%184]
  uses: %181 %182 %183 %184
@@ -141,7 +141,7 @@ bb:40 (succs: 41 54)
 bb:41 (succs: 42)
  defs: [%185,%186]
  uses: %181
- phi assigns: %187<=%183 %188<=%183
+ phi assigns: bb:42,%187<=%183 bb:42,%188<=%183
 bb:42 (succs: 45 46)
  defs: [%187,%195]
  uses: %181 %187 %188 %189 %191 %192 %193 %195
@@ -152,7 +152,7 @@ bb:43 (succs: 44 54)
 bb:44 (succs: 42)
  defs: [%197,%197]
  uses: %182
- phi assigns: %187<=%197 %188<=%189
+ phi assigns: bb:42,%187<=%197 bb:42,%188<=%189
 bb:45 (succs: 47)
  uses: %182 %189
 bb:46 (succs: 47)
@@ -210,12 +210,12 @@ bb:0 (succs: 4 1)
 bb:1 (succs: 3 2)
  defs: [%50,%51]
  uses: %50 %51
- phi assigns: %52<=%40 %53<=%39 %58<=%40
+ phi assigns: bb:2,%52<=%40 bb:2,%53<=%39 bb:3,%58<=%40
 bb:2 (succs: 3 2)
  defs: [%52,%57]
  uses: %52 %53 %54 %56 %57
  phi uses: bb:2=>%55 bb:1=>%40 bb:2=>%54 bb:1=>%39
- phi assigns: %52<=%55 %53<=%54 %58<=%55
+ phi assigns: bb:2,%52<=%55 bb:2,%53<=%54 bb:3,%58<=%55
 bb:3 (succs: 4)
  defs: [%58,%59]
  uses: %46 %48 %58

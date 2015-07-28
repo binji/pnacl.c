@@ -4,7 +4,7 @@ function %1 (main)
 bb:0 (succs: 2 5 5 5 5 1 1 1 1)
  defs: [%117,%122]
  uses: %117 %122
- phi assigns: %146<=%106
+ phi assigns: bb:5,%146<=%106
   %117(int8). cast op:trunc(0) %105(int32)
   %118(int32). alloca %111(int32) align=4
   %119(int32). alloca %108(int32) align=4
@@ -13,7 +13,7 @@ bb:0 (succs: 2 5 5 5 5 1 1 1 1)
   %122(int32). cast op:sext(2) %117(int8)
   switch value:%122(int32) [default:2] [97 => bb:5] [101 => bb:5] [103 => bb:5] [48 => bb:5] [99 => bb:1] [102 => bb:1] [122 => bb:1] [57 => bb:1]
 bb:1 (succs: 5)
- phi assigns: %146<=%113
+ phi assigns: bb:5,%146<=%113
   br 5
 bb:2 (succs: 3 4)
  defs: [%123,%139]
@@ -57,7 +57,7 @@ bb:3 (succs: 4)
 bb:4 (succs: 5)
  defs: [%145,%145]
  uses: %119 %125 %134
- phi assigns: %146<=%110
+ phi assigns: bb:5,%146<=%110
   %145(int32). call %29(int32(int32,int32,int32))(__sfvwrite_r) args: %125(int32) %134(int32) %119(int32)
   br 5
 bb:5 (succs:)

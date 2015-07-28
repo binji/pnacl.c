@@ -992,6 +992,7 @@ typedef struct PNPhiUse {
 } PNPhiUse;
 
 typedef struct PNPhiAssign {
+  PNBasicBlockId bb_id;
   PNValueId source_value_id;
   PNValueId dest_value_id;
 } PNPhiAssign;
@@ -1145,7 +1146,6 @@ typedef struct PNBlockInfoContext {
 typedef struct PNLocation {
   PNFunctionId function_id;
   PNBasicBlockId bb_id;
-  PNBasicBlockId last_bb_id;
   PNInstructionId instruction_id;
 } PNLocation;
 
@@ -2340,7 +2340,8 @@ static void pn_basic_block_trace(PNModule* module,
   if (bb->num_phi_assigns) {
     PN_PRINT(" phi assigns:");
     for (n = 0; n < bb->num_phi_assigns; ++n) {
-      PN_PRINT(" %%%d<=%%%d", bb->phi_assigns[n].dest_value_id,
+      PN_PRINT(" bb:%d,%%%d<=%%%d", bb->phi_assigns[n].bb_id,
+               bb->phi_assigns[n].dest_value_id,
                bb->phi_assigns[n].source_value_id);
     }
     PN_PRINT("\n");
@@ -3629,6 +3630,7 @@ static void pn_function_calculate_phi_assigns(PNModule* module,
       PNPhiAssign* assign =
           &incoming_bb->phi_assigns[incoming_bb->num_phi_assigns++];
 
+      assign->bb_id = n;
       assign->dest_value_id = use->dest_value_id;
       assign->source_value_id = use->incoming.value_id;
     }
@@ -5705,7 +5707,6 @@ static void pn_executor_push_function(PNExecutor* executor,
 
   frame->location.function_id = function_id;
   frame->location.bb_id = 0;
-  frame->location.last_bb_id = prev_frame->location.bb_id;
   frame->location.instruction_id = 0;
   frame->function_values = pn_allocator_alloc(
       &executor->allocator, sizeof(PNRuntimeValue) * function->num_values,
@@ -5730,6 +5731,26 @@ static void pn_executor_push_function(PNExecutor* executor,
   }
 }
 
+static void pn_executor_do_phi_assigns(PNExecutor* executor,
+                                       PNBasicBlock* bb,
+                                       PNBasicBlockId dest_bb_id) {
+  uint32_t i;
+  for (i = 0; i < bb->num_phi_assigns; ++i) {
+    PNPhiAssign* assign = &bb->phi_assigns[i];
+    if (assign->bb_id == dest_bb_id) {
+      pn_executor_set_value(
+          executor, assign->dest_value_id,
+          pn_executor_get_value(executor, assign->source_value_id));
+      PN_TRACE(EXECUTE, "    %%%d <= %%%d\n", assign->dest_value_id,
+               assign->source_value_id);
+    } else if (assign->bb_id > dest_bb_id) {
+      /* Phi assigns are storted by bb_id, so we can stop checking after it is
+       * greater than dest_bb_id */
+      break;
+    }
+  }
+}
+
 static void pn_executor_init(PNExecutor* executor, PNModule* module) {
   pn_allocator_init(&executor->allocator, PN_MIN_CHUNKSIZE, "executor");
   executor->module = module;
@@ -5738,7 +5759,6 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
   executor->heap_end = executor->memory->heap_start;
   executor->sentinel_frame.location.function_id = PN_INVALID_FUNCTION_ID;
   executor->sentinel_frame.location.bb_id = PN_INVALID_BB_ID;
-  executor->sentinel_frame.location.last_bb_id = PN_INVALID_BB_ID;
   executor->sentinel_frame.location.instruction_id = 0;
   executor->sentinel_frame.function_values = NULL;
   executor->sentinel_frame.memory_stack_top = executor->memory->stack_end;
@@ -6595,8 +6615,10 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 
     case PN_OPCODE_BR: {
       PNInstructionBr* i = (PNInstructionBr*)inst;
-      location->last_bb_id = location->bb_id;
-      location->bb_id = i->true_bb_id;
+      PNBasicBlockId new_bb_id = i->true_bb_id;
+      pn_executor_do_phi_assigns(executor, &function->bbs[location->bb_id],
+                                 new_bb_id);
+      location->bb_id = new_bb_id;
       location->instruction_id = 0;
       PN_TRACE(EXECUTE, "bb = %d\n", location->bb_id);
       break;
@@ -6606,7 +6628,8 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       PNInstructionBr* i = (PNInstructionBr*)inst;
       PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);
       PNBasicBlockId new_bb_id = value.u8 ? i->true_bb_id : i->false_bb_id;
-      location->last_bb_id = location->bb_id;
+      pn_executor_do_phi_assigns(executor, &function->bbs[location->bb_id],
+                                 new_bb_id);
       location->bb_id = new_bb_id;
       location->instruction_id = 0;
       PN_TRACE(EXECUTE, "    %%%d = %u\n", i->value_id, value.u8);
@@ -7452,28 +7475,9 @@ longjmp_done:
 
 #undef OPCODE_LOAD
 
-    case PN_OPCODE_PHI: {
-      /* TODO(binji): optimize using phi assigns */
-      PNInstructionPhi* i = (PNInstructionPhi*)inst;
-      uint32_t n;
-      for (n = 0; n < i->num_incoming; ++n) {
-        if (i->incoming[n].bb_id == location->last_bb_id) {
-          PNValueId value_id = i->incoming[n].value_id;
-          PNRuntimeValue result = pn_executor_get_value(executor, value_id);
-          pn_executor_set_value(executor, i->result_value_id, result);
-          pn_executor_value_trace(executor, function, i->result_value_id,
-                                  result, "    ", "  ");
-          pn_executor_value_trace(executor, function, value_id, result, "",
-                                  "\n");
-          break;
-        }
-      }
-      if (n == i->num_incoming) {
-        PN_UNREACHABLE();
-      }
+    case PN_OPCODE_PHI:
       location->instruction_id++;
       break;
-    }
 
     case PN_OPCODE_RET: {
       executor->current_call_frame = frame->parent;
@@ -7538,25 +7542,26 @@ longjmp_done:
 
 #undef OPCODE_STORE
 
-#define OPCODE_SWITCH(ty)                                                \
-  do {                                                                   \
-    PNInstructionSwitch* i = (PNInstructionSwitch*)inst;                 \
-    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id); \
-    PNBasicBlockId bb_id = i->default_bb_id;                             \
-    uint32_t c;                                                          \
-    for (c = 0; c < i->num_cases; ++c) {                                 \
-      PNSwitchCase* switch_case = &i->cases[c];                          \
-      if (value.ty == switch_case->value) {                              \
-        bb_id = switch_case->bb_id;                                      \
-        break;                                                           \
-      }                                                                  \
-    }                                                                    \
-    location->last_bb_id = location->bb_id;                              \
-    location->bb_id = bb_id;                                             \
-    location->instruction_id = 0;                                        \
-    PN_TRACE(EXECUTE, "    %%%d = " PN_FORMAT_##ty "\n", i->value_id,    \
-             value.ty);                                                  \
-    PN_TRACE(EXECUTE, "bb = %d\n", bb_id);                               \
+#define OPCODE_SWITCH(ty)                                                 \
+  do {                                                                    \
+    PNInstructionSwitch* i = (PNInstructionSwitch*)inst;                  \
+    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);  \
+    PNBasicBlockId new_bb_id = i->default_bb_id;                          \
+    uint32_t c;                                                           \
+    for (c = 0; c < i->num_cases; ++c) {                                  \
+      PNSwitchCase* switch_case = &i->cases[c];                           \
+      if (value.ty == switch_case->value) {                               \
+        new_bb_id = switch_case->bb_id;                                   \
+        break;                                                            \
+      }                                                                   \
+    }                                                                     \
+    pn_executor_do_phi_assigns(executor, &function->bbs[location->bb_id], \
+                               new_bb_id);                                \
+    location->bb_id = new_bb_id;                                          \
+    location->instruction_id = 0;                                         \
+    PN_TRACE(EXECUTE, "    %%%d = " PN_FORMAT_##ty "\n", i->value_id,     \
+             value.ty);                                                   \
+    PN_TRACE(EXECUTE, "bb = %d\n", new_bb_id);                            \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_SWITCH_INT1:

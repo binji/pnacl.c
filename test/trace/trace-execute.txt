@@ -43,10 +43,10 @@ auxv = 3664
   store dest:%16(int32) value:%71(int32) align=1
     %16 = 1024  %71 = 1048552
   br 1
+    %84 <= %83
 bb = 1
   forwardtyperef %88(int32) int32
   %84(int32). phi bb:0=>%83(int32) bb:3=>%88(int32)
-    %84 = 3664  %83 = 3664
   %85(int32). load src:%84(int32) align=1
     %85 = 32  %84 = 3664
   switch value:%85(int32) [default:3] [0 => bb:4] [32 => bb:2]
@@ -63,10 +63,10 @@ bb = 3
   %88(int32). binop op:add(0) %84(int32) %42(int32) (flags:0)
     %88 = 3672  %84 = 3664  %42 = 8
   br 1
+    %84 <= %88
 bb = 1
   forwardtyperef %88(int32) int32
   %84(int32). phi bb:0=>%83(int32) bb:3=>%88(int32)
-    %84 = 3672  %88 = 3672
   %85(int32). load src:%84(int32) align=1
     %85 = 0  %84 = 3672
   switch value:%85(int32) [default:3] [0 => bb:4] [32 => bb:2]
@@ -161,9 +161,9 @@ bb = 24
   %130(int32). binop op:add(0) %36(int32) %45(int32) (flags:0)
     %130 = 1684  %36 = 1352  %45 = 332
   br 25
+    %131 <= %130
 bb = 25
   %131(int32). phi bb:24=>%130(int32) bb:23=>%126(int32)
-    %131 = 1684  %130 = 1684
   %132(int32). binop op:add(0) %131(int32) %41(int32) (flags:0)
     %132 = 1688  %131 = 1684  %41 = 4
   %133(int32). load src:%132(int32) align=1
@@ -205,9 +205,9 @@ bb = 29
   store dest:%34(int32) value:%144(int8) align=1
     %34 = 1344  %144 = 1
   br 30
+    %145 <= %66
 bb = 30
   %145(int1). phi bb:28=>%142(int1) bb:29=>%66(int1)
-    %145 = 1  %66 = 1
   %146(int32). vselect %145(int1) ? %51(int32) : %52(int32)
     %146 = 1155  %145 = 1  %51 = 1155
   store dest:%69(int32) value:%40(int32) align=1
@@ -226,9 +226,9 @@ bb = 32
   %153(int32). load src:%69(int32) align=1
     %153 = 4096  %69 = 1048572
   br 33
+    %154 <= %153
 bb = 33
   %154(int32). phi bb:31=>%49(int32) bb:32=>%153(int32)
-    %154 = 4096  %153 = 4096
   %155(int8). load src:%35(int32) align=1
     %155 = 1  %35 = 1345
   %156(int1). cast op:trunc(0) %155(int8)
@@ -241,9 +241,9 @@ bb = 34
   %158(int1). cast op:trunc(0) %157(int8)
     %158 = 1  %157 = 1
   br 36
+    %161 <= %158
 bb = 36
   %161(int1). phi bb:34=>%158(int1) bb:35=>%66(int1)
-    %161 = 1  %158 = 1
   %162(int32). vselect %161(int1) ? %51(int32) : %52(int32)
     %162 = 1155  %161 = 1  %51 = 1155
   %163(int32). binop op:add(0) %154(int32) %162(int32) (flags:0)
@@ -292,10 +292,10 @@ bb = 38
   %179(int1). cmp2 op:icmp_eq(32) %178(int32) %40(int32)
     %179 = 0  %178 = 1684  %40 = 0
   br %179(int1) ? 54 : 40
+    %181 <= %178
     %179 = 0
 bb = 40
   %181(int32). phi bb:39=>%213(int32) bb:38=>%178(int32)
-    %181 = 1684  %178 = 1684
   %182(int32). binop op:add(0) %181(int32) %41(int32) (flags:0)
     %182 = 1688  %181 = 1684  %41 = 4
   %183(int32). load src:%182(int32) align=1
@@ -310,13 +310,13 @@ bb = 41
   %186(int32). binop op:add(0) %181(int32) %63(int32) (flags:0)
     %186 = 2080  %181 = 1684  %63 = 396
   br 42
+    %187 <= %183
+    %188 <= %183
 bb = 42
   forwardtyperef %197(int32) int32
   %187(int32). phi bb:41=>%183(int32) bb:44=>%197(int32)
-    %187 = 1  %183 = 1
   forwardtyperef %189(int32) int32
   %188(int32). phi bb:41=>%183(int32) bb:44=>%189(int32)
-    %188 = 1  %183 = 1
   %189(int32). binop op:add(0) %188(int32) %49(int32) (flags:0)
     %189 = 0  %188 = 1  %49 = 4294967295
   %190(int32). binop op:shl(7) %44(int32) %189(int32) (flags:0)
