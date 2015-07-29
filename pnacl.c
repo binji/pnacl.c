@@ -173,7 +173,9 @@ static PNBool g_pn_print_named_functions;
 static PNBool g_pn_print_stats;
 static PNBool g_pn_print_opcode_counts;
 static PNBool g_pn_run;
+#if PN_TRACING
 static const char* g_pn_trace_function_filter;
+#endif /* PN_TRACING */
 
 #if PN_TIMERS
 static PNBool g_pn_print_time;
@@ -3560,8 +3562,7 @@ static void pn_function_calculate_liveness(PNModule* module,
     PNBasicBlock* bb = &function->bbs[n];
     uint32_t m;
 
-    uint32_t livein_bits_set =
-        pn_bitset_num_bits_set(&state.livein[n].num_bits_set);
+    uint32_t livein_bits_set = pn_bitset_num_bits_set(&state.livein[n]);
     if (livein_bits_set) {
       bb->num_livein = 0;
       bb->livein = pn_allocator_alloc(
@@ -3575,8 +3576,7 @@ static void pn_function_calculate_liveness(PNModule* module,
       }
     }
 
-    uint32_t liveout_bits_set =
-        pn_bitset_num_bits_set(&state.liveout[n].num_bits_set);
+    uint32_t liveout_bits_set = pn_bitset_num_bits_set(&state.liveout[n]);
     if (liveout_bits_set) {
       bb->num_liveout = 0;
       bb->liveout = pn_allocator_alloc(&module->allocator,
@@ -7670,8 +7670,10 @@ static PNOptionHelp g_pn_option_help[] = {
     {PN_FLAG_MEMORY_SIZE, "SIZE",
      "size of runtime memory. suffixes k=1024, m=1024*1024"},
     {PN_FLAG_ENV, "KEY=VALUE", "set runtime environment variable KEY to VALUE"},
+#if PN_TRACING
     {PN_FLAG_TRACE_FUNCTION_FILTER, "NAME",
      "only trace function with given name or id"},
+#endif /* PN_TRACING */
     {PN_NUM_FLAGS, NULL},
 };
 
