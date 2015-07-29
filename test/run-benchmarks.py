@@ -97,7 +97,10 @@ def main(args):
     info = TestInfo()
     try:
       info.Parse(test)
-      stdout, _, duration = info.Run(override)
+      stdout, _, returncode, duration = info.Run(override)
+      if returncode != info.expected_error:
+        raise Error('expected error code %d, got %d.' % (info.expected_error,
+                                                         returncode))
       for opt_level in (0, 2):
         suffix = '.O%d.' % opt_level + options.arch
         nexe_stdout, _, nexe_duration = RunNexe(info, override, suffix)

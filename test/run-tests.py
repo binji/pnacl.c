@@ -165,11 +165,7 @@ class TestInfo(object):
     except OSError as e:
       raise Error(str(e))
 
-    if process.returncode != self.expected_error:
-      raise Error('expected error code %d, got %d.' % (self.expected_error,
-                                                       process.returncode))
-
-    return stdout, stderr, duration
+    return stdout, stderr, process.returncode, duration
 
   def Rebase(self, stdout, stderr):
     with open(self.name, 'w') as f:
@@ -275,7 +271,18 @@ def main(args):
         logger.info('. %s (skipped)' % info.name)
         continue
 
-      stdout, stderr, duration = info.Run(override)
+      stdout, stderr, returncode, duration = info.Run(override)
+      if returncode != info.expected_error:
+        # This test has already failed, but diff it anyway.
+        msg = 'expected error code %d, got %d.' % (info.expected_error,
+                                                   returncode)
+        try:
+          info.Diff(stdout, stderr)
+        except Error as e:
+          msg += '\n' + str(e)
+
+        raise Error(msg)
+
       if options.rebase:
         info.Rebase(stdout, stderr)
       else:
