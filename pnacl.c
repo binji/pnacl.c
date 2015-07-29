@@ -5734,21 +5734,29 @@ static void pn_executor_push_function(PNExecutor* executor,
 static void pn_executor_do_phi_assigns(PNExecutor* executor,
                                        PNBasicBlock* bb,
                                        PNBasicBlockId dest_bb_id) {
+  PNAllocatorMark mark = pn_allocator_mark(&executor->allocator);
+  PNRuntimeValue* temp = pn_allocator_alloc(
+      &executor->allocator, sizeof(PNRuntimeValue) * bb->num_phi_assigns,
+      sizeof(PNRuntimeValue));
+
+  /* First pass, read values to temp */
   uint32_t i;
+  for (i = 0; i < bb->num_phi_assigns; ++i) {
+    temp[i] =
+        pn_executor_get_value(executor, bb->phi_assigns[i].source_value_id);
+  }
+
+  /* Second pass, write values from temp */
   for (i = 0; i < bb->num_phi_assigns; ++i) {
     PNPhiAssign* assign = &bb->phi_assigns[i];
     if (assign->bb_id == dest_bb_id) {
-      pn_executor_set_value(
-          executor, assign->dest_value_id,
-          pn_executor_get_value(executor, assign->source_value_id));
+      pn_executor_set_value(executor, assign->dest_value_id, temp[i]);
       PN_TRACE(EXECUTE, "    %%%d <= %%%d\n", assign->dest_value_id,
                assign->source_value_id);
-    } else if (assign->bb_id > dest_bb_id) {
-      /* Phi assigns are storted by bb_id, so we can stop checking after it is
-       * greater than dest_bb_id */
-      break;
     }
   }
+
+  pn_allocator_reset_to_mark(&executor->allocator, mark);
 }
 
 static void pn_executor_init(PNExecutor* executor, PNModule* module) {
