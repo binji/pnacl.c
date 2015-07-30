@@ -1167,6 +1167,8 @@ typedef struct PNJmpBuf {
 } PNJmpBuf;
 
 typedef struct PNThread {
+  PNAllocator allocator;
+  struct PNExecutor* executor;
   PNCallFrame* current_call_frame;
   uint32_t tls;
 } PNThread;
@@ -5644,13 +5646,13 @@ DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(f64, double)
 
 #undef DEFINE_EXECUTOR_VALUE_CONSTRUCTOR
 
-static PNRuntimeValue pn_executor_get_value(PNExecutor* executor,
-                                            PNValueId value_id) {
-  if (value_id >= executor->module->num_values) {
-    value_id -= executor->module->num_values;
-    return executor->thread.current_call_frame->function_values[value_id];
+static PNRuntimeValue pn_thread_get_value(PNThread* thread,
+                                          PNValueId value_id) {
+  if (value_id >= thread->executor->module->num_values) {
+    value_id -= thread->executor->module->num_values;
+    return thread->current_call_frame->function_values[value_id];
   } else {
-    return executor->module_values[value_id];
+    return thread->executor->module_values[value_id];
   }
 }
 
@@ -5665,12 +5667,12 @@ static PNRuntimeValue pn_executor_get_value_from_frame(PNExecutor* executor,
   }
 }
 
-static void pn_executor_set_value(PNExecutor* executor,
-                                  PNValueId value_id,
-                                  PNRuntimeValue value) {
-  assert(value_id >= executor->module->num_values);
-  value_id -= executor->module->num_values;
-  executor->thread.current_call_frame->function_values[value_id] = value;
+static void pn_thread_set_value(PNThread* thread,
+                                PNValueId value_id,
+                                PNRuntimeValue value) {
+  assert(value_id >= thread->executor->module->num_values);
+  value_id -= thread->executor->module->num_values;
+  thread->current_call_frame->function_values[value_id] = value;
 }
 
 static void pn_executor_init_module_values(PNExecutor* executor) {
@@ -5702,72 +5704,71 @@ static void pn_executor_init_module_values(PNExecutor* executor) {
   }
 }
 
-static void pn_executor_push_function(PNExecutor* executor,
-                                      PNFunctionId function_id,
-                                      PNFunction* function) {
+static void pn_thread_push_function(PNThread* thread,
+                                    PNFunctionId function_id,
+                                    PNFunction* function) {
   PNCallFrame* frame = pn_allocator_alloc(
-      &executor->allocator, sizeof(PNCallFrame), PN_DEFAULT_ALIGN);
-  PNCallFrame* prev_frame = executor->thread.current_call_frame;
+      &thread->allocator, sizeof(PNCallFrame), PN_DEFAULT_ALIGN);
+  PNCallFrame* prev_frame = thread->current_call_frame;
 
   frame->location.function_id = function_id;
   frame->location.bb_id = 0;
   frame->location.instruction_id = 0;
   frame->function_values = pn_allocator_alloc(
-      &executor->allocator, sizeof(PNRuntimeValue) * function->num_values,
+      &thread->allocator, sizeof(PNRuntimeValue) * function->num_values,
       sizeof(PNRuntimeValue));
   frame->memory_stack_top = prev_frame->memory_stack_top;
   frame->parent = prev_frame;
   frame->jmpbuf_head = NULL;
-  frame->mark = pn_allocator_mark(&executor->allocator);
+  frame->mark = pn_allocator_mark(&thread->allocator);
 
-  executor->thread.current_call_frame = frame;
+  thread->current_call_frame = frame;
 
   uint32_t n;
   for (n = 0; n < function->num_constants; ++n) {
     PNConstant* constant = pn_function_get_constant(function, n);
-    PNValueId value_id = executor->module->num_values + function->num_args + n;
+    PNValueId value_id =
+        thread->executor->module->num_values + function->num_args + n;
 #ifndef NDEBUG
     PNValue* value =
-        pn_function_get_value(executor->module, function, value_id);
+        pn_function_get_value(thread->executor->module, function, value_id);
     assert(value->code == PN_VALUE_CODE_CONSTANT);
 #endif /* NDEBUG */
-    pn_executor_set_value(executor, value_id, constant->value);
+    pn_thread_set_value(thread, value_id, constant->value);
   }
 }
 
-static void pn_executor_do_phi_assigns(PNExecutor* executor,
-                                       PNBasicBlock* bb,
-                                       PNBasicBlockId dest_bb_id) {
-  PNAllocatorMark mark = pn_allocator_mark(&executor->allocator);
+static void pn_thread_do_phi_assigns(PNThread* thread,
+                                     PNBasicBlock* bb,
+                                     PNBasicBlockId dest_bb_id) {
+  PNAllocatorMark mark = pn_allocator_mark(&thread->allocator);
   PNRuntimeValue* temp = pn_allocator_alloc(
-      &executor->allocator, sizeof(PNRuntimeValue) * bb->num_phi_assigns,
+      &thread->allocator, sizeof(PNRuntimeValue) * bb->num_phi_assigns,
       sizeof(PNRuntimeValue));
 
   /* First pass, read values to temp */
   uint32_t i;
   for (i = 0; i < bb->num_phi_assigns; ++i) {
-    temp[i] =
-        pn_executor_get_value(executor, bb->phi_assigns[i].source_value_id);
+    temp[i] = pn_thread_get_value(thread, bb->phi_assigns[i].source_value_id);
   }
 
   /* Second pass, write values from temp */
   for (i = 0; i < bb->num_phi_assigns; ++i) {
     PNPhiAssign* assign = &bb->phi_assigns[i];
     if (assign->bb_id == dest_bb_id) {
-      pn_executor_set_value(executor, assign->dest_value_id, temp[i]);
+      pn_thread_set_value(thread, assign->dest_value_id, temp[i]);
       PN_TRACE(EXECUTE, "    %%%d <= %%%d\n", assign->dest_value_id,
                assign->source_value_id);
     }
   }
 
-  pn_allocator_reset_to_mark(&executor->allocator, mark);
+  pn_allocator_reset_to_mark(&thread->allocator, mark);
 }
 
 static void pn_executor_init(PNExecutor* executor, PNModule* module) {
   pn_allocator_init(&executor->allocator, PN_MIN_CHUNKSIZE, "executor");
   executor->module = module;
   executor->memory = module->memory;
-  executor->thread.current_call_frame = &executor->sentinel_frame;
   executor->heap_end = executor->memory->heap_start;
   executor->sentinel_frame.location.function_id = PN_INVALID_FUNCTION_ID;
   executor->sentinel_frame.location.bb_id = PN_INVALID_BB_ID;
@@ -5776,7 +5777,6 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
   executor->sentinel_frame.memory_stack_top = executor->memory->stack_end;
   executor->sentinel_frame.parent = NULL;
   executor->sentinel_frame.mark = pn_allocator_mark(&executor->allocator);
-  executor->thread.tls = 0;
   executor->exit_code = 0;
   executor->exiting = PN_FALSE;
 
@@ -5792,19 +5792,25 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
 
   pn_executor_init_module_values(executor);
 
+  /* TODO(binji): proper handling of thread */
+  PNThread* thread = &executor->thread;
+  pn_allocator_init(&thread->allocator, PN_MIN_CHUNKSIZE, "main thread");
+  thread->current_call_frame = &executor->sentinel_frame;
+  thread->tls = 0;
+
   PNFunctionId start_function_id = module->known_functions[PN_INTRINSIC_START];
   PN_CHECK(start_function_id != PN_INVALID_FUNCTION_ID);
   PNFunction* start_function =
       pn_module_get_function(module, start_function_id);
 
-  pn_executor_push_function(executor, start_function_id, start_function);
+  pn_thread_push_function(thread, start_function_id, start_function);
 
   PN_CHECK(start_function->num_args == 1);
 
   PNValueId value_id = executor->module->num_values;
   PNRuntimeValue value;
   value.u32 = executor->memory->startinfo_start;
-  pn_executor_set_value(executor, value_id, value);
+  pn_thread_set_value(thread, value_id, value);
 }
 
 #if PN_TRACING
@@ -5850,11 +5856,11 @@ static void pn_executor_value_trace(PNExecutor* executor,
   }
 }
 
-static void pn_executor_backtrace(PNExecutor* executor) {
-  PNModule* module = executor->module;
-  PNCallFrame* frame = executor->thread.current_call_frame;
+static void pn_thread_backtrace(PNThread* thread) {
+  PNModule* module = thread->executor->module;
+  PNCallFrame* frame = thread->current_call_frame;
   int n = 0;
-  while (frame != &executor->sentinel_frame) {
+  while (frame != &thread->executor->sentinel_frame) {
     PNLocation* location = &frame->location;
     PNFunction* function = &module->functions[location->function_id];
     if (function->name && function->name[0]) {
@@ -5877,12 +5883,12 @@ static void pn_executor_value_trace(PNExecutor* executor,
                                     const char* prefix,
                                     const char* postfix) {}
 
-static void pn_executor_backtrace(PNExecutor* executor) {}
+static void pn_thread_backtrace(PNThread* thread) {}
 #endif
 
-#define PN_BUILTIN_ARG(name, n, ty)                                      \
-  PNRuntimeValue value##n = pn_executor_get_value(executor, arg_ids[n]); \
-  pn_##ty name = value##n.ty;                                            \
+#define PN_BUILTIN_ARG(name, n, ty)                                  \
+  PNRuntimeValue value##n = pn_thread_get_value(thread, arg_ids[n]); \
+  pn_##ty name = value##n.ty;                                        \
   (void) name /* no semicolon */
 
 static PNErrno pn_from_errno(int e) {
@@ -5896,10 +5902,11 @@ static PNErrno pn_from_errno(int e) {
   }
 }
 
-static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNExecutor* executor,
+static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNThread* thread,
                                                 PNFunction* function,
                                                 uint32_t num_args,
                                                 PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
   PN_CHECK(num_args == 3);
   PN_BUILTIN_ARG(name_p, 0, u32);
   PN_BUILTIN_ARG(table, 1, u32);
@@ -6009,10 +6016,11 @@ static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNExecutor* executor,
 #undef PN_WRITE_BUILTIN
 }
 
-static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_EXIT(PNExecutor* executor,
+static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_EXIT(PNThread* thread,
                                                      PNFunction* function,
                                                      uint32_t num_args,
                                                      PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
   PN_CHECK(num_args == 1);
   PN_BUILTIN_ARG(exit_code, 0, i32);
   PN_TRACE(IRT, "    NACL_IRT_BASIC_EXIT(%d)\n", exit_code);
@@ -6021,10 +6029,11 @@ static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_EXIT(PNExecutor* executor,
   return pn_executor_value_u32(0);
 }
 
-static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_GETTOD(PNExecutor* executor,
+static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_GETTOD(PNThread* thread,
                                                        PNFunction* function,
                                                        uint32_t num_args,
                                                        PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
   PN_CHECK(num_args == 1);
   PN_BUILTIN_ARG(tv_p, 0, i32);
   PN_TRACE(IRT, "    NACL_IRT_BASIC_GETTOD(%u)\n", tv_p);
@@ -6044,10 +6053,11 @@ static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_GETTOD(PNExecutor* executor,
   return pn_executor_value_u32(0);
 }
 
-static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_SYSCONF(PNExecutor* executor,
+static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_SYSCONF(PNThread* thread,
                                                         PNFunction* function,
                                                         uint32_t num_args,
                                                         PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
   PN_CHECK(num_args == 2);
   PN_BUILTIN_ARG(name, 0, u32);
   PN_BUILTIN_ARG(value_p, 1, u32);
@@ -6063,7 +6073,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_SYSCONF(PNExecutor* executor,
   return pn_executor_value_u32(0);
 }
 
-static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_CLOSE(PNExecutor* executor,
+static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_CLOSE(PNThread* thread,
                                                      PNFunction* function,
                                                      uint32_t num_args,
                                                      PNValueId* arg_ids) {
@@ -6078,10 +6088,11 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_CLOSE(PNExecutor* executor,
   return pn_executor_value_u32(0);
 }
 
-static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_READ(PNExecutor* executor,
-                                                     PNFunction* function,
-                                                     uint32_t num_args,
-                                                     PNValueId* arg_ids) {
+static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_READ(PNThread* thread,
+                                                    PNFunction* function,
+                                                    uint32_t num_args,
+                                                    PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
   PN_CHECK(num_args == 4);
   PN_BUILTIN_ARG(fd, 0, u32);
   PN_BUILTIN_ARG(buf_p, 1, u32);
@@ -6102,11 +6113,11 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_READ(PNExecutor* executor,
   return pn_executor_value_u32(0);
 }
 
-
-static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_WRITE(PNExecutor* executor,
+static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_WRITE(PNThread* thread,
                                                      PNFunction* function,
                                                      uint32_t num_args,
                                                      PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
   PN_CHECK(num_args == 4);
   PN_BUILTIN_ARG(fd, 0, u32);
   PN_BUILTIN_ARG(buf_p, 1, u32);
@@ -6127,10 +6138,11 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_WRITE(PNExecutor* executor,
   return pn_executor_value_u32(0);
 }
 
-static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_FSTAT(PNExecutor* executor,
+static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_FSTAT(PNThread* thread,
                                                      PNFunction* function,
                                                      uint32_t num_args,
                                                      PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
   PN_CHECK(num_args == 2);
   PN_BUILTIN_ARG(fd, 0, u32);
   PN_BUILTIN_ARG(stat_p, 1, u32);
@@ -6189,10 +6201,11 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_FSTAT(PNExecutor* executor,
   return pn_executor_value_u32(0);
 }
 
-static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_ISATTY(PNExecutor* executor,
+static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_ISATTY(PNThread* thread,
                                                       PNFunction* function,
                                                       uint32_t num_args,
                                                       PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
   PN_CHECK(num_args == 2);
   PN_BUILTIN_ARG(fd, 0, u32);
   PN_BUILTIN_ARG(result_p, 1, u32);
@@ -6209,10 +6222,11 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_ISATTY(PNExecutor* executor,
   return pn_executor_value_u32(0);
 }
 
-static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_GETCWD(PNExecutor* executor,
+static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_GETCWD(PNThread* thread,
                                                           PNFunction* function,
                                                           uint32_t num_args,
                                                           PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
   PN_CHECK(num_args == 2);
   PN_BUILTIN_ARG(pathname_p, 0, u32);
   PN_BUILTIN_ARG(len, 1, u32);
@@ -6227,10 +6241,11 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_GETCWD(PNExecutor* executor,
 }
 
 static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_READLINK(
-    PNExecutor* executor,
+    PNThread* thread,
     PNFunction* function,
     uint32_t num_args,
     PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
   PN_CHECK(num_args == 4);
   PN_BUILTIN_ARG(path_p, 0, u32);
   PN_BUILTIN_ARG(buf_p, 1, u32);
@@ -6254,10 +6269,11 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_READLINK(
   return pn_executor_value_u32(err);
 }
 
-static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_STAT(PNExecutor* executor,
+static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_STAT(PNThread* thread,
                                                         PNFunction* function,
                                                         uint32_t num_args,
                                                         PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
   PN_CHECK(num_args == 2);
   PN_BUILTIN_ARG(pathname_p, 0, u32);
   PN_BUILTIN_ARG(stat_p, 1, u32);
@@ -6299,10 +6315,11 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_STAT(PNExecutor* executor,
   return pn_executor_value_u32(0);
 }
 
-static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNExecutor* executor,
+static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNThread* thread,
                                                       PNFunction* function,
                                                       uint32_t num_args,
                                                       PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
   PN_CHECK(num_args == 6);
   PN_BUILTIN_ARG(addr_pp, 0, u32);
   PN_BUILTIN_ARG(len, 1, u32);
@@ -6372,10 +6389,11 @@ found:
   return pn_executor_value_u32(0);
 }
 
-static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MUNMAP(PNExecutor* executor,
+static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MUNMAP(PNThread* thread,
                                                         PNFunction* function,
                                                         uint32_t num_args,
                                                         PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
   PN_CHECK(num_args == 2);
   PN_BUILTIN_ARG(addr_p, 0, u32);
   PN_BUILTIN_ARG(len, 1, u32);
@@ -6404,23 +6422,25 @@ static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MUNMAP(PNExecutor* executor,
   return pn_executor_value_u32(0);
 }
 
-static PNRuntimeValue pn_builtin_NACL_IRT_TLS_INIT(PNExecutor* executor,
+static PNRuntimeValue pn_builtin_NACL_IRT_TLS_INIT(PNThread* thread,
                                                    PNFunction* function,
                                                    uint32_t num_args,
                                                    PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
   PN_CHECK(num_args == 1);
   PN_BUILTIN_ARG(thread_ptr_p, 0, u32);
   PN_TRACE(IRT, "    NACL_IRT_TLS_INIT(%u)\n", thread_ptr_p);
   /* How big is TLS? */
   pn_memory_check(executor->memory, thread_ptr_p, 1);
-  executor->thread.tls = thread_ptr_p;
+  thread->tls = thread_ptr_p;
   return pn_executor_value_u32(0);
 }
 
-static PNRuntimeValue pn_builtin_NACL_IRT_FUTEX_WAIT_ABS(PNExecutor* executor,
+static PNRuntimeValue pn_builtin_NACL_IRT_FUTEX_WAIT_ABS(PNThread* thread,
                                                          PNFunction* function,
                                                          uint32_t num_args,
                                                          PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
   /* (Doc From irt.h)
   If |*addr| still contains |value|, futex_wait_abs() waits to be woken up by a
   futex_wake(addr,...) call from another thread; otherwise, it immediately
@@ -6450,7 +6470,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FUTEX_WAIT_ABS(PNExecutor* executor,
   }
 }
 
-static PNRuntimeValue pn_builtin_NACL_IRT_FUTEX_WAKE(PNExecutor* executor,
+static PNRuntimeValue pn_builtin_NACL_IRT_FUTEX_WAKE(PNThread* thread,
                                                      PNFunction* function,
                                                      uint32_t num_args,
                                                      PNValueId* arg_ids) {
@@ -6460,6 +6480,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FUTEX_WAKE(PNExecutor* executor,
   |nwake| is the maximum number of threads that will be woken up.  The number
   of threads that were woken is returned in |*count|.
   */
+  PNExecutor* executor = thread->executor;
   PN_CHECK(num_args == 3);
   PN_BUILTIN_ARG(addr_p, 0, u32);
   PN_BUILTIN_ARG(nwake, 1, u32);
@@ -6469,12 +6490,12 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FUTEX_WAKE(PNExecutor* executor,
   return pn_executor_value_u32(0);
 }
 
-#define PN_BUILTIN_STUB(name)                                        \
-  static PNRuntimeValue pn_builtin_##name(                           \
-      PNExecutor* executor, PNFunction* function, uint32_t num_args, \
-      PNValueId* arg_ids) {                                          \
-    PN_TRACE(IRT, "    " #name "(...)\n");                           \
-    return pn_executor_value_u32(PN_ENOSYS);                         \
+#define PN_BUILTIN_STUB(name)                                    \
+  static PNRuntimeValue pn_builtin_##name(                       \
+      PNThread* thread, PNFunction* function, uint32_t num_args, \
+      PNValueId* arg_ids) {                                      \
+    PN_TRACE(IRT, "    " #name "(...)\n");                       \
+    return pn_executor_value_u32(PN_ENOSYS);                     \
   }
 
 PN_BUILTIN_STUB(NACL_IRT_BASIC_CLOCK)
@@ -6514,8 +6535,9 @@ PN_BUILTIN_STUB(NACL_IRT_THREAD_NICE)
 
 static uint32_t g_pn_opcode_count[PN_MAX_OPCODE];
 
-static void pn_executor_execute_instruction(PNExecutor* executor) {
-  PNCallFrame* frame = executor->thread.current_call_frame;
+static void pn_thread_execute_instruction(PNThread* thread) {
+  PNExecutor* executor = thread->executor;
+  PNCallFrame* frame = thread->current_call_frame;
   PNLocation* location = &frame->location;
   PNModule* module = executor->module;
   PNFunction* function = &module->functions[location->function_id];
@@ -6533,7 +6555,7 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
   switch (inst->opcode) {
     case PN_OPCODE_ALLOCA_INT32: {
       PNInstructionAlloca* i = (PNInstructionAlloca*)inst;
-      PNRuntimeValue size = pn_executor_get_value(executor, i->size_id);
+      PNRuntimeValue size = pn_thread_get_value(thread, i->size_id);
       frame->memory_stack_top =
           pn_align_down(frame->memory_stack_top - size.i32, i->alignment);
       if (frame->memory_stack_top < executor->heap_end) {
@@ -6542,7 +6564,7 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       }
       PNRuntimeValue result;
       result.u32 = frame->memory_stack_top;
-      pn_executor_set_value(executor, i->result_value_id, result);
+      pn_thread_set_value(thread, i->result_value_id, result);
       PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = %d\n", i->result_value_id,
                result.u32, i->size_id, size.i32);
       location->instruction_id++;
@@ -6552,10 +6574,10 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 #define OPCODE_BINOP(op, ty)                                                  \
   do {                                                                        \
     PNInstructionBinop* i = (PNInstructionBinop*)inst;                        \
-    PNRuntimeValue value0 = pn_executor_get_value(executor, i->value0_id);    \
-    PNRuntimeValue value1 = pn_executor_get_value(executor, i->value1_id);    \
+    PNRuntimeValue value0 = pn_thread_get_value(thread, i->value0_id);        \
+    PNRuntimeValue value1 = pn_thread_get_value(thread, i->value1_id);        \
     PNRuntimeValue result = pn_executor_value_##ty(value0.ty op value1.ty);   \
-    pn_executor_set_value(executor, i->result_value_id, result);              \
+    pn_thread_set_value(thread, i->result_value_id, result);                  \
     PN_TRACE(EXECUTE, "    %%%d = " PN_FORMAT_##ty "  %%%d = " PN_FORMAT_##ty \
              "  %%%d = " PN_FORMAT_##ty "\n",                                 \
              i->result_value_id, result.ty, i->value0_id, value0.ty,          \
@@ -6628,8 +6650,8 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     case PN_OPCODE_BR: {
       PNInstructionBr* i = (PNInstructionBr*)inst;
       PNBasicBlockId new_bb_id = i->true_bb_id;
-      pn_executor_do_phi_assigns(executor, &function->bbs[location->bb_id],
-                                 new_bb_id);
+      pn_thread_do_phi_assigns(thread, &function->bbs[location->bb_id],
+                               new_bb_id);
       location->bb_id = new_bb_id;
       location->instruction_id = 0;
       PN_TRACE(EXECUTE, "bb = %d\n", location->bb_id);
@@ -6638,10 +6660,10 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 
     case PN_OPCODE_BR_INT1: {
       PNInstructionBr* i = (PNInstructionBr*)inst;
-      PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);
+      PNRuntimeValue value = pn_thread_get_value(thread, i->value_id);
       PNBasicBlockId new_bb_id = value.u8 ? i->true_bb_id : i->false_bb_id;
-      pn_executor_do_phi_assigns(executor, &function->bbs[location->bb_id],
-                                 new_bb_id);
+      pn_thread_do_phi_assigns(thread, &function->bbs[location->bb_id],
+                               new_bb_id);
       location->bb_id = new_bb_id;
       location->instruction_id = 0;
       PN_TRACE(EXECUTE, "    %%%d = %u\n", i->value_id, value.u8);
@@ -6656,20 +6678,20 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       PNFunctionId new_function_id;
       if (i->is_indirect) {
         PNRuntimeValue function_value =
-            pn_executor_get_value(executor, i->callee_id);
+            pn_thread_get_value(thread, i->callee_id);
         PNFunctionId callee_function_id =
             pn_function_pointer_to_index(function_value.u32);
         if (callee_function_id < PN_MAX_BUILTINS) {
           /* Builtin function. Call it directly, don't set up a new frame */
           switch (callee_function_id) {
-#define PN_BUILTIN(e)                                                \
-  case PN_BUILTIN_##e: {                                             \
-    PNRuntimeValue result =                                          \
-        pn_builtin_##e(executor, function, i->num_args, i->arg_ids); \
-    if (i->result_value_id != PN_INVALID_VALUE_ID) {                 \
-      pn_executor_set_value(executor, i->result_value_id, result);   \
-    }                                                                \
-    break;                                                           \
+#define PN_BUILTIN(e)                                              \
+  case PN_BUILTIN_##e: {                                           \
+    PNRuntimeValue result =                                        \
+        pn_builtin_##e(thread, function, i->num_args, i->arg_ids); \
+    if (i->result_value_id != PN_INVALID_VALUE_ID) {               \
+      pn_thread_set_value(thread, i->result_value_id, result);     \
+    }                                                              \
+    break;                                                         \
   }
             PN_FOREACH_BUILTIN(PN_BUILTIN)
 #undef PN_BUILTIN
@@ -6695,7 +6717,7 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       PNFunction* new_function =
           pn_module_get_function(executor->module, new_function_id);
 
-      pn_executor_push_function(executor, new_function_id, new_function);
+      pn_thread_push_function(thread, new_function_id, new_function);
 
       uint32_t n;
       for (n = 0; n < i->num_args; ++n) {
@@ -6705,7 +6727,7 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 
         pn_executor_value_trace(executor, function, i->arg_ids[n], arg, "",
                                 "  ");
-        pn_executor_set_value(executor, value_id, arg);
+        pn_thread_set_value(thread, value_id, arg);
       }
 
       PN_TRACE(EXECUTE, "\nfunction = %d bb = 0\n", new_function_id);
@@ -6717,8 +6739,8 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     case PN_OPCODE_CAST_BITCAST_INT32_FLOAT:
     case PN_OPCODE_CAST_BITCAST_INT64_DOUBLE: {
       PNInstructionCast* i = (PNInstructionCast*)inst;
-      PNRuntimeValue result = pn_executor_get_value(executor, i->value_id);
-      pn_executor_set_value(executor, i->result_value_id, result);
+      PNRuntimeValue result = pn_thread_get_value(thread, i->value_id);
+      pn_thread_set_value(thread, i->result_value_id, result);
       pn_executor_value_trace(executor, function, i->result_value_id, result,
                               "    ", "\n");
       pn_executor_value_trace(executor, function, i->value_id, result, "    ",
@@ -6731,9 +6753,9 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 #define OPCODE_CAST(from, to)                                                \
   do {                                                                       \
     PNInstructionCast* i = (PNInstructionCast*)inst;                         \
-    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);     \
+    PNRuntimeValue value = pn_thread_get_value(thread, i->value_id);         \
     PNRuntimeValue result = pn_executor_value_##to(value.from);              \
-    pn_executor_set_value(executor, i->result_value_id, result);             \
+    pn_thread_set_value(thread, i->result_value_id, result);                 \
     PN_TRACE(EXECUTE,                                                        \
              "    %%%d = " PN_FORMAT_##to "  %%%d = " PN_FORMAT_##from "\n", \
              i->result_value_id, result.to, i->value_id, result.from);       \
@@ -6743,10 +6765,10 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 #define OPCODE_CAST_SEXT1(size)                                           \
   do {                                                                    \
     PNInstructionCast* i = (PNInstructionCast*)inst;                      \
-    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);  \
+    PNRuntimeValue value = pn_thread_get_value(thread, i->value_id);      \
     PNRuntimeValue result =                                               \
         pn_executor_value_i##size(-(int##size##_t)(value.u8 & 1));        \
-    pn_executor_set_value(executor, i->result_value_id, result);          \
+    pn_thread_set_value(thread, i->result_value_id, result);              \
     PN_TRACE(EXECUTE, "    %%%d = " PN_FORMAT_i##size "  %%%d = %u\n",    \
              i->result_value_id, result.i##size, i->value_id, result.u8); \
     location->instruction_id++;                                           \
@@ -6755,9 +6777,9 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 #define OPCODE_CAST_TRUNC1(size)                                          \
   do {                                                                    \
     PNInstructionCast* i = (PNInstructionCast*)inst;                      \
-    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);  \
+    PNRuntimeValue value = pn_thread_get_value(thread, i->value_id);      \
     PNRuntimeValue result = pn_executor_value_u8(value.u##size & 1);      \
-    pn_executor_set_value(executor, i->result_value_id, result);          \
+    pn_thread_set_value(thread, i->result_value_id, result);              \
     PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " PN_FORMAT_u##size "\n",    \
              i->result_value_id, result.u8, i->value_id, result.u##size); \
     location->instruction_id++;                                           \
@@ -6766,10 +6788,10 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 #define OPCODE_CAST_ZEXT1(size)                                           \
   do {                                                                    \
     PNInstructionCast* i = (PNInstructionCast*)inst;                      \
-    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);  \
+    PNRuntimeValue value = pn_thread_get_value(thread, i->value_id);      \
     PNRuntimeValue result =                                               \
         pn_executor_value_u##size((uint##size##_t)(value.u8 & 1));        \
-    pn_executor_set_value(executor, i->result_value_id, result);          \
+    pn_thread_set_value(thread, i->result_value_id, result);              \
     PN_TRACE(EXECUTE, "    %%%d = " PN_FORMAT_u##size "  %%%d = %u\n",    \
              i->result_value_id, result.u##size, i->value_id, result.u8); \
     location->instruction_id++;                                           \
@@ -6844,27 +6866,27 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 #undef OPCODE_CAST_TRUNC1
 #undef OPCODE_CAST_ZEXT1
 
-#define OPCODE_CMP2(op, ty)                                                \
-  do {                                                                     \
-    PNInstructionCmp2* i = (PNInstructionCmp2*)inst;                       \
-    PNRuntimeValue value0 = pn_executor_get_value(executor, i->value0_id); \
-    PNRuntimeValue value1 = pn_executor_get_value(executor, i->value1_id); \
-    PNRuntimeValue result = pn_executor_value_u8(value0.ty op value1.ty);  \
-    pn_executor_set_value(executor, i->result_value_id, result);           \
-    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " PN_FORMAT_##ty              \
-             "  %%%d = " PN_FORMAT_##ty "\n",                              \
-             i->result_value_id, result.u8, i->value0_id, value0.ty,       \
-             i->value1_id, value1.ty);                                     \
-    location->instruction_id++;                                            \
+#define OPCODE_CMP2(op, ty)                                               \
+  do {                                                                    \
+    PNInstructionCmp2* i = (PNInstructionCmp2*)inst;                      \
+    PNRuntimeValue value0 = pn_thread_get_value(thread, i->value0_id);    \
+    PNRuntimeValue value1 = pn_thread_get_value(thread, i->value1_id);    \
+    PNRuntimeValue result = pn_executor_value_u8(value0.ty op value1.ty); \
+    pn_thread_set_value(thread, i->result_value_id, result);              \
+    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " PN_FORMAT_##ty             \
+             "  %%%d = " PN_FORMAT_##ty "\n",                             \
+             i->result_value_id, result.u8, i->value0_id, value0.ty,      \
+             i->value1_id, value1.ty);                                    \
+    location->instruction_id++;                                           \
   } while (0) /* no semicolon */
 
 #define OPCODE_CMP2_NOT(op, ty)                                              \
   do {                                                                       \
     PNInstructionCmp2* i = (PNInstructionCmp2*)inst;                         \
-    PNRuntimeValue value0 = pn_executor_get_value(executor, i->value0_id);   \
-    PNRuntimeValue value1 = pn_executor_get_value(executor, i->value1_id);   \
+    PNRuntimeValue value0 = pn_thread_get_value(thread, i->value0_id);       \
+    PNRuntimeValue value1 = pn_thread_get_value(thread, i->value1_id);       \
     PNRuntimeValue result = pn_executor_value_u8(!(value0.ty op value1.ty)); \
-    pn_executor_set_value(executor, i->result_value_id, result);             \
+    pn_thread_set_value(thread, i->result_value_id, result);                 \
     PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " PN_FORMAT_##ty                \
              "  %%%d = " PN_FORMAT_##ty "\n",                                \
              i->result_value_id, result.u8, i->value0_id, value0.ty,         \
@@ -6875,11 +6897,11 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
 #define OPCODE_CMP2_ORD(ty)                                                \
   do {                                                                     \
     PNInstructionCmp2* i = (PNInstructionCmp2*)inst;                       \
-    PNRuntimeValue value0 = pn_executor_get_value(executor, i->value0_id); \
-    PNRuntimeValue value1 = pn_executor_get_value(executor, i->value1_id); \
+    PNRuntimeValue value0 = pn_thread_get_value(thread, i->value0_id);     \
+    PNRuntimeValue value1 = pn_thread_get_value(thread, i->value1_id);     \
     PNRuntimeValue result = pn_executor_value_u8(value0.ty == value1.ty || \
                                                  value0.ty != value1.ty);  \
-    pn_executor_set_value(executor, i->result_value_id, result);           \
+    pn_thread_set_value(thread, i->result_value_id, result);               \
     PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " PN_FORMAT_##ty              \
              "  %%%d = " PN_FORMAT_##ty "\n",                              \
              i->result_value_id, result.u8, i->value0_id, value0.ty,       \
@@ -6887,19 +6909,19 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
     location->instruction_id++;                                            \
   } while (0) /* no semicolon */
 
-#define OPCODE_CMP2_UNO(ty)                                                \
-  do {                                                                     \
-    PNInstructionCmp2* i = (PNInstructionCmp2*)inst;                       \
-    PNRuntimeValue value0 = pn_executor_get_value(executor, i->value0_id); \
-    PNRuntimeValue value1 = pn_executor_get_value(executor, i->value1_id); \
-    PNRuntimeValue result = pn_executor_value_u8(                          \
-        !(value0.ty == value1.ty || value0.ty != value1.ty));              \
-    pn_executor_set_value(executor, i->result_value_id, result);           \
-    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " PN_FORMAT_##ty              \
-             "  %%%d = " PN_FORMAT_##ty "\n",                              \
-             i->result_value_id, result.u8, i->value0_id, value0.ty,       \
-             i->value1_id, value1.ty);                                     \
-    location->instruction_id++;                                            \
+#define OPCODE_CMP2_UNO(ty)                                            \
+  do {                                                                 \
+    PNInstructionCmp2* i = (PNInstructionCmp2*)inst;                   \
+    PNRuntimeValue value0 = pn_thread_get_value(thread, i->value0_id); \
+    PNRuntimeValue value1 = pn_thread_get_value(thread, i->value1_id); \
+    PNRuntimeValue result = pn_executor_value_u8(                      \
+        !(value0.ty == value1.ty || value0.ty != value1.ty));          \
+    pn_thread_set_value(thread, i->result_value_id, result);           \
+    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " PN_FORMAT_##ty          \
+             "  %%%d = " PN_FORMAT_##ty "\n",                          \
+             i->result_value_id, result.u8, i->value0_id, value0.ty,   \
+             i->value1_id, value1.ty);                                 \
+    location->instruction_id++;                                        \
   } while (0) /* no semicolon */
 
     //        U L G E
@@ -7003,11 +7025,11 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       PNInstructionCall* i = (PNInstructionCall*)inst;
       PN_CHECK(i->num_args == 5);
       PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
-      uint32_t dst_p = pn_executor_get_value(executor, i->arg_ids[0]).u32;
-      uint32_t src_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;
-      uint32_t len = pn_executor_get_value(executor, i->arg_ids[2]).u32;
-      uint32_t align = pn_executor_get_value(executor, i->arg_ids[3]).u32;
-      uint8_t is_volatile = pn_executor_get_value(executor, i->arg_ids[4]).u8;
+      uint32_t dst_p = pn_thread_get_value(thread, i->arg_ids[0]).u32;
+      uint32_t src_p = pn_thread_get_value(thread, i->arg_ids[1]).u32;
+      uint32_t len = pn_thread_get_value(thread, i->arg_ids[2]).u32;
+      uint32_t align = pn_thread_get_value(thread, i->arg_ids[3]).u32;
+      uint8_t is_volatile = pn_thread_get_value(thread, i->arg_ids[4]).u8;
       PN_TRACE(INTRINSICS,
                "    llvm.memcpy(dst_p:%u, src_p:%u, len:%u, align:%u, "
                "is_volatile:%u)\n",
@@ -7034,11 +7056,11 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       PNInstructionCall* i = (PNInstructionCall*)inst;
       PN_CHECK(i->num_args == 5);
       PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
-      uint32_t dst_p = pn_executor_get_value(executor, i->arg_ids[0]).u32;
-      uint8_t value = pn_executor_get_value(executor, i->arg_ids[1]).u8;
-      uint32_t len = pn_executor_get_value(executor, i->arg_ids[2]).u32;
-      uint32_t align = pn_executor_get_value(executor, i->arg_ids[3]).u32;
-      uint8_t is_volatile = pn_executor_get_value(executor, i->arg_ids[4]).u8;
+      uint32_t dst_p = pn_thread_get_value(thread, i->arg_ids[0]).u32;
+      uint8_t value = pn_thread_get_value(thread, i->arg_ids[1]).u8;
+      uint32_t len = pn_thread_get_value(thread, i->arg_ids[2]).u32;
+      uint32_t align = pn_thread_get_value(thread, i->arg_ids[3]).u32;
+      uint8_t is_volatile = pn_thread_get_value(thread, i->arg_ids[4]).u8;
       PN_TRACE(INTRINSICS,
                "    llvm.memset(dst_p:%u, value:%u, len:%u, align:%u, "
                "is_volatile:%u)\n",
@@ -7063,11 +7085,11 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       PNInstructionCall* i = (PNInstructionCall*)inst;
       PN_CHECK(i->num_args == 5);
       PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
-      uint32_t dst_p = pn_executor_get_value(executor, i->arg_ids[0]).u32;
-      uint32_t src_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;
-      uint32_t len = pn_executor_get_value(executor, i->arg_ids[2]).u32;
-      uint32_t align = pn_executor_get_value(executor, i->arg_ids[3]).u32;
-      uint8_t is_volatile = pn_executor_get_value(executor, i->arg_ids[4]).u8;
+      uint32_t dst_p = pn_thread_get_value(thread, i->arg_ids[0]).u32;
+      uint32_t src_p = pn_thread_get_value(thread, i->arg_ids[1]).u32;
+      uint32_t len = pn_thread_get_value(thread, i->arg_ids[2]).u32;
+      uint32_t align = pn_thread_get_value(thread, i->arg_ids[3]).u32;
+      uint8_t is_volatile = pn_thread_get_value(thread, i->arg_ids[4]).u8;
       PN_TRACE(INTRINSICS,
                "    llvm.memmove(dst_p:%u, src_p:%u, len:%u, align:%u, "
                "is_volatile:%u)\n",
@@ -7094,19 +7116,19 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
   do {                                                                        \
     PNInstructionCall* i = (PNInstructionCall*)inst;                          \
     PN_CHECK(i->num_args == 5);                                               \
-    uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[0]).u32;     \
-    pn_##ty expected = pn_executor_get_value(executor, i->arg_ids[1]).ty;     \
-    pn_##ty desired = pn_executor_get_value(executor, i->arg_ids[2]).ty;      \
+    uint32_t addr_p = pn_thread_get_value(thread, i->arg_ids[0]).u32;         \
+    pn_##ty expected = pn_thread_get_value(thread, i->arg_ids[1]).ty;         \
+    pn_##ty desired = pn_thread_get_value(thread, i->arg_ids[2]).ty;          \
     uint32_t memory_order_success =                                           \
-        pn_executor_get_value(executor, i->arg_ids[3]).u32;                   \
+        pn_thread_get_value(thread, i->arg_ids[3]).u32;                       \
     uint32_t memory_order_failure =                                           \
-        pn_executor_get_value(executor, i->arg_ids[4]).u32;                   \
+        pn_thread_get_value(thread, i->arg_ids[4]).u32;                       \
     pn_##ty read = pn_memory_read_##ty(executor->memory, addr_p);             \
     PNRuntimeValue result = pn_executor_value_##ty(read);                     \
     if (read == expected) {                                                   \
       pn_memory_write_##ty(executor->memory, addr_p, desired);                \
     }                                                                         \
-    pn_executor_set_value(executor, i->result_value_id, result);              \
+    pn_thread_set_value(thread, i->result_value_id, result);                  \
     PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.cmpxchg." #ty                  \
                          "(addr_p:%u, expected:" PN_FORMAT_##ty               \
              ", desired:" PN_FORMAT_##ty ", ...)\n",                          \
@@ -7141,11 +7163,11 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
   do {                                                                         \
     PNInstructionCall* i = (PNInstructionCall*)inst;                           \
     PN_CHECK(i->num_args == 2);                                                \
-    uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[0]).u32;      \
-    uint32_t flags = pn_executor_get_value(executor, i->arg_ids[1]).u32;       \
+    uint32_t addr_p = pn_thread_get_value(thread, i->arg_ids[0]).u32;          \
+    uint32_t flags = pn_thread_get_value(thread, i->arg_ids[1]).u32;           \
     pn_##ty value = pn_memory_read_##ty(executor->memory, addr_p);             \
     PNRuntimeValue result = pn_executor_value_##ty(value);                     \
-    pn_executor_set_value(executor, i->result_value_id, result);               \
+    pn_thread_set_value(thread, i->result_value_id, result);                   \
     PN_TRACE(INTRINSICS,                                                       \
              "    llvm.nacl.atomic.load." #ty "(addr_p:%u, flags:%u)\n",       \
              addr_p, flags);                                                   \
@@ -7175,16 +7197,15 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
   do {                                                                         \
     PNInstructionCall* i = (PNInstructionCall*)inst;                           \
     PN_CHECK(i->num_args == 4);                                                \
-    PN_CHECK(pn_executor_get_value(executor, i->arg_ids[0]).u32 == opval);     \
-    uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;      \
-    pn_##ty value = pn_executor_get_value(executor, i->arg_ids[2]).ty;         \
-    uint32_t memory_order =                                                    \
-        pn_executor_get_value(executor, i->arg_ids[3]).u32;                    \
+    PN_CHECK(pn_thread_get_value(thread, i->arg_ids[0]).u32 == opval);         \
+    uint32_t addr_p = pn_thread_get_value(thread, i->arg_ids[1]).u32;          \
+    pn_##ty value = pn_thread_get_value(thread, i->arg_ids[2]).ty;             \
+    uint32_t memory_order = pn_thread_get_value(thread, i->arg_ids[3]).u32;    \
     pn_##ty old_value = pn_memory_read_##ty(executor->memory, addr_p);         \
     pn_##ty new_value = old_value op value;                                    \
     pn_memory_write_##ty(executor->memory, addr_p, new_value);                 \
     PNRuntimeValue result = pn_executor_value_u32(old_value);                  \
-    pn_executor_set_value(executor, i->result_value_id, result);               \
+    pn_thread_set_value(thread, i->result_value_id, result);                   \
     PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.rmw." #ty                       \
                          "(op: %s, addr_p:%u, value: " PN_FORMAT_##ty ")\n",   \
              #op, addr_p, value);                                              \
@@ -7266,16 +7287,15 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
   do {                                                                         \
     PNInstructionCall* i = (PNInstructionCall*)inst;                           \
     PN_CHECK(i->num_args == 4);                                                \
-    PN_CHECK(pn_executor_get_value(executor, i->arg_ids[0]).u32 == opval);     \
-    uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;      \
-    pn_##ty value = pn_executor_get_value(executor, i->arg_ids[2]).ty;         \
-    uint32_t memory_order =                                                    \
-        pn_executor_get_value(executor, i->arg_ids[3]).u32;                    \
+    PN_CHECK(pn_thread_get_value(thread, i->arg_ids[0]).u32 == opval);         \
+    uint32_t addr_p = pn_thread_get_value(thread, i->arg_ids[1]).u32;          \
+    pn_##ty value = pn_thread_get_value(thread, i->arg_ids[2]).ty;             \
+    uint32_t memory_order = pn_thread_get_value(thread, i->arg_ids[3]).u32;    \
     pn_##ty old_value = pn_memory_read_##ty(executor->memory, addr_p);         \
     pn_##ty new_value = value;                                                 \
     pn_memory_write_##ty(executor->memory, addr_p, new_value);                 \
     PNRuntimeValue result = pn_executor_value_u32(old_value);                  \
-    pn_executor_set_value(executor, i->result_value_id, result);               \
+    pn_thread_set_value(thread, i->result_value_id, result);                   \
     PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.exchange." #ty                  \
                          "(addr_p:%u, value: " PN_FORMAT_##ty ")\n",           \
              addr_p, value);                                                   \
@@ -7308,8 +7328,8 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
       PNInstructionCall* i = (PNInstructionCall*)inst;
       PN_CHECK(i->num_args == 2);
       PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
-      uint32_t jmpbuf_p = pn_executor_get_value(executor, i->arg_ids[0]).u32;
-      PNRuntimeValue value = pn_executor_get_value(executor, i->arg_ids[1]);
+      uint32_t jmpbuf_p = pn_thread_get_value(thread, i->arg_ids[0]).u32;
+      PNRuntimeValue value = pn_thread_get_value(thread, i->arg_ids[1]);
       PN_TRACE(INTRINSICS, "    llvm.nacl.longjmp(jmpbuf: %u, value: %u)\n",
                jmpbuf_p, value.u32);
       PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = %u\n", i->arg_ids[0], jmpbuf_p,
@@ -7324,11 +7344,11 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
         while (buf) {
           if (buf->id == id) {
             /* Found it */
-            executor->thread.current_call_frame = f;
-            pn_allocator_reset_to_mark(&executor->allocator, f->mark);
+            thread->current_call_frame = f;
+            pn_allocator_reset_to_mark(&thread->allocator, f->mark);
             /* Reset the frame to its original state */
-            *executor->thread.current_call_frame = buf->frame;
-            location = &executor->thread.current_call_frame->location;
+            *thread->current_call_frame = buf->frame;
+            location = &thread->current_call_frame->location;
             PN_TRACE(EXECUTE, "function = %d  bb = %d\n", location->function_id,
                      location->bb_id);
             /* Set the return value */
@@ -7338,7 +7358,7 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
             PNInstructionCall* c =
                 (PNInstructionCall*)
                     new_bb->instructions[location->instruction_id];
-            pn_executor_set_value(executor, c->result_value_id, value);
+            pn_thread_set_value(thread, c->result_value_id, value);
             pn_executor_value_trace(executor, function, i->arg_ids[1], value,
                                     "    ", "\n");
             location->instruction_id++;
@@ -7357,16 +7377,16 @@ longjmp_done:
       PNInstructionCall* i = (PNInstructionCall*)inst;
       PN_CHECK(i->num_args == 1);
       PN_CHECK(i->result_value_id != PN_INVALID_VALUE_ID);
-      uint32_t jmpbuf_p = pn_executor_get_value(executor, i->arg_ids[0]).u32;
-      PNJmpBuf* buf = pn_allocator_alloc(&executor->allocator,
-                                          sizeof(PNJmpBuf), PN_DEFAULT_ALIGN);
+      uint32_t jmpbuf_p = pn_thread_get_value(thread, i->arg_ids[0]).u32;
+      PNJmpBuf* buf = pn_allocator_alloc(&thread->allocator, sizeof(PNJmpBuf),
+                                         PN_DEFAULT_ALIGN);
       buf->id = executor->next_jmpbuf_id++;
       buf->frame = *frame;
       buf->next = frame->jmpbuf_head;
       frame->jmpbuf_head = buf;
       pn_memory_write_u32(executor->memory, jmpbuf_p, buf->id);
       PNRuntimeValue result = pn_executor_value_u32(0);
-      pn_executor_set_value(executor, i->result_value_id, result);
+      pn_thread_set_value(thread, i->result_value_id, result);
       PN_TRACE(INTRINSICS, "    llvm.nacl.setjmp(jmpbuf: %u)\n", jmpbuf_p);
       PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = %u\n", i->result_value_id,
                result.u32, i->arg_ids[0], jmpbuf_p);
@@ -7378,9 +7398,9 @@ longjmp_done:
       PNInstructionCall* i = (PNInstructionCall*)inst;
       PN_CHECK(i->num_args == 3);
       PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
-      uint32_t value = pn_executor_get_value(executor, i->arg_ids[0]).u32;
-      uint32_t addr_p = pn_executor_get_value(executor, i->arg_ids[1]).u32;
-      uint32_t flags = pn_executor_get_value(executor, i->arg_ids[2]).u32;
+      uint32_t value = pn_thread_get_value(thread, i->arg_ids[0]).u32;
+      uint32_t addr_p = pn_thread_get_value(thread, i->arg_ids[1]).u32;
+      uint32_t flags = pn_thread_get_value(thread, i->arg_ids[2]).u32;
       pn_memory_write_u32(executor->memory, addr_p, value);
       PN_TRACE(
           INTRINSICS,
@@ -7397,8 +7417,8 @@ longjmp_done:
       PNInstructionCall* i = (PNInstructionCall*)inst;
       PN_CHECK(i->num_args == 0);
       PN_CHECK(i->result_value_id != PN_INVALID_VALUE_ID);
-      PNRuntimeValue result = pn_executor_value_u32(executor->thread.tls);
-      pn_executor_set_value(executor, i->result_value_id, result);
+      PNRuntimeValue result = pn_executor_value_u32(thread->tls);
+      pn_thread_set_value(thread, i->result_value_id, result);
       PN_TRACE(INTRINSICS, "    llvm.nacl.read.tp()\n");
       PN_TRACE(EXECUTE, "    %%%d = %u\n", i->result_value_id, result.u32);
       location->instruction_id++;
@@ -7409,9 +7429,9 @@ longjmp_done:
       PNInstructionCall* i = (PNInstructionCall*)inst;
       PN_CHECK(i->num_args == 1);
       PN_CHECK(i->result_value_id != PN_INVALID_VALUE_ID);
-      float value = pn_executor_get_value(executor, i->arg_ids[0]).f32;
+      float value = pn_thread_get_value(thread, i->arg_ids[0]).f32;
       PNRuntimeValue result = pn_executor_value_f32(sqrtf(value));
-      pn_executor_set_value(executor, i->result_value_id, result);
+      pn_thread_set_value(thread, i->result_value_id, result);
       PN_TRACE(INTRINSICS, "    llvm.sqrt.f32(%f)\n", value);
       PN_TRACE(EXECUTE, "    %%%d = %f  %%%d = %f\n", i->result_value_id,
                result.f32, i->arg_ids[0], value);
@@ -7423,9 +7443,9 @@ longjmp_done:
       PNInstructionCall* i = (PNInstructionCall*)inst;
       PN_CHECK(i->num_args == 1);
       PN_CHECK(i->result_value_id != PN_INVALID_VALUE_ID);
-      double value = pn_executor_get_value(executor, i->arg_ids[0]).f64;
+      double value = pn_thread_get_value(thread, i->arg_ids[0]).f64;
       PNRuntimeValue result = pn_executor_value_f64(sqrt(value));
-      pn_executor_set_value(executor, i->result_value_id, result);
+      pn_thread_set_value(thread, i->result_value_id, result);
       PN_TRACE(INTRINSICS, "    llvm.sqrt.f64(%f)\n", value);
       PN_TRACE(EXECUTE, "    %%%d = %f  %%%d = %f\n", i->result_value_id,
                result.f64, i->arg_ids[0], value);
@@ -7466,16 +7486,16 @@ longjmp_done:
     PN_OPCODE_INTRINSIC_STUB(LLVM_STACKSAVE)
     PN_OPCODE_INTRINSIC_STUB(START)
 
-#define OPCODE_LOAD(ty)                                              \
-  do {                                                               \
-    PNInstructionLoad* i = (PNInstructionLoad*)inst;                 \
-    PNRuntimeValue src = pn_executor_get_value(executor, i->src_id); \
-    PNRuntimeValue result = pn_executor_value_##ty(                  \
-        pn_memory_read_##ty(executor->memory, src.u32));             \
-    pn_executor_set_value(executor, i->result_value_id, result);     \
-    PN_TRACE(EXECUTE, "    %%%d = " PN_FORMAT_##ty "  %%%d = %u\n",  \
-             i->result_value_id, result.ty, i->src_id, src.u32);     \
-    location->instruction_id++;                                      \
+#define OPCODE_LOAD(ty)                                             \
+  do {                                                              \
+    PNInstructionLoad* i = (PNInstructionLoad*)inst;                \
+    PNRuntimeValue src = pn_thread_get_value(thread, i->src_id);    \
+    PNRuntimeValue result = pn_executor_value_##ty(                 \
+        pn_memory_read_##ty(executor->memory, src.u32));            \
+    pn_thread_set_value(thread, i->result_value_id, result);        \
+    PN_TRACE(EXECUTE, "    %%%d = " PN_FORMAT_##ty "  %%%d = %u\n", \
+             i->result_value_id, result.ty, i->src_id, src.u32);    \
+    location->instruction_id++;                                     \
   } while (0) /*no semicolon */
 
     case PN_OPCODE_LOAD_DOUBLE: OPCODE_LOAD(f64); break;
@@ -7492,9 +7512,9 @@ longjmp_done:
       break;
 
     case PN_OPCODE_RET: {
-      executor->thread.current_call_frame = frame->parent;
+      thread->current_call_frame = frame->parent;
       location = &frame->parent->location;
-      pn_allocator_reset_to_mark(&executor->allocator, frame->parent->mark);
+      pn_allocator_reset_to_mark(&thread->allocator, frame->parent->mark);
       PN_TRACE(EXECUTE, "function = %d  bb = %d\n", location->function_id,
                location->bb_id);
       location->instruction_id++;
@@ -7503,9 +7523,9 @@ longjmp_done:
 
     case PN_OPCODE_RET_VALUE: {
       PNInstructionRet* i = (PNInstructionRet*)inst;
-      PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);
+      PNRuntimeValue value = pn_thread_get_value(thread, i->value_id);
 
-      executor->thread.current_call_frame = frame->parent;
+      thread->current_call_frame = frame->parent;
       location = &frame->parent->location;
 
       if (location->function_id != PN_INVALID_FUNCTION_ID) {
@@ -7513,10 +7533,10 @@ longjmp_done:
         PNBasicBlock* new_bb = &new_function->bbs[location->bb_id];
         PNInstructionCall* c =
             (PNInstructionCall*)new_bb->instructions[location->instruction_id];
-        pn_executor_set_value(executor, c->result_value_id, value);
+        pn_thread_set_value(thread, c->result_value_id, value);
         pn_executor_value_trace(executor, function, i->value_id, value, "    ",
                                 "\n");
-        pn_allocator_reset_to_mark(&executor->allocator, frame->parent->mark);
+        pn_allocator_reset_to_mark(&thread->allocator, frame->parent->mark);
         PN_TRACE(EXECUTE, "function = %d  bb = %d\n", location->function_id,
                  location->bb_id);
         pn_executor_value_trace(executor, new_function, c->result_value_id,
@@ -7534,15 +7554,15 @@ longjmp_done:
       break;
     }
 
-#define OPCODE_STORE(ty)                                                 \
-  do {                                                                   \
-    PNInstructionStore* i = (PNInstructionStore*)inst;                   \
-    PNRuntimeValue dest = pn_executor_get_value(executor, i->dest_id);   \
-    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id); \
-    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " PN_FORMAT_##ty "\n",      \
-             i->dest_id, dest.u32, i->value_id, value.ty);               \
-    pn_memory_write_##ty(executor->memory, dest.u32, value.ty);          \
-    location->instruction_id++;                                          \
+#define OPCODE_STORE(ty)                                             \
+  do {                                                               \
+    PNInstructionStore* i = (PNInstructionStore*)inst;               \
+    PNRuntimeValue dest = pn_thread_get_value(thread, i->dest_id);   \
+    PNRuntimeValue value = pn_thread_get_value(thread, i->value_id); \
+    PN_TRACE(EXECUTE, "    %%%d = %u  %%%d = " PN_FORMAT_##ty "\n",  \
+             i->dest_id, dest.u32, i->value_id, value.ty);           \
+    pn_memory_write_##ty(executor->memory, dest.u32, value.ty);      \
+    location->instruction_id++;                                      \
   } while (0) /*no semicolon */
 
     case PN_OPCODE_STORE_DOUBLE: OPCODE_STORE(f64); break;
@@ -7554,26 +7574,26 @@ longjmp_done:
 
 #undef OPCODE_STORE
 
-#define OPCODE_SWITCH(ty)                                                 \
-  do {                                                                    \
-    PNInstructionSwitch* i = (PNInstructionSwitch*)inst;                  \
-    PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);  \
-    PNBasicBlockId new_bb_id = i->default_bb_id;                          \
-    uint32_t c;                                                           \
-    for (c = 0; c < i->num_cases; ++c) {                                  \
-      PNSwitchCase* switch_case = &i->cases[c];                           \
-      if (value.ty == switch_case->value) {                               \
-        new_bb_id = switch_case->bb_id;                                   \
-        break;                                                            \
-      }                                                                   \
-    }                                                                     \
-    pn_executor_do_phi_assigns(executor, &function->bbs[location->bb_id], \
-                               new_bb_id);                                \
-    location->bb_id = new_bb_id;                                          \
-    location->instruction_id = 0;                                         \
-    PN_TRACE(EXECUTE, "    %%%d = " PN_FORMAT_##ty "\n", i->value_id,     \
-             value.ty);                                                   \
-    PN_TRACE(EXECUTE, "bb = %d\n", new_bb_id);                            \
+#define OPCODE_SWITCH(ty)                                             \
+  do {                                                                \
+    PNInstructionSwitch* i = (PNInstructionSwitch*)inst;              \
+    PNRuntimeValue value = pn_thread_get_value(thread, i->value_id);  \
+    PNBasicBlockId new_bb_id = i->default_bb_id;                      \
+    uint32_t c;                                                       \
+    for (c = 0; c < i->num_cases; ++c) {                              \
+      PNSwitchCase* switch_case = &i->cases[c];                       \
+      if (value.ty == switch_case->value) {                           \
+        new_bb_id = switch_case->bb_id;                               \
+        break;                                                        \
+      }                                                               \
+    }                                                                 \
+    pn_thread_do_phi_assigns(thread, &function->bbs[location->bb_id], \
+                             new_bb_id);                              \
+    location->bb_id = new_bb_id;                                      \
+    location->instruction_id = 0;                                     \
+    PN_TRACE(EXECUTE, "    %%%d = " PN_FORMAT_##ty "\n", i->value_id, \
+             value.ty);                                               \
+    PN_TRACE(EXECUTE, "bb = %d\n", new_bb_id);                        \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_SWITCH_INT1:
@@ -7591,10 +7611,10 @@ longjmp_done:
 
     case PN_OPCODE_VSELECT: {
       PNInstructionVselect* i = (PNInstructionVselect*)inst;
-      PNRuntimeValue cond = pn_executor_get_value(executor, i->cond_id);
+      PNRuntimeValue cond = pn_thread_get_value(thread, i->cond_id);
       PNValueId value_id = (cond.u8 & 1) ? i->true_value_id : i->false_value_id;
-      PNRuntimeValue result = pn_executor_get_value(executor, value_id);
-      pn_executor_set_value(executor, i->result_value_id, result);
+      PNRuntimeValue result = pn_thread_get_value(thread, value_id);
+      pn_thread_set_value(thread, i->result_value_id, result);
       pn_executor_value_trace(executor, function, i->result_value_id, result,
                               "    ", "  ");
       pn_executor_value_trace(executor, function, i->cond_id, cond, "", "  ");
@@ -8156,10 +8176,14 @@ int main(int argc, char** argv, char** envp) {
     pn_memory_init_startinfo(&memory, g_pn_argv, g_pn_environ);
 
     PNExecutor executor;
+    /* TODO(binji): handle thread properly */
+    PNThread* thread = &executor.thread;
+    thread->executor = &executor;
+
     pn_executor_init(&executor, &module);
-    while (executor.thread.current_call_frame != &executor.sentinel_frame &&
+    while (thread->current_call_frame != &executor.sentinel_frame &&
            !executor.exiting) {
-      pn_executor_execute_instruction(&executor);
+      pn_thread_execute_instruction(thread);
     }
     PN_END_TIME(EXECUTE);
 
