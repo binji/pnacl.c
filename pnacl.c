@@ -1166,17 +1166,21 @@ typedef struct PNJmpBuf {
   struct PNJmpBuf* next;
 } PNJmpBuf;
 
+typedef struct PNThread {
+  PNCallFrame* current_call_frame;
+  uint32_t tls;
+} PNThread;
+
 typedef struct PNExecutor {
   PNModule* module;
   PNMemory* memory;
-  PNCallFrame* current_call_frame;
   PNRuntimeValue* module_values;
-  PNBitSet mapped_pages;
+  PNThread thread;
   PNCallFrame sentinel_frame;
+  PNBitSet mapped_pages;
   PNAllocator allocator;
   PNJmpBufId next_jmpbuf_id;
   uint32_t heap_end; /* Grows up */
-  uint32_t tls;
   int32_t exit_code;
   PNBool exiting;
 } PNExecutor;
@@ -5644,7 +5648,7 @@ static PNRuntimeValue pn_executor_get_value(PNExecutor* executor,
                                             PNValueId value_id) {
   if (value_id >= executor->module->num_values) {
     value_id -= executor->module->num_values;
-    return executor->current_call_frame->function_values[value_id];
+    return executor->thread.current_call_frame->function_values[value_id];
   } else {
     return executor->module_values[value_id];
   }
@@ -5666,7 +5670,7 @@ static void pn_executor_set_value(PNExecutor* executor,
                                   PNRuntimeValue value) {
   assert(value_id >= executor->module->num_values);
   value_id -= executor->module->num_values;
-  executor->current_call_frame->function_values[value_id] = value;
+  executor->thread.current_call_frame->function_values[value_id] = value;
 }
 
 static void pn_executor_init_module_values(PNExecutor* executor) {
@@ -5703,7 +5707,7 @@ static void pn_executor_push_function(PNExecutor* executor,
                                       PNFunction* function) {
   PNCallFrame* frame = pn_allocator_alloc(
       &executor->allocator, sizeof(PNCallFrame), PN_DEFAULT_ALIGN);
-  PNCallFrame* prev_frame = executor->current_call_frame;
+  PNCallFrame* prev_frame = executor->thread.current_call_frame;
 
   frame->location.function_id = function_id;
   frame->location.bb_id = 0;
@@ -5716,7 +5720,7 @@ static void pn_executor_push_function(PNExecutor* executor,
   frame->jmpbuf_head = NULL;
   frame->mark = pn_allocator_mark(&executor->allocator);
 
-  executor->current_call_frame = frame;
+  executor->thread.current_call_frame = frame;
 
   uint32_t n;
   for (n = 0; n < function->num_constants; ++n) {
@@ -5763,7 +5767,7 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
   pn_allocator_init(&executor->allocator, PN_MIN_CHUNKSIZE, "executor");
   executor->module = module;
   executor->memory = module->memory;
-  executor->current_call_frame = &executor->sentinel_frame;
+  executor->thread.current_call_frame = &executor->sentinel_frame;
   executor->heap_end = executor->memory->heap_start;
   executor->sentinel_frame.location.function_id = PN_INVALID_FUNCTION_ID;
   executor->sentinel_frame.location.bb_id = PN_INVALID_BB_ID;
@@ -5772,7 +5776,7 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
   executor->sentinel_frame.memory_stack_top = executor->memory->stack_end;
   executor->sentinel_frame.parent = NULL;
   executor->sentinel_frame.mark = pn_allocator_mark(&executor->allocator);
-  executor->tls = 0;
+  executor->thread.tls = 0;
   executor->exit_code = 0;
   executor->exiting = PN_FALSE;
 
@@ -5848,7 +5852,7 @@ static void pn_executor_value_trace(PNExecutor* executor,
 
 static void pn_executor_backtrace(PNExecutor* executor) {
   PNModule* module = executor->module;
-  PNCallFrame* frame = executor->current_call_frame;
+  PNCallFrame* frame = executor->thread.current_call_frame;
   int n = 0;
   while (frame != &executor->sentinel_frame) {
     PNLocation* location = &frame->location;
@@ -6353,7 +6357,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNExecutor* executor,
   assert(pn_is_aligned(result, PN_PAGESIZE));
   pn_memory_check(memory, result, len);
   new_heap_end = executor->heap_end + len;
-  if (new_heap_end > executor->current_call_frame->memory_stack_top) {
+  if (new_heap_end > executor->thread.current_call_frame->memory_stack_top) {
     PN_FATAL("Out of heap\n");
   }
   executor->heap_end = new_heap_end;
@@ -6409,7 +6413,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_TLS_INIT(PNExecutor* executor,
   PN_TRACE(IRT, "    NACL_IRT_TLS_INIT(%u)\n", thread_ptr_p);
   /* How big is TLS? */
   pn_memory_check(executor->memory, thread_ptr_p, 1);
-  executor->tls = thread_ptr_p;
+  executor->thread.tls = thread_ptr_p;
   return pn_executor_value_u32(0);
 }
 
@@ -6511,7 +6515,7 @@ PN_BUILTIN_STUB(NACL_IRT_THREAD_NICE)
 static uint32_t g_pn_opcode_count[PN_MAX_OPCODE];
 
 static void pn_executor_execute_instruction(PNExecutor* executor) {
-  PNCallFrame* frame = executor->current_call_frame;
+  PNCallFrame* frame = executor->thread.current_call_frame;
   PNLocation* location = &frame->location;
   PNModule* module = executor->module;
   PNFunction* function = &module->functions[location->function_id];
@@ -7320,11 +7324,11 @@ static void pn_executor_execute_instruction(PNExecutor* executor) {
         while (buf) {
           if (buf->id == id) {
             /* Found it */
-            executor->current_call_frame = f;
+            executor->thread.current_call_frame = f;
             pn_allocator_reset_to_mark(&executor->allocator, f->mark);
             /* Reset the frame to its original state */
-            *executor->current_call_frame = buf->frame;
-            location = &executor->current_call_frame->location;
+            *executor->thread.current_call_frame = buf->frame;
+            location = &executor->thread.current_call_frame->location;
             PN_TRACE(EXECUTE, "function = %d  bb = %d\n", location->function_id,
                      location->bb_id);
             /* Set the return value */
@@ -7393,7 +7397,7 @@ longjmp_done:
       PNInstructionCall* i = (PNInstructionCall*)inst;
       PN_CHECK(i->num_args == 0);
       PN_CHECK(i->result_value_id != PN_INVALID_VALUE_ID);
-      PNRuntimeValue result = pn_executor_value_u32(executor->tls);
+      PNRuntimeValue result = pn_executor_value_u32(executor->thread.tls);
       pn_executor_set_value(executor, i->result_value_id, result);
       PN_TRACE(INTRINSICS, "    llvm.nacl.read.tp()\n");
       PN_TRACE(EXECUTE, "    %%%d = %u\n", i->result_value_id, result.u32);
@@ -7488,7 +7492,7 @@ longjmp_done:
       break;
 
     case PN_OPCODE_RET: {
-      executor->current_call_frame = frame->parent;
+      executor->thread.current_call_frame = frame->parent;
       location = &frame->parent->location;
       pn_allocator_reset_to_mark(&executor->allocator, frame->parent->mark);
       PN_TRACE(EXECUTE, "function = %d  bb = %d\n", location->function_id,
@@ -7501,7 +7505,7 @@ longjmp_done:
       PNInstructionRet* i = (PNInstructionRet*)inst;
       PNRuntimeValue value = pn_executor_get_value(executor, i->value_id);
 
-      executor->current_call_frame = frame->parent;
+      executor->thread.current_call_frame = frame->parent;
       location = &frame->parent->location;
 
       if (location->function_id != PN_INVALID_FUNCTION_ID) {
@@ -8153,7 +8157,7 @@ int main(int argc, char** argv, char** envp) {
 
     PNExecutor executor;
     pn_executor_init(&executor, &module);
-    while (executor.current_call_frame != &executor.sentinel_frame &&
+    while (executor.thread.current_call_frame != &executor.sentinel_frame &&
            !executor.exiting) {
       pn_executor_execute_instruction(&executor);
     }
