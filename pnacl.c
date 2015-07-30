@@ -40,6 +40,7 @@
 #define PN_MEMORY_GUARD_SIZE 1024
 #define PN_PAGESHIFT 12
 #define PN_PAGESIZE (1 << PN_PAGESHIFT)
+#define PN_INSTRUCTIONS_QUANTUM 100
 
 #define PN_FALSE 0
 #define PN_TRUE 1
@@ -1170,6 +1171,7 @@ typedef struct PNThread {
   PNAllocator allocator;
   struct PNExecutor* executor;
   PNCallFrame* current_call_frame;
+  struct PNThread* next;
   uint32_t tls;
 } PNThread;
 
@@ -1177,7 +1179,7 @@ typedef struct PNExecutor {
   PNModule* module;
   PNMemory* memory;
   PNRuntimeValue* module_values;
-  PNThread thread;
+  PNThread main_thread;
   PNCallFrame sentinel_frame;
   PNBitSet mapped_pages;
   PNAllocator allocator;
@@ -5793,7 +5795,7 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
   pn_executor_init_module_values(executor);
 
   /* TODO(binji): proper handling of thread */
-  PNThread* thread = &executor->thread;
+  PNThread* thread = &executor->main_thread;
   pn_allocator_init(&thread->allocator, PN_MIN_CHUNKSIZE, "main thread");
   thread->current_call_frame = &executor->sentinel_frame;
   thread->tls = 0;
@@ -6374,7 +6376,8 @@ static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNThread* thread,
   assert(pn_is_aligned(result, PN_PAGESIZE));
   pn_memory_check(memory, result, len);
   new_heap_end = executor->heap_end + len;
-  if (new_heap_end > executor->thread.current_call_frame->memory_stack_top) {
+  if (new_heap_end >
+      executor->main_thread.current_call_frame->memory_stack_top) {
     PN_FATAL("Out of heap\n");
   }
   executor->heap_end = new_heap_end;
@@ -8177,13 +8180,22 @@ int main(int argc, char** argv, char** envp) {
 
     PNExecutor executor;
     /* TODO(binji): handle thread properly */
-    PNThread* thread = &executor.thread;
+    PNThread* thread = &executor.main_thread;
     thread->executor = &executor;
+    thread->next = thread;
 
     pn_executor_init(&executor, &module);
-    while (thread->current_call_frame != &executor.sentinel_frame &&
-           !executor.exiting) {
-      pn_thread_execute_instruction(thread);
+    PNBool running = PN_TRUE;
+    while (running) {
+      uint32_t i;
+      for (i = 0; i < PN_INSTRUCTIONS_QUANTUM && running; ++i) {
+        pn_thread_execute_instruction(thread);
+        running = thread->current_call_frame != &executor.sentinel_frame &&
+                  !executor.exiting;
+      }
+
+      /* TODO(binji): smarter scheduler */
+      thread = thread->next;
     }
     PN_END_TIME(EXECUTE);
 
