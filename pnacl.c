@@ -459,252 +459,252 @@ typedef enum PNBuiltinId {
   V(LLVM_TRAP, "llvm.trap")                                       \
   V(START, "_start")
 
-#define PN_FOREACH_OPCODE(V) \
-  V(ALLOCA_INT32) \
-  V(BINOP_ADD_DOUBLE) \
-  V(BINOP_ADD_FLOAT) \
-  V(BINOP_ADD_INT8) \
-  V(BINOP_ADD_INT16) \
-  V(BINOP_ADD_INT32) \
-  V(BINOP_ADD_INT64) \
-  V(BINOP_AND_INT1) \
-  V(BINOP_AND_INT8) \
-  V(BINOP_AND_INT16) \
-  V(BINOP_AND_INT32) \
-  V(BINOP_AND_INT64) \
-  V(BINOP_ASHR_INT8) \
-  V(BINOP_ASHR_INT16) \
-  V(BINOP_ASHR_INT32) \
-  V(BINOP_ASHR_INT64) \
-  V(BINOP_LSHR_INT8) \
-  V(BINOP_LSHR_INT16) \
-  V(BINOP_LSHR_INT32) \
-  V(BINOP_LSHR_INT64) \
-  V(BINOP_MUL_DOUBLE) \
-  V(BINOP_MUL_FLOAT) \
-  V(BINOP_MUL_INT8) \
-  V(BINOP_MUL_INT16) \
-  V(BINOP_MUL_INT32) \
-  V(BINOP_MUL_INT64) \
-  V(BINOP_OR_INT1) \
-  V(BINOP_OR_INT8) \
-  V(BINOP_OR_INT16) \
-  V(BINOP_OR_INT32) \
-  V(BINOP_OR_INT64) \
-  V(BINOP_SDIV_DOUBLE) \
-  V(BINOP_SDIV_FLOAT) \
-  V(BINOP_SDIV_INT32) \
-  V(BINOP_SDIV_INT64) \
-  V(BINOP_SHL_INT8) \
-  V(BINOP_SHL_INT16) \
-  V(BINOP_SHL_INT32) \
-  V(BINOP_SHL_INT64) \
-  V(BINOP_SREM_INT32) \
-  V(BINOP_SREM_INT64) \
-  V(BINOP_SUB_DOUBLE) \
-  V(BINOP_SUB_FLOAT) \
-  V(BINOP_SUB_INT8) \
-  V(BINOP_SUB_INT16) \
-  V(BINOP_SUB_INT32) \
-  V(BINOP_SUB_INT64) \
-  V(BINOP_UDIV_INT8) \
-  V(BINOP_UDIV_INT16) \
-  V(BINOP_UDIV_INT32) \
-  V(BINOP_UDIV_INT64) \
-  V(BINOP_UREM_INT8) \
-  V(BINOP_UREM_INT16) \
-  V(BINOP_UREM_INT32) \
-  V(BINOP_UREM_INT64) \
-  V(BINOP_XOR_INT1) \
-  V(BINOP_XOR_INT8) \
-  V(BINOP_XOR_INT16) \
-  V(BINOP_XOR_INT32) \
-  V(BINOP_XOR_INT64) \
-  V(BR) \
-  V(BR_INT1) \
-  V(CALL) \
-  V(CALL_INDIRECT) \
-  V(CAST_BITCAST_DOUBLE_INT64) \
-  V(CAST_BITCAST_FLOAT_INT32) \
-  V(CAST_BITCAST_INT32_FLOAT) \
-  V(CAST_BITCAST_INT64_DOUBLE) \
-  V(CAST_FPEXT_FLOAT_DOUBLE) \
-  V(CAST_FPTOSI_DOUBLE_INT8) \
-  V(CAST_FPTOSI_DOUBLE_INT16) \
-  V(CAST_FPTOSI_DOUBLE_INT32) \
-  V(CAST_FPTOSI_DOUBLE_INT64) \
-  V(CAST_FPTOSI_FLOAT_INT8) \
-  V(CAST_FPTOSI_FLOAT_INT16) \
-  V(CAST_FPTOSI_FLOAT_INT32) \
-  V(CAST_FPTOSI_FLOAT_INT64) \
-  V(CAST_FPTOUI_DOUBLE_INT8) \
-  V(CAST_FPTOUI_DOUBLE_INT16) \
-  V(CAST_FPTOUI_DOUBLE_INT32) \
-  V(CAST_FPTOUI_DOUBLE_INT64) \
-  V(CAST_FPTOUI_FLOAT_INT8) \
-  V(CAST_FPTOUI_FLOAT_INT16) \
-  V(CAST_FPTOUI_FLOAT_INT32) \
-  V(CAST_FPTOUI_FLOAT_INT64) \
-  V(CAST_FPTRUNC_DOUBLE_FLOAT) \
-  V(CAST_SEXT_INT1_INT8) \
-  V(CAST_SEXT_INT1_INT16) \
-  V(CAST_SEXT_INT1_INT32) \
-  V(CAST_SEXT_INT1_INT64) \
-  V(CAST_SEXT_INT8_INT16) \
-  V(CAST_SEXT_INT8_INT32) \
-  V(CAST_SEXT_INT8_INT64) \
-  V(CAST_SEXT_INT16_INT32) \
-  V(CAST_SEXT_INT16_INT64) \
-  V(CAST_SEXT_INT32_INT64) \
-  V(CAST_SITOFP_INT8_DOUBLE) \
-  V(CAST_SITOFP_INT8_FLOAT) \
-  V(CAST_SITOFP_INT16_DOUBLE) \
-  V(CAST_SITOFP_INT16_FLOAT) \
-  V(CAST_SITOFP_INT32_DOUBLE) \
-  V(CAST_SITOFP_INT32_FLOAT) \
-  V(CAST_SITOFP_INT64_DOUBLE) \
-  V(CAST_SITOFP_INT64_FLOAT) \
-  V(CAST_TRUNC_INT8_INT1) \
-  V(CAST_TRUNC_INT16_INT1) \
-  V(CAST_TRUNC_INT16_INT8) \
-  V(CAST_TRUNC_INT32_INT1) \
-  V(CAST_TRUNC_INT32_INT8) \
-  V(CAST_TRUNC_INT32_INT16) \
-  V(CAST_TRUNC_INT64_INT8) \
-  V(CAST_TRUNC_INT64_INT16) \
-  V(CAST_TRUNC_INT64_INT32) \
-  V(CAST_UITOFP_INT8_DOUBLE) \
-  V(CAST_UITOFP_INT8_FLOAT) \
-  V(CAST_UITOFP_INT16_DOUBLE) \
-  V(CAST_UITOFP_INT16_FLOAT) \
-  V(CAST_UITOFP_INT32_DOUBLE) \
-  V(CAST_UITOFP_INT32_FLOAT) \
-  V(CAST_UITOFP_INT64_DOUBLE) \
-  V(CAST_UITOFP_INT64_FLOAT) \
-  V(CAST_ZEXT_INT1_INT8) \
-  V(CAST_ZEXT_INT1_INT16) \
-  V(CAST_ZEXT_INT1_INT32) \
-  V(CAST_ZEXT_INT1_INT64) \
-  V(CAST_ZEXT_INT8_INT16) \
-  V(CAST_ZEXT_INT8_INT32) \
-  V(CAST_ZEXT_INT8_INT64) \
-  V(CAST_ZEXT_INT16_INT32) \
-  V(CAST_ZEXT_INT16_INT64) \
-  V(CAST_ZEXT_INT32_INT64) \
-  V(FCMP_OEQ_DOUBLE) \
-  V(FCMP_OEQ_FLOAT) \
-  V(FCMP_OGE_DOUBLE) \
-  V(FCMP_OGE_FLOAT) \
-  V(FCMP_OGT_DOUBLE) \
-  V(FCMP_OGT_FLOAT) \
-  V(FCMP_OLE_DOUBLE) \
-  V(FCMP_OLE_FLOAT) \
-  V(FCMP_OLT_DOUBLE) \
-  V(FCMP_OLT_FLOAT) \
-  V(FCMP_ONE_DOUBLE) \
-  V(FCMP_ONE_FLOAT) \
-  V(FCMP_ORD_DOUBLE) \
-  V(FCMP_ORD_FLOAT) \
-  V(FCMP_UEQ_DOUBLE) \
-  V(FCMP_UEQ_FLOAT) \
-  V(FCMP_UGE_DOUBLE) \
-  V(FCMP_UGE_FLOAT) \
-  V(FCMP_UGT_DOUBLE) \
-  V(FCMP_UGT_FLOAT) \
-  V(FCMP_ULE_DOUBLE) \
-  V(FCMP_ULE_FLOAT) \
-  V(FCMP_ULT_DOUBLE) \
-  V(FCMP_ULT_FLOAT) \
-  V(FCMP_UNE_DOUBLE) \
-  V(FCMP_UNE_FLOAT) \
-  V(FCMP_UNO_DOUBLE) \
-  V(FCMP_UNO_FLOAT) \
-  V(FORWARDTYPEREF) \
-  V(ICMP_EQ_INT8) \
-  V(ICMP_EQ_INT16) \
-  V(ICMP_EQ_INT32) \
-  V(ICMP_EQ_INT64) \
-  V(ICMP_NE_INT8) \
-  V(ICMP_NE_INT16) \
-  V(ICMP_NE_INT32) \
-  V(ICMP_NE_INT64) \
-  V(ICMP_SGE_INT8) \
-  V(ICMP_SGE_INT16) \
-  V(ICMP_SGE_INT32) \
-  V(ICMP_SGE_INT64) \
-  V(ICMP_SGT_INT8) \
-  V(ICMP_SGT_INT16) \
-  V(ICMP_SGT_INT32) \
-  V(ICMP_SGT_INT64) \
-  V(ICMP_SLE_INT8) \
-  V(ICMP_SLE_INT16) \
-  V(ICMP_SLE_INT32) \
-  V(ICMP_SLE_INT64) \
-  V(ICMP_SLT_INT8) \
-  V(ICMP_SLT_INT16) \
-  V(ICMP_SLT_INT32) \
-  V(ICMP_SLT_INT64) \
-  V(ICMP_UGE_INT8) \
-  V(ICMP_UGE_INT16) \
-  V(ICMP_UGE_INT32) \
-  V(ICMP_UGE_INT64) \
-  V(ICMP_UGT_INT8) \
-  V(ICMP_UGT_INT16) \
-  V(ICMP_UGT_INT32) \
-  V(ICMP_UGT_INT64) \
-  V(ICMP_ULE_INT8) \
-  V(ICMP_ULE_INT16) \
-  V(ICMP_ULE_INT32) \
-  V(ICMP_ULE_INT64) \
-  V(ICMP_ULT_INT8) \
-  V(ICMP_ULT_INT16) \
-  V(ICMP_ULT_INT32) \
-  V(ICMP_ULT_INT64) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_ADD_I16) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_ADD_I32) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_ADD_I64) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_AND_I8) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_AND_I16) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_AND_I32) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_AND_I64) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I8) \
+#define PN_FOREACH_OPCODE(V)                 \
+  V(ALLOCA_INT32)                            \
+  V(BINOP_ADD_DOUBLE)                        \
+  V(BINOP_ADD_FLOAT)                         \
+  V(BINOP_ADD_INT8)                          \
+  V(BINOP_ADD_INT16)                         \
+  V(BINOP_ADD_INT32)                         \
+  V(BINOP_ADD_INT64)                         \
+  V(BINOP_AND_INT1)                          \
+  V(BINOP_AND_INT8)                          \
+  V(BINOP_AND_INT16)                         \
+  V(BINOP_AND_INT32)                         \
+  V(BINOP_AND_INT64)                         \
+  V(BINOP_ASHR_INT8)                         \
+  V(BINOP_ASHR_INT16)                        \
+  V(BINOP_ASHR_INT32)                        \
+  V(BINOP_ASHR_INT64)                        \
+  V(BINOP_LSHR_INT8)                         \
+  V(BINOP_LSHR_INT16)                        \
+  V(BINOP_LSHR_INT32)                        \
+  V(BINOP_LSHR_INT64)                        \
+  V(BINOP_MUL_DOUBLE)                        \
+  V(BINOP_MUL_FLOAT)                         \
+  V(BINOP_MUL_INT8)                          \
+  V(BINOP_MUL_INT16)                         \
+  V(BINOP_MUL_INT32)                         \
+  V(BINOP_MUL_INT64)                         \
+  V(BINOP_OR_INT1)                           \
+  V(BINOP_OR_INT8)                           \
+  V(BINOP_OR_INT16)                          \
+  V(BINOP_OR_INT32)                          \
+  V(BINOP_OR_INT64)                          \
+  V(BINOP_SDIV_DOUBLE)                       \
+  V(BINOP_SDIV_FLOAT)                        \
+  V(BINOP_SDIV_INT32)                        \
+  V(BINOP_SDIV_INT64)                        \
+  V(BINOP_SHL_INT8)                          \
+  V(BINOP_SHL_INT16)                         \
+  V(BINOP_SHL_INT32)                         \
+  V(BINOP_SHL_INT64)                         \
+  V(BINOP_SREM_INT32)                        \
+  V(BINOP_SREM_INT64)                        \
+  V(BINOP_SUB_DOUBLE)                        \
+  V(BINOP_SUB_FLOAT)                         \
+  V(BINOP_SUB_INT8)                          \
+  V(BINOP_SUB_INT16)                         \
+  V(BINOP_SUB_INT32)                         \
+  V(BINOP_SUB_INT64)                         \
+  V(BINOP_UDIV_INT8)                         \
+  V(BINOP_UDIV_INT16)                        \
+  V(BINOP_UDIV_INT32)                        \
+  V(BINOP_UDIV_INT64)                        \
+  V(BINOP_UREM_INT8)                         \
+  V(BINOP_UREM_INT16)                        \
+  V(BINOP_UREM_INT32)                        \
+  V(BINOP_UREM_INT64)                        \
+  V(BINOP_XOR_INT1)                          \
+  V(BINOP_XOR_INT8)                          \
+  V(BINOP_XOR_INT16)                         \
+  V(BINOP_XOR_INT32)                         \
+  V(BINOP_XOR_INT64)                         \
+  V(BR)                                      \
+  V(BR_INT1)                                 \
+  V(CALL)                                    \
+  V(CALL_INDIRECT)                           \
+  V(CAST_BITCAST_DOUBLE_INT64)               \
+  V(CAST_BITCAST_FLOAT_INT32)                \
+  V(CAST_BITCAST_INT32_FLOAT)                \
+  V(CAST_BITCAST_INT64_DOUBLE)               \
+  V(CAST_FPEXT_FLOAT_DOUBLE)                 \
+  V(CAST_FPTOSI_DOUBLE_INT8)                 \
+  V(CAST_FPTOSI_DOUBLE_INT16)                \
+  V(CAST_FPTOSI_DOUBLE_INT32)                \
+  V(CAST_FPTOSI_DOUBLE_INT64)                \
+  V(CAST_FPTOSI_FLOAT_INT8)                  \
+  V(CAST_FPTOSI_FLOAT_INT16)                 \
+  V(CAST_FPTOSI_FLOAT_INT32)                 \
+  V(CAST_FPTOSI_FLOAT_INT64)                 \
+  V(CAST_FPTOUI_DOUBLE_INT8)                 \
+  V(CAST_FPTOUI_DOUBLE_INT16)                \
+  V(CAST_FPTOUI_DOUBLE_INT32)                \
+  V(CAST_FPTOUI_DOUBLE_INT64)                \
+  V(CAST_FPTOUI_FLOAT_INT8)                  \
+  V(CAST_FPTOUI_FLOAT_INT16)                 \
+  V(CAST_FPTOUI_FLOAT_INT32)                 \
+  V(CAST_FPTOUI_FLOAT_INT64)                 \
+  V(CAST_FPTRUNC_DOUBLE_FLOAT)               \
+  V(CAST_SEXT_INT1_INT8)                     \
+  V(CAST_SEXT_INT1_INT16)                    \
+  V(CAST_SEXT_INT1_INT32)                    \
+  V(CAST_SEXT_INT1_INT64)                    \
+  V(CAST_SEXT_INT8_INT16)                    \
+  V(CAST_SEXT_INT8_INT32)                    \
+  V(CAST_SEXT_INT8_INT64)                    \
+  V(CAST_SEXT_INT16_INT32)                   \
+  V(CAST_SEXT_INT16_INT64)                   \
+  V(CAST_SEXT_INT32_INT64)                   \
+  V(CAST_SITOFP_INT8_DOUBLE)                 \
+  V(CAST_SITOFP_INT8_FLOAT)                  \
+  V(CAST_SITOFP_INT16_DOUBLE)                \
+  V(CAST_SITOFP_INT16_FLOAT)                 \
+  V(CAST_SITOFP_INT32_DOUBLE)                \
+  V(CAST_SITOFP_INT32_FLOAT)                 \
+  V(CAST_SITOFP_INT64_DOUBLE)                \
+  V(CAST_SITOFP_INT64_FLOAT)                 \
+  V(CAST_TRUNC_INT8_INT1)                    \
+  V(CAST_TRUNC_INT16_INT1)                   \
+  V(CAST_TRUNC_INT16_INT8)                   \
+  V(CAST_TRUNC_INT32_INT1)                   \
+  V(CAST_TRUNC_INT32_INT8)                   \
+  V(CAST_TRUNC_INT32_INT16)                  \
+  V(CAST_TRUNC_INT64_INT8)                   \
+  V(CAST_TRUNC_INT64_INT16)                  \
+  V(CAST_TRUNC_INT64_INT32)                  \
+  V(CAST_UITOFP_INT8_DOUBLE)                 \
+  V(CAST_UITOFP_INT8_FLOAT)                  \
+  V(CAST_UITOFP_INT16_DOUBLE)                \
+  V(CAST_UITOFP_INT16_FLOAT)                 \
+  V(CAST_UITOFP_INT32_DOUBLE)                \
+  V(CAST_UITOFP_INT32_FLOAT)                 \
+  V(CAST_UITOFP_INT64_DOUBLE)                \
+  V(CAST_UITOFP_INT64_FLOAT)                 \
+  V(CAST_ZEXT_INT1_INT8)                     \
+  V(CAST_ZEXT_INT1_INT16)                    \
+  V(CAST_ZEXT_INT1_INT32)                    \
+  V(CAST_ZEXT_INT1_INT64)                    \
+  V(CAST_ZEXT_INT8_INT16)                    \
+  V(CAST_ZEXT_INT8_INT32)                    \
+  V(CAST_ZEXT_INT8_INT64)                    \
+  V(CAST_ZEXT_INT16_INT32)                   \
+  V(CAST_ZEXT_INT16_INT64)                   \
+  V(CAST_ZEXT_INT32_INT64)                   \
+  V(FCMP_OEQ_DOUBLE)                         \
+  V(FCMP_OEQ_FLOAT)                          \
+  V(FCMP_OGE_DOUBLE)                         \
+  V(FCMP_OGE_FLOAT)                          \
+  V(FCMP_OGT_DOUBLE)                         \
+  V(FCMP_OGT_FLOAT)                          \
+  V(FCMP_OLE_DOUBLE)                         \
+  V(FCMP_OLE_FLOAT)                          \
+  V(FCMP_OLT_DOUBLE)                         \
+  V(FCMP_OLT_FLOAT)                          \
+  V(FCMP_ONE_DOUBLE)                         \
+  V(FCMP_ONE_FLOAT)                          \
+  V(FCMP_ORD_DOUBLE)                         \
+  V(FCMP_ORD_FLOAT)                          \
+  V(FCMP_UEQ_DOUBLE)                         \
+  V(FCMP_UEQ_FLOAT)                          \
+  V(FCMP_UGE_DOUBLE)                         \
+  V(FCMP_UGE_FLOAT)                          \
+  V(FCMP_UGT_DOUBLE)                         \
+  V(FCMP_UGT_FLOAT)                          \
+  V(FCMP_ULE_DOUBLE)                         \
+  V(FCMP_ULE_FLOAT)                          \
+  V(FCMP_ULT_DOUBLE)                         \
+  V(FCMP_ULT_FLOAT)                          \
+  V(FCMP_UNE_DOUBLE)                         \
+  V(FCMP_UNE_FLOAT)                          \
+  V(FCMP_UNO_DOUBLE)                         \
+  V(FCMP_UNO_FLOAT)                          \
+  V(FORWARDTYPEREF)                          \
+  V(ICMP_EQ_INT8)                            \
+  V(ICMP_EQ_INT16)                           \
+  V(ICMP_EQ_INT32)                           \
+  V(ICMP_EQ_INT64)                           \
+  V(ICMP_NE_INT8)                            \
+  V(ICMP_NE_INT16)                           \
+  V(ICMP_NE_INT32)                           \
+  V(ICMP_NE_INT64)                           \
+  V(ICMP_SGE_INT8)                           \
+  V(ICMP_SGE_INT16)                          \
+  V(ICMP_SGE_INT32)                          \
+  V(ICMP_SGE_INT64)                          \
+  V(ICMP_SGT_INT8)                           \
+  V(ICMP_SGT_INT16)                          \
+  V(ICMP_SGT_INT32)                          \
+  V(ICMP_SGT_INT64)                          \
+  V(ICMP_SLE_INT8)                           \
+  V(ICMP_SLE_INT16)                          \
+  V(ICMP_SLE_INT32)                          \
+  V(ICMP_SLE_INT64)                          \
+  V(ICMP_SLT_INT8)                           \
+  V(ICMP_SLT_INT16)                          \
+  V(ICMP_SLT_INT32)                          \
+  V(ICMP_SLT_INT64)                          \
+  V(ICMP_UGE_INT8)                           \
+  V(ICMP_UGE_INT16)                          \
+  V(ICMP_UGE_INT32)                          \
+  V(ICMP_UGE_INT64)                          \
+  V(ICMP_UGT_INT8)                           \
+  V(ICMP_UGT_INT16)                          \
+  V(ICMP_UGT_INT32)                          \
+  V(ICMP_UGT_INT64)                          \
+  V(ICMP_ULE_INT8)                           \
+  V(ICMP_ULE_INT16)                          \
+  V(ICMP_ULE_INT32)                          \
+  V(ICMP_ULE_INT64)                          \
+  V(ICMP_ULT_INT8)                           \
+  V(ICMP_ULT_INT16)                          \
+  V(ICMP_ULT_INT32)                          \
+  V(ICMP_ULT_INT64)                          \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8)       \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_ADD_I16)      \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_ADD_I32)      \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_ADD_I64)      \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_AND_I8)       \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_AND_I16)      \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_AND_I32)      \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_AND_I64)      \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I8)  \
   V(INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I16) \
   V(INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I32) \
   V(INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I64) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_OR_I8) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_OR_I16) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_OR_I32) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_OR_I64) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_SUB_I8) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_SUB_I16) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_SUB_I32) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_SUB_I64) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_XOR_I8) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_XOR_I16) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_XOR_I32) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_XOR_I64) \
-  V(LOAD_DOUBLE) \
-  V(LOAD_FLOAT) \
-  V(LOAD_INT8) \
-  V(LOAD_INT16) \
-  V(LOAD_INT32) \
-  V(LOAD_INT64) \
-  V(PHI) \
-  V(RET) \
-  V(RET_VALUE) \
-  V(STORE_DOUBLE) \
-  V(STORE_FLOAT) \
-  V(STORE_INT8) \
-  V(STORE_INT16) \
-  V(STORE_INT32) \
-  V(STORE_INT64) \
-  V(SWITCH_INT1) \
-  V(SWITCH_INT8) \
-  V(SWITCH_INT16) \
-  V(SWITCH_INT32) \
-  V(SWITCH_INT64) \
-  V(UNREACHABLE) \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_OR_I8)        \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_OR_I16)       \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_OR_I32)       \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_OR_I64)       \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_SUB_I8)       \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_SUB_I16)      \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_SUB_I32)      \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_SUB_I64)      \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_XOR_I8)       \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_XOR_I16)      \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_XOR_I32)      \
+  V(INTRINSIC_LLVM_NACL_ATOMIC_XOR_I64)      \
+  V(LOAD_DOUBLE)                             \
+  V(LOAD_FLOAT)                              \
+  V(LOAD_INT8)                               \
+  V(LOAD_INT16)                              \
+  V(LOAD_INT32)                              \
+  V(LOAD_INT64)                              \
+  V(PHI)                                     \
+  V(RET)                                     \
+  V(RET_VALUE)                               \
+  V(STORE_DOUBLE)                            \
+  V(STORE_FLOAT)                             \
+  V(STORE_INT8)                              \
+  V(STORE_INT16)                             \
+  V(STORE_INT32)                             \
+  V(STORE_INT64)                             \
+  V(SWITCH_INT1)                             \
+  V(SWITCH_INT8)                             \
+  V(SWITCH_INT16)                            \
+  V(SWITCH_INT32)                            \
+  V(SWITCH_INT64)                            \
+  V(UNREACHABLE)                             \
   V(VSELECT)
 
 typedef enum PNOpcode {
@@ -1385,9 +1385,9 @@ static inline uint32_t pn_popcount(uint32_t x) {
 #if defined(__clang__) || defined(__GNUC__)
   return __builtin_popcount(x);
 #else
-/* See
- * http://stackoverflow.com/questions/109023/how-to-count-the-number-of-set-bits-in-a-32-bit-integer
- */
+  /* See
+   * http://stackoverflow.com/questions/109023/how-to-count-the-number-of-set-bits-in-a-32-bit-integer
+   */
   x = x - ((x >> 1) & 0x55555555);
   x = (x & 0x33333333) + ((x >> 2) & 0x33333333);
   return (((x + (x >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
@@ -3597,9 +3597,9 @@ static void pn_function_calculate_liveness(PNModule* module,
     uint32_t livein_bits_set = pn_bitset_num_bits_set(&state.livein[n]);
     if (livein_bits_set) {
       bb->num_livein = 0;
-      bb->livein = pn_allocator_alloc(
-          &module->allocator, sizeof(PNValueId) * livein_bits_set,
-          sizeof(PNValueId));
+      bb->livein = pn_allocator_alloc(&module->allocator,
+                                      sizeof(PNValueId) * livein_bits_set,
+                                      sizeof(PNValueId));
 
       for (m = 0; m < function->num_values; ++m) {
         if (pn_bitset_is_set(&state.livein[n], m)) {
@@ -6631,7 +6631,6 @@ static PNRuntimeValue pn_builtin_NACL_IRT_THREAD_EXIT(PNThread* thread,
   return pn_executor_value_u32(0);
 }
 
-
 #define PN_BUILTIN_STUB(name)                                    \
   static PNRuntimeValue pn_builtin_##name(                       \
       PNThread* thread, PNFunction* function, uint32_t num_args, \
@@ -7117,6 +7116,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     case PN_OPCODE_FCMP_UNO_DOUBLE: OPCODE_CMP2_UNO(f64); break;
     case PN_OPCODE_FCMP_UNO_FLOAT:  OPCODE_CMP2_UNO(f32); break;
 
+
     case PN_OPCODE_FORWARDTYPEREF:
       location->instruction_id++;
       break;
@@ -7515,7 +7515,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
         f = f->parent;
       }
       PN_FATAL("Invalid jmpbuf target: %d\n", id);
-longjmp_done:
+    longjmp_done:
       break;
     }
 
@@ -7608,7 +7608,7 @@ longjmp_done:
       break;
     }
 
-#define PN_OPCODE_INTRINSIC_STUB(name)                   \
+#define PN_OPCODE_INTRINSIC_STUB(name)                \
   case PN_OPCODE_INTRINSIC_##name: {                  \
     PN_FATAL("Unimplemented intrinsic: %s\n", #name); \
     break;                                            \
@@ -8065,7 +8065,6 @@ static void pn_options_parse(int argc, char** argv, char** env) {
         } else {
           PN_FATAL("Unable to parse memory-size flag \"%s\".\n", optarg);
         }
-
 
         if (size < PN_MEMORY_GUARD_SIZE) {
           PN_FATAL(
