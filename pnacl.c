@@ -92,6 +92,7 @@ PN_STATIC_ASSERT(sizeof(double) == sizeof(uint64_t));
 
 #if PN_TIMERS
 
+#define PN_NANOSECONDS_IN_A_MICROSECOND 1000
 #define PN_NANOSECONDS_IN_A_SECOND 1000000000
 
 #define PN_BEGIN_TIME(name)          \
@@ -808,6 +809,12 @@ typedef enum PNThreadState {
   PN_THREAD_DEAD,
 } PNThreadState;
 
+typedef enum PNFutexState {
+  PN_FUTEX_NONE,
+  PN_FUTEX_WOKEN,
+  PN_FUTEX_TIMEDOUT,
+} PNFutexState;
+
 typedef struct PNAllocatorChunk {
   struct PNAllocatorChunk* next;
   void* current;
@@ -1180,8 +1187,14 @@ typedef struct PNThread {
   struct PNThread* next;
   struct PNThread* prev;
   PNThreadState state;
+  PNFutexState futex_state;
   uint32_t tls;
   uint32_t id;
+
+  uint32_t wait_addr;
+  PNBool has_timeout;
+  uint64_t timeout_sec;
+  uint32_t timeout_usec;
 } PNThread;
 
 typedef struct PNExecutor {
@@ -5488,6 +5501,7 @@ static void pn_module_block_read(PNModule* module,
 
             function->name = NULL;
             function->type_id = pn_record_read_int32(&reader, "type_id");
+            function->intrinsic_id = PN_INTRINSIC_NULL;
             function->calling_convention =
                 pn_record_read_int32(&reader, "calling_convention");
             function->is_proto = pn_record_read_int32(&reader, "is_proto");
@@ -6468,21 +6482,55 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FUTEX_WAIT_ABS(PNThread* thread,
   PN_BUILTIN_ARG(addr_p, 0, u32);
   PN_BUILTIN_ARG(value, 1, u32);
   PN_BUILTIN_ARG(abstime_p, 2, u32);
-  PN_TRACE(IRT, "    NACL_IRT_WAIT_ABS(%u, %u, %u)\n", addr_p, value,
-           abstime_p);
-  uint32_t read = pn_memory_read_u32(executor->memory, addr_p);
-  if (read != value) {
-    return pn_executor_value_u32(PN_EAGAIN);
-  }
+  switch (thread->futex_state) {
+    case PN_FUTEX_NONE: {
+      PN_TRACE(IRT, "    NACL_IRT_WAIT_ABS(%u, %u, %u)\n", addr_p, value,
+               abstime_p);
+      uint32_t read = pn_memory_read_u32(executor->memory, addr_p);
+      if (read != value) {
+        return pn_executor_value_u32(PN_EAGAIN);
+      }
 
-  if (abstime_p != 0) {
-    /* Pretend we timed out */
-    PN_TRACE(IRT, "      errno = ETIMEDOUT (%d)\n", PN_ETIMEDOUT);
-    return pn_executor_value_u32(PN_ETIMEDOUT);
-  } else {
-    /* Pretend we are woken up by another thread */
-    PN_TRACE(IRT, "      errno = 0\n");
-    return pn_executor_value_u32(0);
+      thread->wait_addr = addr_p;
+
+      if (abstime_p != 0) {
+        thread->has_timeout = PN_TRUE;
+        thread->timeout_sec = pn_memory_read_u64(executor->memory, abstime_p);
+        /* IRT timeout is a timespec, which uses nanoseconds. Convert to
+         * microseconds for comparison with gettimeofday */
+        thread->timeout_usec =
+            pn_memory_read_u32(executor->memory, abstime_p + 8) /
+            PN_NANOSECONDS_IN_A_MICROSECOND;
+      } else {
+        thread->has_timeout = PN_FALSE;
+        thread->timeout_sec = 0;
+        thread->timeout_usec = 0;
+      }
+
+      thread->state = PN_THREAD_BLOCKED;
+
+      /* Return an arbitrary value. We'll set the real value when the thread is
+       * unblocked */
+      return pn_executor_value_u32(0);
+    }
+
+    case PN_FUTEX_TIMEDOUT:
+      PN_TRACE(IRT, "    NACL_IRT_WAIT_ABS(%u, %u, %u)\n", addr_p, value,
+               abstime_p);
+      PN_TRACE(IRT, "      errno = ETIMEDOUT (%d)\n", PN_ETIMEDOUT);
+      thread->futex_state = PN_FUTEX_NONE;
+      return pn_executor_value_u32(PN_ETIMEDOUT);
+
+    case PN_FUTEX_WOKEN:
+      PN_TRACE(IRT, "    NACL_IRT_WAIT_ABS(%u, %u, %u)\n", addr_p, value,
+               abstime_p);
+      PN_TRACE(IRT, "      errno = 0\n");
+      thread->futex_state = PN_FUTEX_NONE;
+      return pn_executor_value_u32(0);
+
+    default:
+      PN_UNREACHABLE();
+      return pn_executor_value_u32(PN_EINVAL);
   }
 }
 
@@ -6502,7 +6550,19 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FUTEX_WAKE(PNThread* thread,
   PN_BUILTIN_ARG(nwake, 1, u32);
   PN_BUILTIN_ARG(count_p, 2, u32);
   PN_TRACE(IRT, "    NACL_IRT_WAKE(%u, %u, %u)\n", addr_p, nwake, count_p);
-  pn_memory_write_u32(executor->memory, count_p, 0);
+
+  uint32_t woken = 0;
+  PNThread* i;
+  for (i = thread->next; i != thread && woken < nwake; i = i->next) {
+    if (i->state == PN_THREAD_BLOCKED && i->wait_addr == addr_p) {
+      PN_TRACE(IRT, "      waking thread %d\n", i->id);
+      i->state = PN_THREAD_RUNNING;
+      i->futex_state = PN_FUTEX_WOKEN;
+      woken++;
+    }
+  }
+
+  pn_memory_write_u32(executor->memory, count_p, woken);
   return pn_executor_value_u32(0);
 }
 
@@ -6547,6 +6607,8 @@ static PNRuntimeValue pn_builtin_NACL_IRT_THREAD_CREATE(PNThread* thread,
       pn_module_get_function(executor->module, new_function_id);
   pn_thread_push_function(new_thread, new_function_id, new_function);
   new_thread->current_call_frame->memory_stack_top = stack_p;
+
+  PN_TRACE(IRT, "      created thread %d\n", new_thread->id);
 
   return pn_executor_value_u32(0);
 }
@@ -6778,7 +6840,12 @@ static void pn_thread_execute_instruction(PNThread* thread) {
               PN_FATAL("Unknown builtin: %d\n", callee_function_id);
               break;
           }
-          location->instruction_id++;
+          /* If the builtin was PN_BUILTIN_NACL_IRT_FUTEX_WAIT_ABS, then this
+           * thread may have been blocked. If so, do not increment the
+           * instruction counter */
+          if (thread->state == PN_THREAD_RUNNING) {
+            location->instruction_id++;
+          }
           break;
         } else {
           new_function_id = callee_function_id - PN_MAX_BUILTINS;
@@ -8254,12 +8321,12 @@ int main(int argc, char** argv, char** envp) {
     PN_BEGIN_TIME(EXECUTE);
     pn_memory_init_startinfo(&memory, g_pn_argv, g_pn_environ);
 
-    PNExecutor executor;
+    PNExecutor executor = {};
     PNThread* thread = &executor.main_thread;
     thread->executor = &executor;
     thread->next = thread;
     thread->prev = thread;
-    thread->id = 0;
+    thread->futex_state = PN_FUTEX_NONE;
 
     pn_executor_init(&executor, &module);
     PNBool running = PN_TRUE;
@@ -8296,21 +8363,32 @@ int main(int argc, char** argv, char** envp) {
       thread = next_thread;
 
       /* Schedule the next thread */
-      PNThread* first_thread = thread;
       while (1) {
         assert(thread->state != PN_THREAD_DEAD);
 
         if (thread->state == PN_THREAD_RUNNING) {
           if (thread->id != last_thread_id) {
             last_thread_id = thread->id;
-            PN_TRACE(EXECUTE, "Switch thread: %d\n", thread->id);
+            if (PN_IS_TRACE(EXECUTE) || PN_IS_TRACE(IRT) ||
+                PN_IS_TRACE(INTRINSICS)) {
+              PN_PRINT("Switch thread: %d\n", thread->id);
+            }
           }
           break;
         } else if (thread->state == PN_THREAD_BLOCKED) {
-          /* TODO(binji): If there is a timeout, check for expiry */
-          if (thread->next == first_thread) {
-            PN_FATAL("Deadlock.\n");
+          struct timeval tv;
+          gettimeofday(&tv, NULL);
+          if (thread->has_timeout && (tv.tv_sec > thread->timeout_sec ||
+                                      (tv.tv_sec == thread->timeout_sec &&
+                                       tv.tv_usec > thread->timeout_usec))) {
+            /* Run the call instruction again from the timedout state. This
+             * will set the proper return value and continue on. */
+            thread->state = PN_THREAD_RUNNING;
+            thread->futex_state = PN_FUTEX_TIMEDOUT;
+            break;
           }
+
+          /* TODO(binji): detect deadlock */
         } else {
           PN_UNREACHABLE();
         }

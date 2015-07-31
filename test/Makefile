@@ -6,6 +6,7 @@ TESTS = \
 	res/printf \
 	res/dedupe_incoming \
 	res/thread \
+	res/sem
 
 BENCHMARKS = \
 	benchmark/res/nbody \
