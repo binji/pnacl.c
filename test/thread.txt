@@ -1,0 +1,5 @@
+# FLAGS: -r
+# FILE: res/thread.pexe
+# STDOUT:
+data = 10
+retval = 0x2a

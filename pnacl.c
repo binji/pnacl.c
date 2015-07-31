@@ -802,6 +802,12 @@ typedef enum PNErrno {
 #undef PN_ERRNO
 } PNErrno;
 
+typedef enum PNThreadState {
+  PN_THREAD_RUNNING,
+  PN_THREAD_BLOCKED,
+  PN_THREAD_DEAD,
+} PNThreadState;
+
 typedef struct PNAllocatorChunk {
   struct PNAllocatorChunk* next;
   void* current;
@@ -1172,7 +1178,10 @@ typedef struct PNThread {
   struct PNExecutor* executor;
   PNCallFrame* current_call_frame;
   struct PNThread* next;
+  struct PNThread* prev;
+  PNThreadState state;
   uint32_t tls;
+  uint32_t id;
 } PNThread;
 
 typedef struct PNExecutor {
@@ -1180,10 +1189,12 @@ typedef struct PNExecutor {
   PNMemory* memory;
   PNRuntimeValue* module_values;
   PNThread main_thread;
+  PNThread* dead_threads;
   PNCallFrame sentinel_frame;
   PNBitSet mapped_pages;
   PNAllocator allocator;
   PNJmpBufId next_jmpbuf_id;
+  uint32_t next_thread_id;
   uint32_t heap_end; /* Grows up */
   int32_t exit_code;
   PNBool exiting;
@@ -5781,6 +5792,8 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
   executor->sentinel_frame.mark = pn_allocator_mark(&executor->allocator);
   executor->exit_code = 0;
   executor->exiting = PN_FALSE;
+  executor->next_thread_id = 0;
+  executor->dead_threads = NULL;
 
   PN_CHECK(pn_is_aligned(executor->memory->size, PN_PAGESIZE));
   PN_CHECK(pn_is_aligned(executor->memory->heap_start, PN_PAGESIZE));
@@ -5794,11 +5807,11 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
 
   pn_executor_init_module_values(executor);
 
-  /* TODO(binji): proper handling of thread */
   PNThread* thread = &executor->main_thread;
   pn_allocator_init(&thread->allocator, PN_MIN_CHUNKSIZE, "main thread");
   thread->current_call_frame = &executor->sentinel_frame;
   thread->tls = 0;
+  thread->id = executor->next_thread_id++;
 
   PNFunctionId start_function_id = module->known_functions[PN_INTRINSIC_START];
   PN_CHECK(start_function_id != PN_INVALID_FUNCTION_ID);
@@ -6493,6 +6506,70 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FUTEX_WAKE(PNThread* thread,
   return pn_executor_value_u32(0);
 }
 
+static PNRuntimeValue pn_builtin_NACL_IRT_THREAD_CREATE(PNThread* thread,
+                                                        PNFunction* function,
+                                                        uint32_t num_args,
+                                                        PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
+  PN_CHECK(num_args == 3);
+  PN_BUILTIN_ARG(start_func_p, 0, u32);
+  PN_BUILTIN_ARG(stack_p, 1, u32);
+  PN_BUILTIN_ARG(thread_p, 2, u32);
+  PN_TRACE(IRT, "    NACL_IRT_THREAD_CREATE(%u, %u, %u)\n", start_func_p,
+           stack_p, thread_p);
+  PNThread* main_thread = &executor->main_thread;
+  PNThread* new_thread;
+  if (executor->dead_threads) {
+    /* Dead thread list is singly-linked */
+    new_thread = executor->dead_threads;
+    executor->dead_threads = new_thread->next;
+  } else {
+    new_thread = pn_allocator_alloc(&executor->allocator, sizeof(PNThread),
+                                    PN_DEFAULT_ALIGN);
+  }
+
+  pn_allocator_init(&new_thread->allocator, PN_MIN_CHUNKSIZE, "thread");
+  new_thread->executor = executor;
+  new_thread->current_call_frame = &executor->sentinel_frame;
+  new_thread->tls = thread_p;
+  new_thread->id = executor->next_thread_id++;
+  new_thread->state = PN_THREAD_RUNNING;
+  new_thread->next = main_thread;
+  new_thread->prev = main_thread->prev;
+  main_thread->prev->next = new_thread;
+  main_thread->prev = new_thread;
+
+  PNFunctionId new_function_id = pn_function_pointer_to_index(start_func_p);
+  assert(new_function_id >= PN_MAX_BUILTINS);
+  new_function_id -= PN_MAX_BUILTINS;
+  PN_CHECK(new_function_id < executor->module->num_functions);
+  PNFunction* new_function =
+      pn_module_get_function(executor->module, new_function_id);
+  pn_thread_push_function(new_thread, new_function_id, new_function);
+  new_thread->current_call_frame->memory_stack_top = stack_p;
+
+  return pn_executor_value_u32(0);
+}
+
+static PNRuntimeValue pn_builtin_NACL_IRT_THREAD_EXIT(PNThread* thread,
+                                                      PNFunction* function,
+                                                      uint32_t num_args,
+                                                      PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
+  PN_CHECK(num_args == 1);
+  PN_BUILTIN_ARG(stack_flag_p, 0, u32);
+  PN_TRACE(IRT, "    NACL_IRT_THREAD_EXIT(%u)\n", stack_flag_p);
+  PN_CHECK(thread != &executor->main_thread);
+  thread->state = PN_THREAD_DEAD;
+
+  if (stack_flag_p) {
+    pn_memory_write_u32(executor->memory, stack_flag_p, 0);
+  }
+
+  return pn_executor_value_u32(0);
+}
+
+
 #define PN_BUILTIN_STUB(name)                                    \
   static PNRuntimeValue pn_builtin_##name(                       \
       PNThread* thread, PNFunction* function, uint32_t num_args, \
@@ -6528,8 +6605,6 @@ PN_BUILTIN_STUB(NACL_IRT_FILENAME_ACCESS)
 PN_BUILTIN_STUB(NACL_IRT_FILENAME_UTIMES)
 PN_BUILTIN_STUB(NACL_IRT_MEMORY_MPROTECT)
 PN_BUILTIN_STUB(NACL_IRT_TLS_GET)
-PN_BUILTIN_STUB(NACL_IRT_THREAD_CREATE)
-PN_BUILTIN_STUB(NACL_IRT_THREAD_EXIT)
 PN_BUILTIN_STUB(NACL_IRT_THREAD_NICE)
 
 #undef PN_BUILTIN_STUB
@@ -6561,7 +6636,8 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PNRuntimeValue size = pn_thread_get_value(thread, i->size_id);
       frame->memory_stack_top =
           pn_align_down(frame->memory_stack_top - size.i32, i->alignment);
-      if (frame->memory_stack_top < executor->heap_end) {
+      if (thread == &executor->main_thread &&
+          frame->memory_stack_top < executor->heap_end) {
         PN_FATAL("Out of stack\n");
         break;
       }
@@ -8179,23 +8255,68 @@ int main(int argc, char** argv, char** envp) {
     pn_memory_init_startinfo(&memory, g_pn_argv, g_pn_environ);
 
     PNExecutor executor;
-    /* TODO(binji): handle thread properly */
     PNThread* thread = &executor.main_thread;
     thread->executor = &executor;
     thread->next = thread;
+    thread->prev = thread;
+    thread->id = 0;
 
     pn_executor_init(&executor, &module);
     PNBool running = PN_TRUE;
+    uint32_t last_thread_id = executor.main_thread.id;
     while (running) {
       uint32_t i;
-      for (i = 0; i < PN_INSTRUCTIONS_QUANTUM && running; ++i) {
+      for (i = 0; i < PN_INSTRUCTIONS_QUANTUM && running &&
+                  thread->state == PN_THREAD_RUNNING;
+           ++i) {
         pn_thread_execute_instruction(thread);
         running = thread->current_call_frame != &executor.sentinel_frame &&
                   !executor.exiting;
       }
 
-      /* TODO(binji): smarter scheduler */
-      thread = thread->next;
+      if (!running) {
+        break;
+      }
+
+      /* Remove the dead thread from the executing linked-list. Only the
+       * currently executing thread should be in this state. */
+      PNThread* next_thread = thread->next;
+      if (thread->state == PN_THREAD_DEAD) {
+        assert(thread != &executor.main_thread);
+        /* Unlink from executing linked list */
+        thread->prev->next = thread->next;
+        thread->next->prev = thread->prev;
+
+        /* Link into dead list, singly-linked */
+        thread->next = executor.dead_threads;
+        thread->prev = NULL;
+        executor.dead_threads = thread;
+      }
+
+      thread = next_thread;
+
+      /* Schedule the next thread */
+      PNThread* first_thread = thread;
+      while (1) {
+        assert(thread->state != PN_THREAD_DEAD);
+
+        if (thread->state == PN_THREAD_RUNNING) {
+          if (thread->id != last_thread_id) {
+            last_thread_id = thread->id;
+            PN_TRACE(EXECUTE, "Switch thread: %d\n", thread->id);
+          }
+          break;
+        } else if (thread->state == PN_THREAD_BLOCKED) {
+          /* TODO(binji): If there is a timeout, check for expiry */
+          if (thread->next == first_thread) {
+            PN_FATAL("Deadlock.\n");
+          }
+        } else {
+          PN_UNREACHABLE();
+        }
+
+        thread = thread->next;
+      }
     }
     PN_END_TIME(EXECUTE);
 

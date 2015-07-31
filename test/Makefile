@@ -5,6 +5,7 @@ TESTS = \
 	res/setjmp \
 	res/printf \
 	res/dedupe_incoming \
+	res/thread \
 
 BENCHMARKS = \
 	benchmark/res/nbody \
@@ -31,7 +32,7 @@ PNACL_FINALIZE = $(shell $(NACL_CONFIG) --tool finalize -t pnacl)
 PNACL_TRANSLATE = $(shell $(NACL_CONFIG) --tool translate -t pnacl)
 
 %.bc: %.c Makefile
-	$(PNACL_CC) -std=c99 -O2 -o $@ $<
+	$(PNACL_CC) -std=c99 -O2 -pthread -o $@ $<
 
 %.pexe: %.bc Makefile
 	$(PNACL_FINALIZE) --no-strip-syms -o $@ $<
