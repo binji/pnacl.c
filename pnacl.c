@@ -6595,6 +6595,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_THREAD_CREATE(PNThread* thread,
   new_thread->tls = thread_p;
   new_thread->id = executor->next_thread_id++;
   new_thread->state = PN_THREAD_RUNNING;
+  new_thread->futex_state = PN_FUTEX_NONE;
   new_thread->next = main_thread;
   new_thread->prev = main_thread->prev;
   main_thread->prev->next = new_thread;
