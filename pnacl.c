@@ -90,9 +90,10 @@
 PN_STATIC_ASSERT(sizeof(float) == sizeof(uint32_t));
 PN_STATIC_ASSERT(sizeof(double) == sizeof(uint64_t));
 
+#define PN_NANOSECONDS_IN_A_MICROSECOND 1000
+
 #if PN_TIMERS
 
-#define PN_NANOSECONDS_IN_A_MICROSECOND 1000
 #define PN_NANOSECONDS_IN_A_SECOND 1000000000
 
 #define PN_BEGIN_TIME(name)          \
