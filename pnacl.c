@@ -1962,6 +1962,14 @@ DEFINE_MEMORY_WRITE(f64, double)
 #undef DEFINE_MEMORY_READ
 #undef DEFINE_MEMORY_WRITE
 
+static uint32_t pn_memory_check_cstr(PNMemory* memory, uint32_t p) {
+  uint32_t end = p;
+  while (pn_memory_read_u8(memory, end) != 0) {
+    end++;
+  }
+  return end - p;
+}
+
 static void pn_memory_zerofill(PNMemory* memory,
                                uint32_t offset,
                                uint32_t num_bytes) {
@@ -5945,12 +5953,8 @@ static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNThread* thread,
   PNMemory* memory = executor->memory;
   pn_memory_check(memory, name_p, 1);
 
-  /* Find the end of the |name_p| string */
-  uint32_t end_p = name_p;
-  while (pn_memory_read_u8(memory, end_p) != 0) {
-    end_p++;
-  }
-  PN_CHECK(end_p > name_p);
+  uint32_t name_len = pn_memory_check_cstr(executor->memory, name_p);
+  PN_CHECK(name_len > 0);
 
 #define PN_WRITE_BUILTIN(offset, name)                           \
   pn_memory_write_u32(memory, table + offset * sizeof(uint32_t), \
@@ -6270,6 +6274,27 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_GETCWD(PNThread* thread,
   return pn_executor_value_u32(err);
 }
 
+static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_OPEN(PNThread* thread,
+                                                        PNFunction* function,
+                                                        uint32_t num_args,
+                                                        PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
+  PN_CHECK(num_args == 4);
+  PN_BUILTIN_ARG(pathname_p, 0, u32);
+  PN_BUILTIN_ARG(oflag, 1, u32);
+  PN_BUILTIN_ARG(cmode, 2, u32);
+  PN_BUILTIN_ARG(newfd_p, 3, u32);
+
+  pn_memory_check_cstr(executor->memory, pathname_p);
+  char* pathname = executor->memory->data + pathname_p;
+  PN_TRACE(IRT, "    NACL_IRT_FILENAME_OPEN(%u (%s), %u, %u, %u)\n", pathname_p,
+           pathname, oflag, cmode, newfd_p);
+  PN_TRACE(IRT, "      errno = ENOENT\n");
+  (void)executor;
+  (void)pathname;
+  return pn_executor_value_u32(PN_ENOENT);
+}
+
 static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_READLINK(
     PNThread* thread,
     PNFunction* function,
@@ -6282,10 +6307,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_READLINK(
   PN_BUILTIN_ARG(count, 2, u32);
   PN_BUILTIN_ARG(nread_p, 3, u32);
 
-  uint32_t end_p = path_p;
-  while (pn_memory_read_u8(executor->memory, end_p) != 0) {
-    end_p++;
-  }
+  pn_memory_check_cstr(executor->memory, path_p);
   char* path = executor->memory->data + path_p;
 
   PN_TRACE(IRT, "    NACL_IRT_FILENAME_READLINK(%u (%s), %u, %u, %u)\n", path_p,
@@ -6308,10 +6330,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_STAT(PNThread* thread,
   PN_BUILTIN_ARG(pathname_p, 0, u32);
   PN_BUILTIN_ARG(stat_p, 1, u32);
 
-  uint32_t end_p = pathname_p;
-  while (pn_memory_read_u8(executor->memory, end_p) != 0) {
-    end_p++;
-  }
+  pn_memory_check_cstr(executor->memory, pathname_p);
   char* pathname = executor->memory->data + pathname_p;
 
   PN_TRACE(IRT, "    NACL_IRT_FILENAME_STAT(%u (%s), %u)\n", pathname_p,
@@ -6653,7 +6672,6 @@ PN_BUILTIN_STUB(NACL_IRT_FDIO_FCHMOD)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_FSYNC)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_FDATASYNC)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_FTRUNCATE)
-PN_BUILTIN_STUB(NACL_IRT_FILENAME_OPEN)
 PN_BUILTIN_STUB(NACL_IRT_FILENAME_MKDIR)
 PN_BUILTIN_STUB(NACL_IRT_FILENAME_RMDIR)
 PN_BUILTIN_STUB(NACL_IRT_FILENAME_CHDIR)
