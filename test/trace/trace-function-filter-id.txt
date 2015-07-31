@@ -1,23 +1,42 @@
 # FLAGS: --trace-function-filter=3
 # FILE: res/main.pexe
-function %3 (__libnacl_mandatory_irt_query)
-bb:0 (succs: 1 2)
- defs: [%43,%44]
- uses: %43 %44
-  %43(int32). load src:%18(int32) align=1
-  %44(int1). cmp2 op:icmp_eq(32) %43(int32) %42(int32)
-  br %44(int1) ? 1 : 2
-bb:1 (succs:)
-  call %4(void(int32))(__libnacl_fatal) args: %19(int32)
-  unreachable
-bb:2 (succs: 4 3)
- defs: [%45,%46]
- uses: %43 %45 %46
-  %45(int32). call indirect %43(int32) args: %39(int32) %40(int32) %41(int32)
-  %46(int1). cmp2 op:icmp_eq(32) %45(int32) %41(int32)
-  br %46(int1) ? 4 : 3
-bb:3 (succs:)
-  call %4(void(int32))(__libnacl_fatal) args: %20(int32)
-  unreachable
+function %3 (__libnacl_fatal)
+bb:0 (succs: 4 1)
+ defs: [%46,%49]
+ uses: %47 %48 %49
+  %46(int32). alloca %42(int32) align=4
+  %47(int32). binop op:add(0) %16(int32) %43(int32) (flags:0)
+  %48(int32). load src:%47(int32) align=1
+  %49(int1). cmp2 op:icmp_eq(32) %48(int32) %40(int32)
+  br %49(int1) ? 4 : 1
+bb:1 (succs: 3 2)
+ defs: [%50,%51]
+ uses: %50 %51
+ phi assigns: bb:2,%52<=%40 bb:2,%53<=%39 bb:3,%58<=%40
+  %50(int8). load src:%39(int32) align=1
+  %51(int1). cmp2 op:icmp_eq(32) %50(int8) %45(int8)
+  br %51(int1) ? 3 : 2
+bb:2 (succs: 3 2)
+ defs: [%52,%57]
+ uses: %52 %53 %54 %56 %57
+ phi uses: bb:2=>%55 bb:1=>%40 bb:2=>%54 bb:1=>%39
+ phi assigns: bb:2,%52<=%55 bb:2,%53<=%54 bb:3,%58<=%55
+  forwardtyperef %55(int32) int32
+  %52(int32). phi bb:2=>%55(int32) bb:1=>%40(int32)
+  forwardtyperef %54(int32) int32
+  %53(int32). phi bb:2=>%54(int32) bb:1=>%39(int32)
+  %54(int32). binop op:add(0) %53(int32) %41(int32) (flags:0)
+  %55(int32). binop op:add(0) %52(int32) %41(int32) (flags:0)
+  %56(int8). load src:%54(int32) align=1
+  %57(int1). cmp2 op:icmp_eq(32) %56(int8) %45(int8)
+  br %57(int1) ? 3 : 2
+bb:3 (succs: 4)
+ defs: [%58,%59]
+ uses: %46 %48 %58
+ phi uses: bb:1=>%40 bb:2=>%55
+  %58(int32). phi bb:1=>%40(int32) bb:2=>%55(int32)
+  %59(int32). call indirect %48(int32) args: %44(int32) %39(int32) %58(int32) %46(int32)
+  br 4
 bb:4 (succs:)
-  ret
+  call %1(void())(llvm.trap) args:
+  unreachable

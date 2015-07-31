@@ -1,37 +1,35 @@
 # FLAGS: --trace-function-block
 # FILE: res/main.pexe
-function %2 (_start)
-  %39. function arg 0
-num bbs:57
-*** SUBBLOCK CONSTANTS (11)
-*** END BLOCK
-function %3 (__libnacl_mandatory_irt_query)
+function %2 (__libnacl_mandatory_irt_query)
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
 num bbs:5
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %4 (__libnacl_fatal)
+function %3 (__libnacl_fatal)
   %39. function arg 0
 num bbs:5
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %5 (stub_getdents)
+function %4 (stub_close)
   %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-  %42. function arg 3
 num bbs:1
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %6 (stub_fstat)
+function %5 (stub_dup)
   %39. function arg 0
   %40. function arg 1
 num bbs:1
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %7 (stub_seek)
+function %6 (stub_dup2)
+  %39. function arg 0
+  %40. function arg 1
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+*** END BLOCK
+function %7 (stub_read)
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
@@ -47,7 +45,7 @@ function %8 (stub_write)
 num bbs:1
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %9 (stub_read)
+function %9 (stub_seek)
   %39. function arg 0
   %40. function arg 1
   %41. function arg 2
@@ -55,21 +53,23 @@ function %9 (stub_read)
 num bbs:1
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %10 (stub_dup2)
+function %10 (stub_fstat)
   %39. function arg 0
   %40. function arg 1
 num bbs:1
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %11 (stub_dup)
+function %11 (stub_getdents)
   %39. function arg 0
   %40. function arg 1
+  %41. function arg 2
+  %42. function arg 3
 num bbs:1
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
-function %12 (stub_close)
+function %12 (_start)
   %39. function arg 0
-num bbs:1
+num bbs:57
 *** SUBBLOCK CONSTANTS (11)
 *** END BLOCK
 function %13 (__libnacl_irt_mprotect)

@@ -1,6 +1,42 @@
 # FLAGS: --trace-constants-block
 # FILE: res/main.pexe
   constants settype 0 (int32)
+  %42. integer 0
+*** END BLOCK
+  constants settype 0 (int32)
+  %40. integer 0
+  %41. integer 1
+  %42. integer 4
+  %43. integer 16
+  %44. integer 2
+  constants settype 3 (int8)
+  %45. integer 0
+*** END BLOCK
+  constants settype 0 (int32)
+  %40. integer 38
+*** END BLOCK
+  constants settype 0 (int32)
+  %41. integer 38
+*** END BLOCK
+  constants settype 0 (int32)
+  %41. integer 38
+*** END BLOCK
+  constants settype 0 (int32)
+  %43. integer 38
+*** END BLOCK
+  constants settype 0 (int32)
+  %43. integer 38
+*** END BLOCK
+  constants settype 0 (int32)
+  %43. integer 38
+*** END BLOCK
+  constants settype 0 (int32)
+  %41. integer 38
+*** END BLOCK
+  constants settype 0 (int32)
+  %43. integer 38
+*** END BLOCK
+  constants settype 0 (int32)
   %40. integer 0
   %41. integer 4
   %42. integer 8
@@ -32,42 +68,6 @@
   %67. integer 0
   constants settype 9 (int64)
   %68. integer 0
-*** END BLOCK
-  constants settype 0 (int32)
-  %42. integer 0
-*** END BLOCK
-  constants settype 0 (int32)
-  %40. integer 0
-  %41. integer 1
-  %42. integer 4
-  %43. integer 16
-  %44. integer 2
-  constants settype 3 (int8)
-  %45. integer 0
-*** END BLOCK
-  constants settype 0 (int32)
-  %43. integer 38
-*** END BLOCK
-  constants settype 0 (int32)
-  %41. integer 38
-*** END BLOCK
-  constants settype 0 (int32)
-  %43. integer 38
-*** END BLOCK
-  constants settype 0 (int32)
-  %43. integer 38
-*** END BLOCK
-  constants settype 0 (int32)
-  %43. integer 38
-*** END BLOCK
-  constants settype 0 (int32)
-  %41. integer 38
-*** END BLOCK
-  constants settype 0 (int32)
-  %41. integer 38
-*** END BLOCK
-  constants settype 0 (int32)
-  %40. integer 38
 *** END BLOCK
   constants settype 0 (int32)
   %42. integer 38

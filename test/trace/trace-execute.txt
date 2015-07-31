@@ -38,10 +38,10 @@ auxv = 3664
     %82 = 24  %81 = 6  %41 = 4
   %83(int32). binop op:add(0) %39(int32) %82(int32) (flags:0)
     %83 = 3664  %39 = 3640  %82 = 24
-  store dest:%32(int32) value:%77(int32) align=1
-    %32 = 1336  %77 = 3660
-  store dest:%16(int32) value:%71(int32) align=1
-    %16 = 1024  %71 = 1048552
+  store dest:%31(int32) value:%77(int32) align=1
+    %31 = 1332  %77 = 3660
+  store dest:%23(int32) value:%71(int32) align=1
+    %23 = 1192  %71 = 1048552
   br 1
     %84 <= %83
 bb = 1
@@ -56,8 +56,8 @@ bb = 2
     %86 = 3668  %84 = 3664  %41 = 4
   %87(int32). load src:%86(int32) align=1
     %87 = 4  %86 = 3668
-  store dest:%18(int32) value:%87(int32) align=1
-    %18 = 1060  %87 = 4
+  store dest:%17(int32) value:%87(int32) align=1
+    %17 = 1056  %87 = 4
   br 3
 bb = 3
   %88(int32). binop op:add(0) %84(int32) %42(int32) (flags:0)
@@ -72,72 +72,72 @@ bb = 1
   switch value:%85(int32) [default:3] [0 => bb:4] [32 => bb:2]
     %85 = 0
 bb = 4
-  %89(int32). load src:%18(int32) align=1
-    %89 = 4  %18 = 1060
+  %89(int32). load src:%17(int32) align=1
+    %89 = 4  %17 = 1056
   %90(int1). cmp2 op:icmp_eq(32) %89(int32) %40(int32)
     %90 = 0  %89 = 4  %40 = 0
   br %90(int1) ? 5 : 6
     %90 = 0
 bb = 6
-  %91(int32). call indirect %89(int32) args: %24(int32) %17(int32) %47(int32)
-    NACL_IRT_QUERY(1196 (nacl-irt-fdio-0.1), 1028, 32)
+  %91(int32). call indirect %89(int32) args: %24(int32) %16(int32) %47(int32)
+    NACL_IRT_QUERY(1196 (nacl-irt-fdio-0.1), 1024, 32)
   %92(int1). cmp2 op:icmp_eq(32) %91(int32) %47(int32)
     %92 = 1  %91 = 32  %47 = 32
   br %92(int1) ? 10 : 7
     %92 = 1
 bb = 10
-  call %3(void(int32,int32,int32))(__libnacl_mandatory_irt_query) args: %26(int32) %21(int32) %56(int32)
-    %26 = 1236  %21 = 1152  %56 = 24  
-function = 3 bb = 0
-  %43(int32). load src:%18(int32) align=1
-    %43 = 4  %18 = 1060
+  call %2(void(int32,int32,int32))(__libnacl_mandatory_irt_query) args: %26(int32) %18(int32) %56(int32)
+    %26 = 1236  %18 = 1060  %56 = 24  
+function = 2 bb = 0
+  %43(int32). load src:%17(int32) align=1
+    %43 = 4  %17 = 1056
   %44(int1). cmp2 op:icmp_eq(32) %43(int32) %42(int32)
     %44 = 0  %43 = 4  %42 = 0
   br %44(int1) ? 1 : 2
     %44 = 0
 bb = 2
   %45(int32). call indirect %43(int32) args: %39(int32) %40(int32) %41(int32)
-    NACL_IRT_QUERY(1236 (nacl-irt-basic-0.1), 1152, 24)
+    NACL_IRT_QUERY(1236 (nacl-irt-basic-0.1), 1060, 24)
   %46(int1). cmp2 op:icmp_eq(32) %45(int32) %41(int32)
     %46 = 1  %45 = 24  %41 = 24
   br %46(int1) ? 4 : 3
     %46 = 1
 bb = 4
   ret
-function = 2  bb = 10
-  %96(int32). load src:%18(int32) align=1
-    %96 = 4  %18 = 1060
+function = 12  bb = 10
+  %96(int32). load src:%17(int32) align=1
+    %96 = 4  %17 = 1056
   %97(int1). cmp2 op:icmp_eq(32) %96(int32) %40(int32)
     %97 = 0  %96 = 4  %40 = 0
   br %97(int1) ? 11 : 12
     %97 = 0
 bb = 12
-  %98(int32). call indirect %96(int32) args: %27(int32) %22(int32) %48(int32)
-    NACL_IRT_QUERY(1255 (nacl-irt-memory-0.3), 1176, 12)
+  %98(int32). call indirect %96(int32) args: %27(int32) %19(int32) %48(int32)
+    NACL_IRT_QUERY(1255 (nacl-irt-memory-0.3), 1084, 12)
   %99(int1). cmp2 op:icmp_eq(32) %98(int32) %48(int32)
     %99 = 1  %98 = 12  %48 = 12
   br %99(int1) ? 18 : 13
     %99 = 1
 bb = 18
-  call %3(void(int32,int32,int32))(__libnacl_mandatory_irt_query) args: %30(int32) %23(int32) %42(int32)
-    %30 = 1315  %23 = 1188  %42 = 8  
-function = 3 bb = 0
-  %43(int32). load src:%18(int32) align=1
-    %43 = 4  %18 = 1060
+  call %2(void(int32,int32,int32))(__libnacl_mandatory_irt_query) args: %30(int32) %20(int32) %42(int32)
+    %30 = 1315  %20 = 1096  %42 = 8  
+function = 2 bb = 0
+  %43(int32). load src:%17(int32) align=1
+    %43 = 4  %17 = 1056
   %44(int1). cmp2 op:icmp_eq(32) %43(int32) %42(int32)
     %44 = 0  %43 = 4  %42 = 0
   br %44(int1) ? 1 : 2
     %44 = 0
 bb = 2
   %45(int32). call indirect %43(int32) args: %39(int32) %40(int32) %41(int32)
-    NACL_IRT_QUERY(1315 (nacl-irt-tls-0.1), 1188, 8)
+    NACL_IRT_QUERY(1315 (nacl-irt-tls-0.1), 1096, 8)
   %46(int1). cmp2 op:icmp_eq(32) %45(int32) %41(int32)
     %46 = 1  %45 = 8  %41 = 8
   br %46(int1) ? 4 : 3
     %46 = 1
 bb = 4
   ret
-function = 2  bb = 18
+function = 12  bb = 18
   %110(int1). cmp2 op:icmp_eq(32) %72(int32) %40(int32)
     %110 = 1  %72 = 0  %40 = 0
   br %110(int1) ? 23 : 19
@@ -212,8 +212,8 @@ bb = 30
     %146 = 1155  %145 = 1  %51 = 1155
   store dest:%69(int32) value:%40(int32) align=1
     %69 = 1048572  %40 = 0
-  %147(int32). load src:%22(int32) align=1
-    %147 = 152  %22 = 1176
+  %147(int32). load src:%19(int32) align=1
+    %147 = 152  %19 = 1084
   %148(int32). call indirect %147(int32) args: %69(int32) %146(int32) %57(int32) %58(int32) %49(int32) %68(int64)
     NACL_IRT_MEMORY_MMAP(1048572, 1155, 3, 34, -1, 0)
       Searching from [1, 1)
@@ -272,8 +272,8 @@ bb = 38
     %166 = 4096  %171 = 2496  %168 = 1144  %44 = 1  %67 = 0
   store dest:%167(int32) value:%167(int32) align=1
     %167 = 5240  %167 = 5240
-  %172(int32). load src:%23(int32) align=1
-    %172 = 164  %23 = 1188
+  %172(int32). load src:%20(int32) align=1
+    %172 = 164  %20 = 1096
   %173(int32). call indirect %172(int32) args: %167(int32)
     NACL_IRT_TLS_INIT(5240)
   %174(int32). call %15(int32())(llvm.nacl.read.tp) args:
@@ -358,7 +358,7 @@ bb = 49
     %194 = 248 
 function = 14 bb = 0
   ret
-function = 2  bb = 49
+function = 12  bb = 49
   br 53
 bb = 53
   %210(int32). load src:%182(int32) align=1
@@ -390,7 +390,7 @@ bb = 54
   br %218(int1) ? 56 : 55
     %218 = 1
 bb = 56
-  %219(int32). load src:%21(int32) align=1
-    %219 = 8  %21 = 1152
+  %219(int32). load src:%18(int32) align=1
+    %219 = 8  %18 = 1060
   call indirect %219(int32) args: %40(int32)
     NACL_IRT_BASIC_EXIT(0)

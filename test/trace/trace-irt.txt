@@ -1,9 +1,9 @@
 # FLAGS: --trace-irt -r
 # FILE: res/main.pexe
-    NACL_IRT_QUERY(1196 (nacl-irt-fdio-0.1), 1028, 32)
-    NACL_IRT_QUERY(1236 (nacl-irt-basic-0.1), 1152, 24)
-    NACL_IRT_QUERY(1255 (nacl-irt-memory-0.3), 1176, 12)
-    NACL_IRT_QUERY(1315 (nacl-irt-tls-0.1), 1188, 8)
+    NACL_IRT_QUERY(1196 (nacl-irt-fdio-0.1), 1024, 32)
+    NACL_IRT_QUERY(1236 (nacl-irt-basic-0.1), 1060, 24)
+    NACL_IRT_QUERY(1255 (nacl-irt-memory-0.3), 1084, 12)
+    NACL_IRT_QUERY(1315 (nacl-irt-tls-0.1), 1096, 8)
     NACL_IRT_MEMORY_MMAP(1048572, 1155, 3, 34, -1, 0)
       Searching from [1, 1)
       returning 4096, errno = 0

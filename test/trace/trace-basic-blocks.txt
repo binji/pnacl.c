@@ -1,6 +1,107 @@
 # FLAGS: --trace-basic-blocks
 # FILE: res/main.pexe
-function %2 (_start)
+function %2 (__libnacl_mandatory_irt_query)
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+num bbs:5
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs: 1 2)
+ defs: [%43,%44]
+ uses: %43 %44
+bb:1 (succs:)
+bb:2 (succs: 4 3)
+ defs: [%45,%46]
+ uses: %43 %45 %46
+bb:3 (succs:)
+bb:4 (succs:)
+*** END BLOCK
+function %3 (__libnacl_fatal)
+  %39. function arg 0
+num bbs:5
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs: 4 1)
+ defs: [%46,%49]
+ uses: %47 %48 %49
+bb:1 (succs: 3 2)
+ defs: [%50,%51]
+ uses: %50 %51
+ phi assigns: bb:2,%52<=%40 bb:2,%53<=%39 bb:3,%58<=%40
+bb:2 (succs: 3 2)
+ defs: [%52,%57]
+ uses: %52 %53 %54 %56 %57
+ phi uses: bb:2=>%55 bb:1=>%40 bb:2=>%54 bb:1=>%39
+ phi assigns: bb:2,%52<=%55 bb:2,%53<=%54 bb:3,%58<=%55
+bb:3 (succs: 4)
+ defs: [%58,%59]
+ uses: %46 %48 %58
+ phi uses: bb:1=>%40 bb:2=>%55
+bb:4 (succs:)
+*** END BLOCK
+function %4 (stub_close)
+  %39. function arg 0
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs:)
+*** END BLOCK
+function %5 (stub_dup)
+  %39. function arg 0
+  %40. function arg 1
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs:)
+*** END BLOCK
+function %6 (stub_dup2)
+  %39. function arg 0
+  %40. function arg 1
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs:)
+*** END BLOCK
+function %7 (stub_read)
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+  %42. function arg 3
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs:)
+*** END BLOCK
+function %8 (stub_write)
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+  %42. function arg 3
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs:)
+*** END BLOCK
+function %9 (stub_seek)
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+  %42. function arg 3
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs:)
+*** END BLOCK
+function %10 (stub_fstat)
+  %39. function arg 0
+  %40. function arg 1
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs:)
+*** END BLOCK
+function %11 (stub_getdents)
+  %39. function arg 0
+  %40. function arg 1
+  %41. function arg 2
+  %42. function arg 3
+num bbs:1
+*** SUBBLOCK CONSTANTS (11)
+bb:0 (succs:)
+*** END BLOCK
+function %12 (_start)
   %39. function arg 0
 num bbs:57
 *** SUBBLOCK CONSTANTS (11)
@@ -183,107 +284,6 @@ bb:55 (succs: 56)
 bb:56 (succs:)
  defs: [%219,%219]
  uses: %219
-*** END BLOCK
-function %3 (__libnacl_mandatory_irt_query)
-  %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-num bbs:5
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs: 1 2)
- defs: [%43,%44]
- uses: %43 %44
-bb:1 (succs:)
-bb:2 (succs: 4 3)
- defs: [%45,%46]
- uses: %43 %45 %46
-bb:3 (succs:)
-bb:4 (succs:)
-*** END BLOCK
-function %4 (__libnacl_fatal)
-  %39. function arg 0
-num bbs:5
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs: 4 1)
- defs: [%46,%49]
- uses: %47 %48 %49
-bb:1 (succs: 3 2)
- defs: [%50,%51]
- uses: %50 %51
- phi assigns: bb:2,%52<=%40 bb:2,%53<=%39 bb:3,%58<=%40
-bb:2 (succs: 3 2)
- defs: [%52,%57]
- uses: %52 %53 %54 %56 %57
- phi uses: bb:2=>%55 bb:1=>%40 bb:2=>%54 bb:1=>%39
- phi assigns: bb:2,%52<=%55 bb:2,%53<=%54 bb:3,%58<=%55
-bb:3 (succs: 4)
- defs: [%58,%59]
- uses: %46 %48 %58
- phi uses: bb:1=>%40 bb:2=>%55
-bb:4 (succs:)
-*** END BLOCK
-function %5 (stub_getdents)
-  %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-  %42. function arg 3
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs:)
-*** END BLOCK
-function %6 (stub_fstat)
-  %39. function arg 0
-  %40. function arg 1
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs:)
-*** END BLOCK
-function %7 (stub_seek)
-  %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-  %42. function arg 3
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs:)
-*** END BLOCK
-function %8 (stub_write)
-  %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-  %42. function arg 3
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs:)
-*** END BLOCK
-function %9 (stub_read)
-  %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-  %42. function arg 3
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs:)
-*** END BLOCK
-function %10 (stub_dup2)
-  %39. function arg 0
-  %40. function arg 1
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs:)
-*** END BLOCK
-function %11 (stub_dup)
-  %39. function arg 0
-  %40. function arg 1
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs:)
-*** END BLOCK
-function %12 (stub_close)
-  %39. function arg 0
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs:)
 *** END BLOCK
 function %13 (__libnacl_irt_mprotect)
   %39. function arg 0

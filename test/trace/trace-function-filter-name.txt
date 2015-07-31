@@ -1,6 +1,6 @@
 # FLAGS: --trace-function-filter=_start
 # FILE: res/main.pexe
-function %2 (_start)
+function %12 (_start)
 bb:0 (succs: 1)
  defs: [%69,%83]
  uses: %71 %73 %74 %75 %76 %77 %78 %79 %80 %81 %82
@@ -21,8 +21,8 @@ bb:0 (succs: 1)
   %81(int32). binop op:add(0) %80(int32) %79(int32) (flags:0)
   %82(int32). binop op:mul(2) %81(int32) %41(int32) (flags:0)
   %83(int32). binop op:add(0) %39(int32) %82(int32) (flags:0)
-  store dest:%32(int32) value:%77(int32) align=1
-  store dest:%16(int32) value:%71(int32) align=1
+  store dest:%31(int32) value:%77(int32) align=1
+  store dest:%23(int32) value:%71(int32) align=1
   br 1
 bb:1 (succs: 3 4 2)
  defs: [%84,%85]
@@ -37,7 +37,7 @@ bb:2 (succs: 3)
  uses: %84 %86 %87
   %86(int32). binop op:add(0) %84(int32) %41(int32) (flags:0)
   %87(int32). load src:%86(int32) align=1
-  store dest:%18(int32) value:%87(int32) align=1
+  store dest:%17(int32) value:%87(int32) align=1
   br 3
 bb:3 (succs: 1)
  defs: [%88,%88]
@@ -48,56 +48,56 @@ bb:3 (succs: 1)
 bb:4 (succs: 5 6)
  defs: [%89,%90]
  uses: %89 %90
-  %89(int32). load src:%18(int32) align=1
+  %89(int32). load src:%17(int32) align=1
   %90(int1). cmp2 op:icmp_eq(32) %89(int32) %40(int32)
   br %90(int1) ? 5 : 6
 bb:5 (succs:)
-  call %4(void(int32))(__libnacl_fatal) args: %19(int32)
+  call %3(void(int32))(__libnacl_fatal) args: %21(int32)
   unreachable
 bb:6 (succs: 10 7)
  defs: [%91,%92]
  uses: %89 %91 %92
-  %91(int32). call indirect %89(int32) args: %24(int32) %17(int32) %47(int32)
+  %91(int32). call indirect %89(int32) args: %24(int32) %16(int32) %47(int32)
   %92(int1). cmp2 op:icmp_eq(32) %91(int32) %47(int32)
   br %92(int1) ? 10 : 7
 bb:7 (succs: 8 9)
  defs: [%93,%94]
  uses: %93 %94
-  %93(int32). load src:%18(int32) align=1
+  %93(int32). load src:%17(int32) align=1
   %94(int1). cmp2 op:icmp_eq(32) %93(int32) %40(int32)
   br %94(int1) ? 8 : 9
 bb:8 (succs:)
-  call %4(void(int32))(__libnacl_fatal) args: %19(int32)
+  call %3(void(int32))(__libnacl_fatal) args: %21(int32)
   unreachable
 bb:9 (succs: 10)
  defs: [%95,%95]
  uses: %93
-  %95(int32). call indirect %93(int32) args: %25(int32) %17(int32) %47(int32)
+  %95(int32). call indirect %93(int32) args: %25(int32) %16(int32) %47(int32)
   br 10
 bb:10 (succs: 11 12)
  defs: [%96,%97]
  uses: %96 %97
-  call %3(void(int32,int32,int32))(__libnacl_mandatory_irt_query) args: %26(int32) %21(int32) %56(int32)
-  %96(int32). load src:%18(int32) align=1
+  call %2(void(int32,int32,int32))(__libnacl_mandatory_irt_query) args: %26(int32) %18(int32) %56(int32)
+  %96(int32). load src:%17(int32) align=1
   %97(int1). cmp2 op:icmp_eq(32) %96(int32) %40(int32)
   br %97(int1) ? 11 : 12
 bb:11 (succs:)
-  call %4(void(int32))(__libnacl_fatal) args: %19(int32)
+  call %3(void(int32))(__libnacl_fatal) args: %21(int32)
   unreachable
 bb:12 (succs: 18 13)
  defs: [%98,%99]
  uses: %96 %98 %99
-  %98(int32). call indirect %96(int32) args: %27(int32) %22(int32) %48(int32)
+  %98(int32). call indirect %96(int32) args: %27(int32) %19(int32) %48(int32)
   %99(int1). cmp2 op:icmp_eq(32) %98(int32) %48(int32)
   br %99(int1) ? 18 : 13
 bb:13 (succs: 14 15)
  defs: [%100,%101]
  uses: %100 %101
-  %100(int32). load src:%18(int32) align=1
+  %100(int32). load src:%17(int32) align=1
   %101(int1). cmp2 op:icmp_eq(32) %100(int32) %40(int32)
   br %101(int1) ? 14 : 15
 bb:14 (succs:)
-  call %4(void(int32))(__libnacl_fatal) args: %19(int32)
+  call %3(void(int32))(__libnacl_fatal) args: %21(int32)
   unreachable
 bb:15 (succs: 17 16)
  defs: [%102,%103]
@@ -108,8 +108,8 @@ bb:15 (succs: 17 16)
 bb:16 (succs: 17)
  defs: [%104,%104]
  uses: %70 %104
-  call %3(void(int32,int32,int32))(__libnacl_mandatory_irt_query) args: %29(int32) %70(int32) %48(int32)
-  %104(int32). binop op:add(0) %22(int32) %42(int32) (flags:0)
+  call %2(void(int32,int32,int32))(__libnacl_mandatory_irt_query) args: %29(int32) %70(int32) %48(int32)
+  %104(int32). binop op:add(0) %19(int32) %42(int32) (flags:0)
   store dest:%104(int32) value:%13(int32(int32,int32,int32)) align=1
   br 17
 bb:17 (succs: 18)
@@ -117,16 +117,16 @@ bb:17 (succs: 18)
  uses: %70 %105 %106 %107 %108 %109
   %105(int32). binop op:add(0) %70(int32) %41(int32) (flags:0)
   %106(int32). load src:%105(int32) align=1
-  store dest:%22(int32) value:%106(int32) align=1
+  store dest:%19(int32) value:%106(int32) align=1
   %107(int32). binop op:add(0) %70(int32) %42(int32) (flags:0)
   %108(int32). load src:%107(int32) align=1
-  %109(int32). binop op:add(0) %22(int32) %41(int32) (flags:0)
+  %109(int32). binop op:add(0) %19(int32) %41(int32) (flags:0)
   store dest:%109(int32) value:%108(int32) align=1
   br 18
 bb:18 (succs: 23 19)
  defs: [%110,%110]
  uses: %72 %110
-  call %3(void(int32,int32,int32))(__libnacl_mandatory_irt_query) args: %30(int32) %23(int32) %42(int32)
+  call %2(void(int32,int32,int32))(__libnacl_mandatory_irt_query) args: %30(int32) %20(int32) %42(int32)
   %110(int1). cmp2 op:icmp_eq(32) %72(int32) %40(int32)
   br %110(int1) ? 23 : 19
 bb:19 (succs: 20 21)
@@ -231,7 +231,7 @@ bb:30 (succs: 32 31)
   %145(int1). phi bb:28=>%142(int1) bb:29=>%66(int1)
   %146(int32). vselect %145(int1) ? %51(int32) : %52(int32)
   store dest:%69(int32) value:%40(int32) align=1
-  %147(int32). load src:%22(int32) align=1
+  %147(int32). load src:%19(int32) align=1
   %148(int32). call indirect %147(int32) args: %69(int32) %146(int32) %57(int32) %58(int32) %49(int32) %68(int64)
   %149(int1). cmp2 op:icmp_eq(32) %148(int32) %40(int32)
   br %149(int1) ? 32 : 31
@@ -300,7 +300,7 @@ bb:38 (succs: 54 40)
   %171(int32). load src:%33(int32) align=1
   call %0(void(int32,int32,int32,int32,int1))(llvm.memcpy.p0i8.p0i8.i32) args: %166(int32) %171(int32) %168(int32) %44(int32) %67(int1)
   store dest:%167(int32) value:%167(int32) align=1
-  %172(int32). load src:%23(int32) align=1
+  %172(int32). load src:%20(int32) align=1
   %173(int32). call indirect %172(int32) args: %167(int32)
   %174(int32). call %15(int32())(llvm.nacl.read.tp) args:
   %175(int32). binop op:add(0) %174(int32) %53(int32) (flags:0)
@@ -428,7 +428,7 @@ bb:55 (succs: 56)
 bb:56 (succs:)
  defs: [%219,%219]
  uses: %219
-  %219(int32). load src:%21(int32) align=1
+  %219(int32). load src:%18(int32) align=1
   call indirect %219(int32) args: %40(int32)
   call %1(void())(llvm.trap) args:
   unreachable
