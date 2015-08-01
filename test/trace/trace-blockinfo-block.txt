@@ -1,7 +1,8 @@
 # FLAGS: --trace-blockinfo-block
 # FILE: res/start.pexe
-block id: 14
-block id: 11
-block id: 12
-block id: 19
-*** END BLOCK
+abbreviations {  // BlockID = 0
+  valuesymtab:
+  constants:
+  function:
+  globals:
+}

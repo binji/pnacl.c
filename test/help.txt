@@ -9,7 +9,9 @@ options:
   -E, --use-host-env                  
   -t, --trace-all                     
       --trace-block                   
+      --trace-bcdis                   
       --trace-flags                   
+      --trace-abbrev                  
       --trace-blockinfo-block         
       --trace-type-block              
       --trace-globalvar-block         

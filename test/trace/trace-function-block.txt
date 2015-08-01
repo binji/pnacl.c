@@ -1,84 +1,41 @@
 # FLAGS: --trace-function-block
 # FILE: res/main.pexe
-function %2 (__libnacl_mandatory_irt_query)
-  %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-num bbs:5
-*** SUBBLOCK CONSTANTS (11)
-*** END BLOCK
-function %3 (__libnacl_fatal)
-  %39. function arg 0
-num bbs:5
-*** SUBBLOCK CONSTANTS (11)
-*** END BLOCK
-function %4 (stub_close)
-  %39. function arg 0
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-*** END BLOCK
-function %5 (stub_dup)
-  %39. function arg 0
-  %40. function arg 1
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-*** END BLOCK
-function %6 (stub_dup2)
-  %39. function arg 0
-  %40. function arg 1
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-*** END BLOCK
-function %7 (stub_read)
-  %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-  %42. function arg 3
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-*** END BLOCK
-function %8 (stub_write)
-  %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-  %42. function arg 3
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-*** END BLOCK
-function %9 (stub_seek)
-  %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-  %42. function arg 3
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-*** END BLOCK
-function %10 (stub_fstat)
-  %39. function arg 0
-  %40. function arg 1
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-*** END BLOCK
-function %11 (stub_getdents)
-  %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-  %42. function arg 3
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-*** END BLOCK
-function %12 (_start)
-  %39. function arg 0
-num bbs:57
-*** SUBBLOCK CONSTANTS (11)
-*** END BLOCK
-function %13 (__libnacl_irt_mprotect)
-  %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-*** END BLOCK
-function %14 (__libc_fini_array)
-num bbs:1
-*** END BLOCK
+function void @f2(i32 %p0, i32 %p1, i32 %p2) {  // BlockID = 12
+  blocks 5;
+}
+function void @f3(i32 %p0) {  // BlockID = 12
+  blocks 5;
+}
+function i32 @f4(i32 %p0) {  // BlockID = 12
+  blocks 1;
+}
+function i32 @f5(i32 %p0, i32 %p1) {  // BlockID = 12
+  blocks 1;
+}
+function i32 @f6(i32 %p0, i32 %p1) {  // BlockID = 12
+  blocks 1;
+}
+function i32 @f7(i32 %p0, i32 %p1, i32 %p2, i32 %p3) {  // BlockID = 12
+  blocks 1;
+}
+function i32 @f8(i32 %p0, i32 %p1, i32 %p2, i32 %p3) {  // BlockID = 12
+  blocks 1;
+}
+function i32 @f9(i32 %p0, i64 %p1, i32 %p2, i32 %p3) {  // BlockID = 12
+  blocks 1;
+}
+function i32 @f10(i32 %p0, i32 %p1) {  // BlockID = 12
+  blocks 1;
+}
+function i32 @f11(i32 %p0, i32 %p1, i32 %p2, i32 %p3) {  // BlockID = 12
+  blocks 1;
+}
+function void @f12(i32 %p0) {  // BlockID = 12
+  blocks 57;
+}
+function i32 @f13(i32 %p0, i32 %p1, i32 %p2) {  // BlockID = 12
+  blocks 1;
+}
+function void @f14() {  // BlockID = 12
+  blocks 1;
+}

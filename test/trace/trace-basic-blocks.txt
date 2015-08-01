@@ -1,299 +1,118 @@
 # FLAGS: --trace-basic-blocks
 # FILE: res/main.pexe
-function %2 (__libnacl_mandatory_irt_query)
-  %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-num bbs:5
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs: 1 2)
- defs: [%43,%44]
- uses: %43 %44
-bb:1 (succs:)
-bb:2 (succs: 4 3)
- defs: [%45,%46]
- uses: %43 %45 %46
-bb:3 (succs:)
-bb:4 (succs:)
-*** END BLOCK
-function %3 (__libnacl_fatal)
-  %39. function arg 0
-num bbs:5
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs: 4 1)
- defs: [%46,%49]
- uses: %47 %48 %49
-bb:1 (succs: 3 2)
- defs: [%50,%51]
- uses: %50 %51
- phi assigns: bb:2,%52<=%40 bb:2,%53<=%39 bb:3,%58<=%40
-bb:2 (succs: 3 2)
- defs: [%52,%57]
- uses: %52 %53 %54 %56 %57
- phi uses: bb:2=>%55 bb:1=>%40 bb:2=>%54 bb:1=>%39
- phi assigns: bb:2,%52<=%55 bb:2,%53<=%54 bb:3,%58<=%55
-bb:3 (succs: 4)
- defs: [%58,%59]
- uses: %46 %48 %58
- phi uses: bb:1=>%40 bb:2=>%55
-bb:4 (succs:)
-*** END BLOCK
-function %4 (stub_close)
-  %39. function arg 0
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs:)
-*** END BLOCK
-function %5 (stub_dup)
-  %39. function arg 0
-  %40. function arg 1
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs:)
-*** END BLOCK
-function %6 (stub_dup2)
-  %39. function arg 0
-  %40. function arg 1
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs:)
-*** END BLOCK
-function %7 (stub_read)
-  %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-  %42. function arg 3
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs:)
-*** END BLOCK
-function %8 (stub_write)
-  %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-  %42. function arg 3
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs:)
-*** END BLOCK
-function %9 (stub_seek)
-  %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-  %42. function arg 3
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs:)
-*** END BLOCK
-function %10 (stub_fstat)
-  %39. function arg 0
-  %40. function arg 1
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs:)
-*** END BLOCK
-function %11 (stub_getdents)
-  %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-  %42. function arg 3
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs:)
-*** END BLOCK
-function %12 (_start)
-  %39. function arg 0
-num bbs:57
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs: 1)
- defs: [%69,%83]
- uses: %71 %73 %74 %75 %76 %77 %78 %79 %80 %81 %82
- phi assigns: bb:1,%84<=%83
-bb:1 (succs: 3 4 2)
- defs: [%84,%85]
- uses: %84 %85
- phi uses: bb:0=>%83 bb:3=>%88
-bb:2 (succs: 3)
- defs: [%86,%87]
- uses: %84 %86 %87
-bb:3 (succs: 1)
- defs: [%88,%88]
- uses: %84
- phi assigns: bb:1,%84<=%88
-bb:4 (succs: 5 6)
- defs: [%89,%90]
- uses: %89 %90
-bb:5 (succs:)
-bb:6 (succs: 10 7)
- defs: [%91,%92]
- uses: %89 %91 %92
-bb:7 (succs: 8 9)
- defs: [%93,%94]
- uses: %93 %94
-bb:8 (succs:)
-bb:9 (succs: 10)
- defs: [%95,%95]
- uses: %93
-bb:10 (succs: 11 12)
- defs: [%96,%97]
- uses: %96 %97
-bb:11 (succs:)
-bb:12 (succs: 18 13)
- defs: [%98,%99]
- uses: %96 %98 %99
-bb:13 (succs: 14 15)
- defs: [%100,%101]
- uses: %100 %101
-bb:14 (succs:)
-bb:15 (succs: 17 16)
- defs: [%102,%103]
- uses: %70 %100 %102 %103
-bb:16 (succs: 17)
- defs: [%104,%104]
- uses: %70 %104
-bb:17 (succs: 18)
- defs: [%105,%109]
- uses: %70 %105 %106 %107 %108 %109
-bb:18 (succs: 23 19)
- defs: [%110,%110]
- uses: %72 %110
-bb:19 (succs: 20 21)
- defs: [%111,%113]
- uses: %111 %112 %113
- phi assigns: bb:21,%117<=%112
-bb:20 (succs: 21)
- defs: [%114,%116]
- uses: %114 %115
- phi assigns: bb:21,%117<=%116
-bb:21 (succs: 23 22)
- defs: [%117,%120]
- uses: %117 %118 %119 %120
- phi uses: bb:20=>%116 bb:19=>%112
-bb:22 (succs: 23)
- defs: [%121,%124]
- uses: %72 %117 %118 %119 %121 %122 %123 %124
-bb:23 (succs: 24 25)
- defs: [%125,%127]
- uses: %125 %126 %127
- phi assigns: bb:25,%131<=%126
-bb:24 (succs: 25)
- defs: [%128,%130]
- uses: %128 %129
- phi assigns: bb:25,%131<=%130
-bb:25 (succs: 27 26)
- defs: [%131,%134]
- uses: %131 %132 %133 %134
- phi uses: bb:24=>%130 bb:23=>%126
-bb:26 (succs: 27)
- defs: [%135,%138]
- uses: %131 %132 %133 %135 %136 %137 %138
-bb:27 (succs: 28 29)
- defs: [%139,%140]
- uses: %139 %140
-bb:28 (succs: 30)
- defs: [%141,%142]
- uses: %141
- phi assigns: bb:30,%145<=%142
-bb:29 (succs: 30)
- defs: [%143,%144]
- uses: %143 %144
- phi assigns: bb:30,%145<=%66
-bb:30 (succs: 32 31)
- defs: [%145,%149]
- uses: %69 %145 %146 %147 %148 %149
- phi uses: bb:28=>%142 bb:29=>%66
-bb:31 (succs: 33)
- defs: [%150,%152]
- uses: %148 %150 %151 %152
- phi assigns: bb:33,%154<=%49
-bb:32 (succs: 33)
- defs: [%153,%153]
- uses: %69
- phi assigns: bb:33,%154<=%153
-bb:33 (succs: 34 35)
- defs: [%154,%156]
- uses: %155 %156
- phi uses: bb:31=>%49 bb:32=>%153
-bb:34 (succs: 36)
- defs: [%157,%158]
- uses: %157
- phi assigns: bb:36,%161<=%158
-bb:35 (succs: 36)
- defs: [%159,%160]
- uses: %159 %160
- phi assigns: bb:36,%161<=%66
-bb:36 (succs: 37 38)
- defs: [%161,%170]
- uses: %154 %161 %162 %163 %164 %165 %166 %168 %169 %170
- phi uses: bb:34=>%158 bb:35=>%66
-bb:37 (succs:)
-bb:38 (succs: 54 40)
- defs: [%171,%179]
- uses: %166 %167 %168 %171 %172 %174 %175 %176 %177 %178 %179
- phi assigns: bb:40,%181<=%178
-bb:39 (succs: 54 40)
- defs: [%180,%180]
- uses: %180 %213
- phi assigns: bb:40,%181<=%213
-bb:40 (succs: 41 54)
- defs: [%181,%184]
- uses: %181 %182 %183 %184
- phi uses: bb:39=>%213 bb:38=>%178
-bb:41 (succs: 42)
- defs: [%185,%186]
- uses: %181
- phi assigns: bb:42,%187<=%183 bb:42,%188<=%183
-bb:42 (succs: 45 46)
- defs: [%187,%195]
- uses: %181 %187 %188 %189 %191 %192 %193 %195
- phi uses: bb:41=>%183 bb:44=>%197 bb:41=>%183 bb:44=>%189
-bb:43 (succs: 44 54)
- defs: [%196,%196]
- uses: %188 %196
-bb:44 (succs: 42)
- defs: [%197,%197]
- uses: %182
- phi assigns: bb:42,%187<=%197 bb:42,%188<=%189
-bb:45 (succs: 47)
- uses: %182 %189
-bb:46 (succs: 47)
- uses: %193
-bb:47 (succs: 43 48)
- defs: [%198,%198]
- uses: %194 %198
-bb:48 (succs: 49 50)
- defs: [%199,%202]
- uses: %182 %185 %190 %200 %201 %202
-bb:49 (succs: 53)
- uses: %194
-bb:50 (succs: 51 52)
- defs: [%203,%209]
- uses: %181 %186 %189 %190 %203 %204 %205 %206 %207 %208
-bb:51 (succs: 53)
- uses: %194 %209
-bb:52 (succs: 53)
- uses: %194 %209
-bb:53 (succs: 43 39)
- defs: [%210,%215]
- uses: %181 %182 %199 %210 %211 %212 %213 %214 %215
-bb:54 (succs: 56 55)
- defs: [%216,%218]
- uses: %216 %217 %218
-bb:55 (succs: 56)
- uses: %217
-bb:56 (succs:)
- defs: [%219,%219]
- uses: %219
-*** END BLOCK
-function %13 (__libnacl_irt_mprotect)
-  %39. function arg 0
-  %40. function arg 1
-  %41. function arg 2
-num bbs:1
-*** SUBBLOCK CONSTANTS (11)
-bb:0 (succs:)
-*** END BLOCK
-function %14 (__libc_fini_array)
-num bbs:1
-bb:0 (succs:)
-*** END BLOCK
+function void @f2(i32 %p0, i32 %p1, i32 %p2) {  // BlockID = 12
+  blocks 5;
+%b0:
+%b1:
+%b2:
+%b3:
+%b4:
+}
+function void @f3(i32 %p0) {  // BlockID = 12
+  blocks 5;
+%b0:
+%b1:
+%b2:
+%b3:
+%b4:
+}
+function i32 @f4(i32 %p0) {  // BlockID = 12
+  blocks 1;
+%b0:
+}
+function i32 @f5(i32 %p0, i32 %p1) {  // BlockID = 12
+  blocks 1;
+%b0:
+}
+function i32 @f6(i32 %p0, i32 %p1) {  // BlockID = 12
+  blocks 1;
+%b0:
+}
+function i32 @f7(i32 %p0, i32 %p1, i32 %p2, i32 %p3) {  // BlockID = 12
+  blocks 1;
+%b0:
+}
+function i32 @f8(i32 %p0, i32 %p1, i32 %p2, i32 %p3) {  // BlockID = 12
+  blocks 1;
+%b0:
+}
+function i32 @f9(i32 %p0, i64 %p1, i32 %p2, i32 %p3) {  // BlockID = 12
+  blocks 1;
+%b0:
+}
+function i32 @f10(i32 %p0, i32 %p1) {  // BlockID = 12
+  blocks 1;
+%b0:
+}
+function i32 @f11(i32 %p0, i32 %p1, i32 %p2, i32 %p3) {  // BlockID = 12
+  blocks 1;
+%b0:
+}
+function void @f12(i32 %p0) {  // BlockID = 12
+  blocks 57;
+%b0:
+%b1:
+%b2:
+%b3:
+%b4:
+%b5:
+%b6:
+%b7:
+%b8:
+%b9:
+%b10:
+%b11:
+%b12:
+%b13:
+%b14:
+%b15:
+%b16:
+%b17:
+%b18:
+%b19:
+%b20:
+%b21:
+%b22:
+%b23:
+%b24:
+%b25:
+%b26:
+%b27:
+%b28:
+%b29:
+%b30:
+%b31:
+%b32:
+%b33:
+%b34:
+%b35:
+%b36:
+%b37:
+%b38:
+%b39:
+%b40:
+%b41:
+%b42:
+%b43:
+%b44:
+%b45:
+%b46:
+%b47:
+%b48:
+%b49:
+%b50:
+%b51:
+%b52:
+%b53:
+%b54:
+%b55:
+%b56:
+}
+function i32 @f13(i32 %p0, i32 %p1, i32 %p2) {  // BlockID = 12
+  blocks 1;
+%b0:
+}
+function void @f14() {  // BlockID = 12
+  blocks 1;
+%b0:
+}

@@ -3,33 +3,54 @@
 *** ARGS:
   [0] res/start.pexe
 *** ENVIRONMENT:
-entry: 1
-module version: 1
-*** SUBBLOCK BLOCKINFO (0)
-block id: 14
-block id: 11
-block id: 12
-block id: 19
-*** END BLOCK
-*** SUBBLOCK TYPE (17)
-num types: 3
-0: type void
-1: type integer 32
-2: type function is_varargs:0 ret:0 1 
-*** END BLOCK
-%0. module function: (type:2,cc:0,is_proto:0,linkage:0)
-*** SUBBLOCK GLOBALVAR (19)
-global var count: 0
-*** END BLOCK
-*** SUBBLOCK VALUE_SYMTAB (14)
-  entry: id:0 name:"_start"
+module {  // BlockID = 8
+  version 1;
+  abbreviations {  // BlockID = 0
+    valuesymtab:
+      @a0 = abbrev <fixed(3), vbr(8), array(fixed(8))>;
+      @a1 = abbrev <1, vbr(8), array(fixed(7))>;
+      @a2 = abbrev <1, vbr(8), array(char6)>;
+      @a3 = abbrev <2, vbr(8), array(char6)>;
+    constants:
+      @a0 = abbrev <1, fixed(2)>;
+      @a1 = abbrev <4, vbr(8)>;
+      @a2 = abbrev <4, 0>;
+      @a3 = abbrev <6, vbr(8)>;
+    function:
+      @a0 = abbrev <20, vbr(6), vbr(4), vbr(4)>;
+      @a1 = abbrev <2, vbr(6), vbr(6), fixed(4)>;
+      @a2 = abbrev <3, vbr(6), fixed(2), fixed(4)>;
+      @a3 = abbrev <10>;
+      @a4 = abbrev <10, vbr(6)>;
+      @a5 = abbrev <15>;
+      @a6 = abbrev <43, vbr(6), fixed(2)>;
+      @a7 = abbrev <24, vbr(6), vbr(6), vbr(4)>;
+    globals:
+      @a0 = abbrev <0, vbr(6), fixed(1)>;
+      @a1 = abbrev <1, vbr(8)>;
+      @a2 = abbrev <2, vbr(8)>;
+      @a3 = abbrev <3, array(fixed(8))>;
+      @a4 = abbrev <4, vbr(6)>;
+      @a5 = abbrev <4, vbr(6), vbr(6)>;
+  }
+  types {  // BlockID = 17
+    %a0 = abbrev <21, fixed(1), array(fixed(2))>;
+    count 3;
+    @t0 = void;
+    @t1 = i32;
+    @t2 = void (i32);
+  }
+  define external void @f0(i32);
+  globals {  // BlockID = 19
+    count 0;
+  }
+  valuesymtab {  // BlockID = 14
+    @f0 : "_start";
     intrinsic "_start" (35)
-*** END BLOCK
-*** SUBBLOCK FUNCTION (12)
-function %0 (_start)
-  %1. function arg 0
-num bbs:1
-bb:0 (succs:)
-  ret
-*** END BLOCK
-done
+  }
+  function void @f0(i32 %p0) {  // BlockID = 12
+    blocks 1;
+  %b0:
+    ret void;
+  }
+}
