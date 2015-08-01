@@ -46,7 +46,7 @@ static void pn_memory_check_pointer(PNMemory* memory, void* p, uint32_t size) {
 
 #if PN_UNALIGNED_MEMORY_ACCESS
 
-#define DEFINE_MEMORY_READ(ty, ctype)                                   \
+#define PN_DEFINE_MEMORY_READ(ty, ctype)                                \
   static ctype pn_memory_read_##ty(PNMemory* memory, uint32_t offset) { \
     pn_memory_check(memory, offset, sizeof(ctype));                     \
     ctype* m = (ctype*)(memory->data + offset);                         \
@@ -55,7 +55,7 @@ static void pn_memory_check_pointer(PNMemory* memory, void* p, uint32_t size) {
     return *m;                                                          \
   }
 
-#define DEFINE_MEMORY_WRITE(ty, ctype)                                  \
+#define PN_DEFINE_MEMORY_WRITE(ty, ctype)                               \
   static void pn_memory_write_##ty(PNMemory* memory, uint32_t offset,   \
                                    ctype value) {                       \
     pn_memory_check(memory, offset, sizeof(value));                     \
@@ -67,7 +67,7 @@ static void pn_memory_check_pointer(PNMemory* memory, void* p, uint32_t size) {
 
 #else
 
-#define DEFINE_MEMORY_READ(ty, ctype)                                   \
+#define PN_DEFINE_MEMORY_READ(ty, ctype)                                \
   static ctype pn_memory_read_##ty(PNMemory* memory, uint32_t offset) { \
     pn_memory_check(memory, offset, sizeof(ctype));                     \
     ctype* m = (ctype*)(memory->data + offset);                         \
@@ -76,7 +76,7 @@ static void pn_memory_check_pointer(PNMemory* memory, void* p, uint32_t size) {
     return ret;                                                         \
   }
 
-#define DEFINE_MEMORY_WRITE(ty, ctype)                                \
+#define PN_DEFINE_MEMORY_WRITE(ty, ctype)                             \
   static void pn_memory_write_##ty(PNMemory* memory, uint32_t offset, \
                                    ctype value) {                     \
     pn_memory_check(memory, offset, sizeof(value));                   \
@@ -86,30 +86,30 @@ static void pn_memory_check_pointer(PNMemory* memory, void* p, uint32_t size) {
 
 #endif
 
-DEFINE_MEMORY_READ(i8, int8_t)
-DEFINE_MEMORY_READ(u8, uint8_t)
-DEFINE_MEMORY_READ(i16, int16_t)
-DEFINE_MEMORY_READ(u16, uint16_t)
-DEFINE_MEMORY_READ(i32, int32_t)
-DEFINE_MEMORY_READ(u32, uint32_t)
-DEFINE_MEMORY_READ(i64, int64_t)
-DEFINE_MEMORY_READ(u64, uint64_t)
-DEFINE_MEMORY_READ(f32, float)
-DEFINE_MEMORY_READ(f64, double)
+PN_DEFINE_MEMORY_READ(i8, int8_t)
+PN_DEFINE_MEMORY_READ(u8, uint8_t)
+PN_DEFINE_MEMORY_READ(i16, int16_t)
+PN_DEFINE_MEMORY_READ(u16, uint16_t)
+PN_DEFINE_MEMORY_READ(i32, int32_t)
+PN_DEFINE_MEMORY_READ(u32, uint32_t)
+PN_DEFINE_MEMORY_READ(i64, int64_t)
+PN_DEFINE_MEMORY_READ(u64, uint64_t)
+PN_DEFINE_MEMORY_READ(f32, float)
+PN_DEFINE_MEMORY_READ(f64, double)
 
-DEFINE_MEMORY_WRITE(i8, int8_t)
-DEFINE_MEMORY_WRITE(u8, uint8_t)
-DEFINE_MEMORY_WRITE(i16, int16_t)
-DEFINE_MEMORY_WRITE(u16, uint16_t)
-DEFINE_MEMORY_WRITE(i32, int32_t)
-DEFINE_MEMORY_WRITE(u32, uint32_t)
-DEFINE_MEMORY_WRITE(i64, int64_t)
-DEFINE_MEMORY_WRITE(u64, uint64_t)
-DEFINE_MEMORY_WRITE(f32, float)
-DEFINE_MEMORY_WRITE(f64, double)
+PN_DEFINE_MEMORY_WRITE(i8, int8_t)
+PN_DEFINE_MEMORY_WRITE(u8, uint8_t)
+PN_DEFINE_MEMORY_WRITE(i16, int16_t)
+PN_DEFINE_MEMORY_WRITE(u16, uint16_t)
+PN_DEFINE_MEMORY_WRITE(i32, int32_t)
+PN_DEFINE_MEMORY_WRITE(u32, uint32_t)
+PN_DEFINE_MEMORY_WRITE(i64, int64_t)
+PN_DEFINE_MEMORY_WRITE(u64, uint64_t)
+PN_DEFINE_MEMORY_WRITE(f32, float)
+PN_DEFINE_MEMORY_WRITE(f64, double)
 
-#undef DEFINE_MEMORY_READ
-#undef DEFINE_MEMORY_WRITE
+#undef PN_DEFINE_MEMORY_READ
+#undef PN_DEFINE_MEMORY_WRITE
 
 static uint32_t pn_memory_check_cstr(PNMemory* memory, uint32_t p) {
   uint32_t end = p;

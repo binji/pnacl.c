@@ -5,25 +5,25 @@
 #ifndef PN_EXECUTOR_H_
 #define PN_EXECUTOR_H_
 
-#define DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(ty, ctype)             \
+#define PN_DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(ty, ctype)          \
   static inline PNRuntimeValue pn_executor_value_##ty(ctype x) { \
     PNRuntimeValue ret;                                          \
     ret.ty = x;                                                  \
     return ret;                                                  \
   }
 
-DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(i8, int8_t)
-DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(u8, uint8_t)
-DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(i16, int16_t)
-DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(u16, uint16_t)
-DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(i32, int32_t)
-DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(u32, uint32_t)
-DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(i64, int64_t)
-DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(u64, uint64_t)
-DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(f32, float)
-DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(f64, double)
+PN_DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(i8, int8_t)
+PN_DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(u8, uint8_t)
+PN_DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(i16, int16_t)
+PN_DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(u16, uint16_t)
+PN_DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(i32, int32_t)
+PN_DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(u32, uint32_t)
+PN_DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(i64, int64_t)
+PN_DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(u64, uint64_t)
+PN_DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(f32, float)
+PN_DEFINE_EXECUTOR_VALUE_CONSTRUCTOR(f64, double)
 
-#undef DEFINE_EXECUTOR_VALUE_CONSTRUCTOR
+#undef PN_DEFINE_EXECUTOR_VALUE_CONSTRUCTOR
 
 static PNRuntimeValue pn_thread_get_value(PNThread* thread,
                                           PNValueId value_id) {
@@ -308,7 +308,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       break;
     }
 
-#define OPCODE_BINOP(op, ty)                                                  \
+#define PN_OPCODE_BINOP(op, ty)                                               \
   do {                                                                        \
     PNInstructionBinop* i = (PNInstructionBinop*)inst;                        \
     PNRuntimeValue value0 = pn_thread_get_value(thread, i->value0_id);        \
@@ -322,67 +322,67 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     location->instruction_id++;                                               \
   } while (0) /* no semicolon */
 
-    case PN_OPCODE_BINOP_ADD_DOUBLE:  OPCODE_BINOP(+, f64); break;
-    case PN_OPCODE_BINOP_ADD_FLOAT:   OPCODE_BINOP(+, f32); break;
-    case PN_OPCODE_BINOP_ADD_INT8:    OPCODE_BINOP(+, u8); break;
-    case PN_OPCODE_BINOP_ADD_INT16:   OPCODE_BINOP(+, u16); break;
-    case PN_OPCODE_BINOP_ADD_INT32:   OPCODE_BINOP(+, u32); break;
-    case PN_OPCODE_BINOP_ADD_INT64:   OPCODE_BINOP(+, u64); break;
+    case PN_OPCODE_BINOP_ADD_DOUBLE:  PN_OPCODE_BINOP(+, f64); break;
+    case PN_OPCODE_BINOP_ADD_FLOAT:   PN_OPCODE_BINOP(+, f32); break;
+    case PN_OPCODE_BINOP_ADD_INT8:    PN_OPCODE_BINOP(+, u8); break;
+    case PN_OPCODE_BINOP_ADD_INT16:   PN_OPCODE_BINOP(+, u16); break;
+    case PN_OPCODE_BINOP_ADD_INT32:   PN_OPCODE_BINOP(+, u32); break;
+    case PN_OPCODE_BINOP_ADD_INT64:   PN_OPCODE_BINOP(+, u64); break;
     case PN_OPCODE_BINOP_AND_INT1:
-    case PN_OPCODE_BINOP_AND_INT8:    OPCODE_BINOP(&, u8); break;
-    case PN_OPCODE_BINOP_AND_INT16:   OPCODE_BINOP(&, u16); break;
-    case PN_OPCODE_BINOP_AND_INT32:   OPCODE_BINOP(&, u32); break;
-    case PN_OPCODE_BINOP_AND_INT64:   OPCODE_BINOP(&, u64); break;
-    case PN_OPCODE_BINOP_ASHR_INT8:   OPCODE_BINOP(>>, i8); break;
-    case PN_OPCODE_BINOP_ASHR_INT16:  OPCODE_BINOP(>>, i16); break;
-    case PN_OPCODE_BINOP_ASHR_INT32:  OPCODE_BINOP(>>, i32); break;
-    case PN_OPCODE_BINOP_ASHR_INT64:  OPCODE_BINOP(>>, i64); break;
-    case PN_OPCODE_BINOP_LSHR_INT8:   OPCODE_BINOP(>>, u8); break;
-    case PN_OPCODE_BINOP_LSHR_INT16:  OPCODE_BINOP(>>, u16); break;
-    case PN_OPCODE_BINOP_LSHR_INT32:  OPCODE_BINOP(>>, u32); break;
-    case PN_OPCODE_BINOP_LSHR_INT64:  OPCODE_BINOP(>>, u64); break;
-    case PN_OPCODE_BINOP_MUL_DOUBLE:  OPCODE_BINOP(*, f64); break;
-    case PN_OPCODE_BINOP_MUL_FLOAT:   OPCODE_BINOP(*, f32); break;
-    case PN_OPCODE_BINOP_MUL_INT8:    OPCODE_BINOP(*, u8); break;
-    case PN_OPCODE_BINOP_MUL_INT16:   OPCODE_BINOP(*, u16); break;
-    case PN_OPCODE_BINOP_MUL_INT32:   OPCODE_BINOP(*, u32); break;
-    case PN_OPCODE_BINOP_MUL_INT64:   OPCODE_BINOP(*, u64); break;
+    case PN_OPCODE_BINOP_AND_INT8:    PN_OPCODE_BINOP(&, u8); break;
+    case PN_OPCODE_BINOP_AND_INT16:   PN_OPCODE_BINOP(&, u16); break;
+    case PN_OPCODE_BINOP_AND_INT32:   PN_OPCODE_BINOP(&, u32); break;
+    case PN_OPCODE_BINOP_AND_INT64:   PN_OPCODE_BINOP(&, u64); break;
+    case PN_OPCODE_BINOP_ASHR_INT8:   PN_OPCODE_BINOP(>>, i8); break;
+    case PN_OPCODE_BINOP_ASHR_INT16:  PN_OPCODE_BINOP(>>, i16); break;
+    case PN_OPCODE_BINOP_ASHR_INT32:  PN_OPCODE_BINOP(>>, i32); break;
+    case PN_OPCODE_BINOP_ASHR_INT64:  PN_OPCODE_BINOP(>>, i64); break;
+    case PN_OPCODE_BINOP_LSHR_INT8:   PN_OPCODE_BINOP(>>, u8); break;
+    case PN_OPCODE_BINOP_LSHR_INT16:  PN_OPCODE_BINOP(>>, u16); break;
+    case PN_OPCODE_BINOP_LSHR_INT32:  PN_OPCODE_BINOP(>>, u32); break;
+    case PN_OPCODE_BINOP_LSHR_INT64:  PN_OPCODE_BINOP(>>, u64); break;
+    case PN_OPCODE_BINOP_MUL_DOUBLE:  PN_OPCODE_BINOP(*, f64); break;
+    case PN_OPCODE_BINOP_MUL_FLOAT:   PN_OPCODE_BINOP(*, f32); break;
+    case PN_OPCODE_BINOP_MUL_INT8:    PN_OPCODE_BINOP(*, u8); break;
+    case PN_OPCODE_BINOP_MUL_INT16:   PN_OPCODE_BINOP(*, u16); break;
+    case PN_OPCODE_BINOP_MUL_INT32:   PN_OPCODE_BINOP(*, u32); break;
+    case PN_OPCODE_BINOP_MUL_INT64:   PN_OPCODE_BINOP(*, u64); break;
     case PN_OPCODE_BINOP_OR_INT1:
-    case PN_OPCODE_BINOP_OR_INT8:     OPCODE_BINOP(|, u8); break;
-    case PN_OPCODE_BINOP_OR_INT16:    OPCODE_BINOP(|, u16); break;
-    case PN_OPCODE_BINOP_OR_INT32:    OPCODE_BINOP(|, u32); break;
-    case PN_OPCODE_BINOP_OR_INT64:    OPCODE_BINOP(|, u64); break;
-    case PN_OPCODE_BINOP_SDIV_DOUBLE: OPCODE_BINOP(/, f64); break;
-    case PN_OPCODE_BINOP_SDIV_FLOAT:  OPCODE_BINOP(/, f32); break;
-    case PN_OPCODE_BINOP_SDIV_INT32:  OPCODE_BINOP(/, i32); break;
-    case PN_OPCODE_BINOP_SDIV_INT64:  OPCODE_BINOP(/, i64); break;
-    case PN_OPCODE_BINOP_SHL_INT8:    OPCODE_BINOP(<<, u8); break;
-    case PN_OPCODE_BINOP_SHL_INT16:   OPCODE_BINOP(<<, u16); break;
-    case PN_OPCODE_BINOP_SHL_INT32:   OPCODE_BINOP(<<, u32); break;
-    case PN_OPCODE_BINOP_SHL_INT64:   OPCODE_BINOP(<<, u64); break;
-    case PN_OPCODE_BINOP_SREM_INT32:  OPCODE_BINOP(%, i32); break;
-    case PN_OPCODE_BINOP_SREM_INT64:  OPCODE_BINOP(%, i64); break;
-    case PN_OPCODE_BINOP_SUB_DOUBLE:  OPCODE_BINOP(-, f64); break;
-    case PN_OPCODE_BINOP_SUB_FLOAT:   OPCODE_BINOP(-, f32); break;
-    case PN_OPCODE_BINOP_SUB_INT8:    OPCODE_BINOP(-, u8); break;
-    case PN_OPCODE_BINOP_SUB_INT16:   OPCODE_BINOP(-, u16); break;
-    case PN_OPCODE_BINOP_SUB_INT32:   OPCODE_BINOP(-, u32); break;
-    case PN_OPCODE_BINOP_SUB_INT64:   OPCODE_BINOP(-, u64); break;
-    case PN_OPCODE_BINOP_UDIV_INT8:   OPCODE_BINOP(/, u8); break;
-    case PN_OPCODE_BINOP_UDIV_INT16:  OPCODE_BINOP(/, u16); break;
-    case PN_OPCODE_BINOP_UDIV_INT32:  OPCODE_BINOP(/, u32); break;
-    case PN_OPCODE_BINOP_UDIV_INT64:  OPCODE_BINOP(/, u64); break;
-    case PN_OPCODE_BINOP_UREM_INT8:   OPCODE_BINOP(%, u8); break;
-    case PN_OPCODE_BINOP_UREM_INT16:  OPCODE_BINOP(%, u16); break;
-    case PN_OPCODE_BINOP_UREM_INT32:  OPCODE_BINOP(%, u32); break;
-    case PN_OPCODE_BINOP_UREM_INT64:  OPCODE_BINOP(%, u64); break;
+    case PN_OPCODE_BINOP_OR_INT8:     PN_OPCODE_BINOP(|, u8); break;
+    case PN_OPCODE_BINOP_OR_INT16:    PN_OPCODE_BINOP(|, u16); break;
+    case PN_OPCODE_BINOP_OR_INT32:    PN_OPCODE_BINOP(|, u32); break;
+    case PN_OPCODE_BINOP_OR_INT64:    PN_OPCODE_BINOP(|, u64); break;
+    case PN_OPCODE_BINOP_SDIV_DOUBLE: PN_OPCODE_BINOP(/, f64); break;
+    case PN_OPCODE_BINOP_SDIV_FLOAT:  PN_OPCODE_BINOP(/, f32); break;
+    case PN_OPCODE_BINOP_SDIV_INT32:  PN_OPCODE_BINOP(/, i32); break;
+    case PN_OPCODE_BINOP_SDIV_INT64:  PN_OPCODE_BINOP(/, i64); break;
+    case PN_OPCODE_BINOP_SHL_INT8:    PN_OPCODE_BINOP(<<, u8); break;
+    case PN_OPCODE_BINOP_SHL_INT16:   PN_OPCODE_BINOP(<<, u16); break;
+    case PN_OPCODE_BINOP_SHL_INT32:   PN_OPCODE_BINOP(<<, u32); break;
+    case PN_OPCODE_BINOP_SHL_INT64:   PN_OPCODE_BINOP(<<, u64); break;
+    case PN_OPCODE_BINOP_SREM_INT32:  PN_OPCODE_BINOP(%, i32); break;
+    case PN_OPCODE_BINOP_SREM_INT64:  PN_OPCODE_BINOP(%, i64); break;
+    case PN_OPCODE_BINOP_SUB_DOUBLE:  PN_OPCODE_BINOP(-, f64); break;
+    case PN_OPCODE_BINOP_SUB_FLOAT:   PN_OPCODE_BINOP(-, f32); break;
+    case PN_OPCODE_BINOP_SUB_INT8:    PN_OPCODE_BINOP(-, u8); break;
+    case PN_OPCODE_BINOP_SUB_INT16:   PN_OPCODE_BINOP(-, u16); break;
+    case PN_OPCODE_BINOP_SUB_INT32:   PN_OPCODE_BINOP(-, u32); break;
+    case PN_OPCODE_BINOP_SUB_INT64:   PN_OPCODE_BINOP(-, u64); break;
+    case PN_OPCODE_BINOP_UDIV_INT8:   PN_OPCODE_BINOP(/, u8); break;
+    case PN_OPCODE_BINOP_UDIV_INT16:  PN_OPCODE_BINOP(/, u16); break;
+    case PN_OPCODE_BINOP_UDIV_INT32:  PN_OPCODE_BINOP(/, u32); break;
+    case PN_OPCODE_BINOP_UDIV_INT64:  PN_OPCODE_BINOP(/, u64); break;
+    case PN_OPCODE_BINOP_UREM_INT8:   PN_OPCODE_BINOP(%, u8); break;
+    case PN_OPCODE_BINOP_UREM_INT16:  PN_OPCODE_BINOP(%, u16); break;
+    case PN_OPCODE_BINOP_UREM_INT32:  PN_OPCODE_BINOP(%, u32); break;
+    case PN_OPCODE_BINOP_UREM_INT64:  PN_OPCODE_BINOP(%, u64); break;
     case PN_OPCODE_BINOP_XOR_INT1:
-    case PN_OPCODE_BINOP_XOR_INT8:    OPCODE_BINOP(^, u8); break;
-    case PN_OPCODE_BINOP_XOR_INT16:   OPCODE_BINOP(^, u16); break;
-    case PN_OPCODE_BINOP_XOR_INT32:   OPCODE_BINOP(^, u32); break;
-    case PN_OPCODE_BINOP_XOR_INT64:   OPCODE_BINOP(^, u64); break;
+    case PN_OPCODE_BINOP_XOR_INT8:    PN_OPCODE_BINOP(^, u8); break;
+    case PN_OPCODE_BINOP_XOR_INT16:   PN_OPCODE_BINOP(^, u16); break;
+    case PN_OPCODE_BINOP_XOR_INT32:   PN_OPCODE_BINOP(^, u32); break;
+    case PN_OPCODE_BINOP_XOR_INT64:   PN_OPCODE_BINOP(^, u64); break;
 
-#undef OPCODE_BINOP
+#undef PN_OPCODE_BINOP
 
     case PN_OPCODE_BR: {
       PNInstructionBr* i = (PNInstructionBr*)inst;
@@ -492,7 +492,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       break;
     }
 
-#define OPCODE_CAST(from, to)                                                \
+#define PN_OPCODE_CAST(from, to)                                             \
   do {                                                                       \
     PNInstructionCast* i = (PNInstructionCast*)inst;                         \
     PNRuntimeValue value = pn_thread_get_value(thread, i->value_id);         \
@@ -504,7 +504,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     location->instruction_id++;                                              \
   } while (0) /* no semicolon */
 
-#define OPCODE_CAST_SEXT1(size)                                           \
+#define PN_OPCODE_CAST_SEXT1(size)                                           \
   do {                                                                    \
     PNInstructionCast* i = (PNInstructionCast*)inst;                      \
     PNRuntimeValue value = pn_thread_get_value(thread, i->value_id);      \
@@ -516,7 +516,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     location->instruction_id++;                                           \
   } while (0) /* no semicolon */
 
-#define OPCODE_CAST_TRUNC1(size)                                          \
+#define PN_OPCODE_CAST_TRUNC1(size)                                          \
   do {                                                                    \
     PNInstructionCast* i = (PNInstructionCast*)inst;                      \
     PNRuntimeValue value = pn_thread_get_value(thread, i->value_id);      \
@@ -527,7 +527,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     location->instruction_id++;                                           \
   } while (0) /* no semicolon */
 
-#define OPCODE_CAST_ZEXT1(size)                                           \
+#define PN_OPCODE_CAST_ZEXT1(size)                                           \
   do {                                                                    \
     PNInstructionCast* i = (PNInstructionCast*)inst;                      \
     PNRuntimeValue value = pn_thread_get_value(thread, i->value_id);      \
@@ -539,76 +539,76 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     location->instruction_id++;                                           \
   } while (0) /* no semicolon */
 
-    case PN_OPCODE_CAST_FPEXT_FLOAT_DOUBLE:   OPCODE_CAST(f32, f64); break;
-    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT8:   OPCODE_CAST(f64, i8); break;
-    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT16:  OPCODE_CAST(f64, i16); break;
-    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT32:  OPCODE_CAST(f64, i32); break;
-    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT64:  OPCODE_CAST(f64, i64); break;
-    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT8:    OPCODE_CAST(f32, i8); break;
-    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT16:   OPCODE_CAST(f32, i16); break;
-    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT32:   OPCODE_CAST(f32, i32); break;
-    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT64:   OPCODE_CAST(f32, i64); break;
-    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT8:   OPCODE_CAST(f64, u8); break;
-    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT16:  OPCODE_CAST(f64, u16); break;
-    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT32:  OPCODE_CAST(f64, u32); break;
-    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT64:  OPCODE_CAST(f64, u64); break;
-    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT8:    OPCODE_CAST(f32, u8); break;
-    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT16:   OPCODE_CAST(f32, u16); break;
-    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT32:   OPCODE_CAST(f32, u32); break;
-    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT64:   OPCODE_CAST(f32, u64); break;
-    case PN_OPCODE_CAST_FPTRUNC_DOUBLE_FLOAT: OPCODE_CAST(f64, f32); break;
-    case PN_OPCODE_CAST_SEXT_INT1_INT8:       OPCODE_CAST_SEXT1(8); break;
-    case PN_OPCODE_CAST_SEXT_INT1_INT16:      OPCODE_CAST_SEXT1(16); break;
-    case PN_OPCODE_CAST_SEXT_INT1_INT32:      OPCODE_CAST_SEXT1(32); break;
-    case PN_OPCODE_CAST_SEXT_INT1_INT64:      OPCODE_CAST_SEXT1(64); break;
-    case PN_OPCODE_CAST_SEXT_INT8_INT16:      OPCODE_CAST(i8, i16); break;
-    case PN_OPCODE_CAST_SEXT_INT8_INT32:      OPCODE_CAST(i8, i32); break;
-    case PN_OPCODE_CAST_SEXT_INT8_INT64:      OPCODE_CAST(i8, i64); break;
-    case PN_OPCODE_CAST_SEXT_INT16_INT32:     OPCODE_CAST(i16, i32); break;
-    case PN_OPCODE_CAST_SEXT_INT16_INT64:     OPCODE_CAST(i16, i64); break;
-    case PN_OPCODE_CAST_SEXT_INT32_INT64:     OPCODE_CAST(i32, i64); break;
-    case PN_OPCODE_CAST_SITOFP_INT8_DOUBLE:   OPCODE_CAST(i8, f64); break;
-    case PN_OPCODE_CAST_SITOFP_INT8_FLOAT:    OPCODE_CAST(i8, f32); break;
-    case PN_OPCODE_CAST_SITOFP_INT16_DOUBLE:  OPCODE_CAST(i16, f64); break;
-    case PN_OPCODE_CAST_SITOFP_INT16_FLOAT:   OPCODE_CAST(i16, f32); break;
-    case PN_OPCODE_CAST_SITOFP_INT32_DOUBLE:  OPCODE_CAST(i32, f64); break;
-    case PN_OPCODE_CAST_SITOFP_INT32_FLOAT:   OPCODE_CAST(i32, f32); break;
-    case PN_OPCODE_CAST_SITOFP_INT64_DOUBLE:  OPCODE_CAST(i64, f64); break;
-    case PN_OPCODE_CAST_SITOFP_INT64_FLOAT:   OPCODE_CAST(i64, f32); break;
-    case PN_OPCODE_CAST_TRUNC_INT8_INT1:      OPCODE_CAST_TRUNC1(8); break;
-    case PN_OPCODE_CAST_TRUNC_INT16_INT1:     OPCODE_CAST_TRUNC1(16); break;
-    case PN_OPCODE_CAST_TRUNC_INT16_INT8:     OPCODE_CAST(i16, i8); break;
-    case PN_OPCODE_CAST_TRUNC_INT32_INT1:     OPCODE_CAST_TRUNC1(32); break;
-    case PN_OPCODE_CAST_TRUNC_INT32_INT8:     OPCODE_CAST(i32, i8); break;
-    case PN_OPCODE_CAST_TRUNC_INT32_INT16:    OPCODE_CAST(i32, i16); break;
-    case PN_OPCODE_CAST_TRUNC_INT64_INT8:     OPCODE_CAST(i64, i8); break;
-    case PN_OPCODE_CAST_TRUNC_INT64_INT16:    OPCODE_CAST(i64, i16); break;
-    case PN_OPCODE_CAST_TRUNC_INT64_INT32:    OPCODE_CAST(i64, i32); break;
-    case PN_OPCODE_CAST_UITOFP_INT8_DOUBLE:   OPCODE_CAST(u8, f64); break;
-    case PN_OPCODE_CAST_UITOFP_INT8_FLOAT:    OPCODE_CAST(u8, f32); break;
-    case PN_OPCODE_CAST_UITOFP_INT16_DOUBLE:  OPCODE_CAST(u16, f64); break;
-    case PN_OPCODE_CAST_UITOFP_INT16_FLOAT:   OPCODE_CAST(u16, f32); break;
-    case PN_OPCODE_CAST_UITOFP_INT32_DOUBLE:  OPCODE_CAST(u32, f64); break;
-    case PN_OPCODE_CAST_UITOFP_INT32_FLOAT:   OPCODE_CAST(u32, f32); break;
-    case PN_OPCODE_CAST_UITOFP_INT64_DOUBLE:  OPCODE_CAST(u64, f64); break;
-    case PN_OPCODE_CAST_UITOFP_INT64_FLOAT:   OPCODE_CAST(u64, f32); break;
-    case PN_OPCODE_CAST_ZEXT_INT1_INT8:       OPCODE_CAST_ZEXT1(8); break;
-    case PN_OPCODE_CAST_ZEXT_INT1_INT16:      OPCODE_CAST_ZEXT1(16); break;
-    case PN_OPCODE_CAST_ZEXT_INT1_INT32:      OPCODE_CAST_ZEXT1(32); break;
-    case PN_OPCODE_CAST_ZEXT_INT1_INT64:      OPCODE_CAST_ZEXT1(64); break;
-    case PN_OPCODE_CAST_ZEXT_INT8_INT16:      OPCODE_CAST(u8, u16); break;
-    case PN_OPCODE_CAST_ZEXT_INT8_INT32:      OPCODE_CAST(u8, u32); break;
-    case PN_OPCODE_CAST_ZEXT_INT8_INT64:      OPCODE_CAST(u8, u64); break;
-    case PN_OPCODE_CAST_ZEXT_INT16_INT32:     OPCODE_CAST(u16, u32); break;
-    case PN_OPCODE_CAST_ZEXT_INT16_INT64:     OPCODE_CAST(u16, u64); break;
-    case PN_OPCODE_CAST_ZEXT_INT32_INT64:     OPCODE_CAST(u32, u64); break;
+    case PN_OPCODE_CAST_FPEXT_FLOAT_DOUBLE:   PN_OPCODE_CAST(f32, f64); break;
+    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT8:   PN_OPCODE_CAST(f64, i8); break;
+    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT16:  PN_OPCODE_CAST(f64, i16); break;
+    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT32:  PN_OPCODE_CAST(f64, i32); break;
+    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT64:  PN_OPCODE_CAST(f64, i64); break;
+    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT8:    PN_OPCODE_CAST(f32, i8); break;
+    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT16:   PN_OPCODE_CAST(f32, i16); break;
+    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT32:   PN_OPCODE_CAST(f32, i32); break;
+    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT64:   PN_OPCODE_CAST(f32, i64); break;
+    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT8:   PN_OPCODE_CAST(f64, u8); break;
+    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT16:  PN_OPCODE_CAST(f64, u16); break;
+    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT32:  PN_OPCODE_CAST(f64, u32); break;
+    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT64:  PN_OPCODE_CAST(f64, u64); break;
+    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT8:    PN_OPCODE_CAST(f32, u8); break;
+    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT16:   PN_OPCODE_CAST(f32, u16); break;
+    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT32:   PN_OPCODE_CAST(f32, u32); break;
+    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT64:   PN_OPCODE_CAST(f32, u64); break;
+    case PN_OPCODE_CAST_FPTRUNC_DOUBLE_FLOAT: PN_OPCODE_CAST(f64, f32); break;
+    case PN_OPCODE_CAST_SEXT_INT1_INT8:       PN_OPCODE_CAST_SEXT1(8); break;
+    case PN_OPCODE_CAST_SEXT_INT1_INT16:      PN_OPCODE_CAST_SEXT1(16); break;
+    case PN_OPCODE_CAST_SEXT_INT1_INT32:      PN_OPCODE_CAST_SEXT1(32); break;
+    case PN_OPCODE_CAST_SEXT_INT1_INT64:      PN_OPCODE_CAST_SEXT1(64); break;
+    case PN_OPCODE_CAST_SEXT_INT8_INT16:      PN_OPCODE_CAST(i8, i16); break;
+    case PN_OPCODE_CAST_SEXT_INT8_INT32:      PN_OPCODE_CAST(i8, i32); break;
+    case PN_OPCODE_CAST_SEXT_INT8_INT64:      PN_OPCODE_CAST(i8, i64); break;
+    case PN_OPCODE_CAST_SEXT_INT16_INT32:     PN_OPCODE_CAST(i16, i32); break;
+    case PN_OPCODE_CAST_SEXT_INT16_INT64:     PN_OPCODE_CAST(i16, i64); break;
+    case PN_OPCODE_CAST_SEXT_INT32_INT64:     PN_OPCODE_CAST(i32, i64); break;
+    case PN_OPCODE_CAST_SITOFP_INT8_DOUBLE:   PN_OPCODE_CAST(i8, f64); break;
+    case PN_OPCODE_CAST_SITOFP_INT8_FLOAT:    PN_OPCODE_CAST(i8, f32); break;
+    case PN_OPCODE_CAST_SITOFP_INT16_DOUBLE:  PN_OPCODE_CAST(i16, f64); break;
+    case PN_OPCODE_CAST_SITOFP_INT16_FLOAT:   PN_OPCODE_CAST(i16, f32); break;
+    case PN_OPCODE_CAST_SITOFP_INT32_DOUBLE:  PN_OPCODE_CAST(i32, f64); break;
+    case PN_OPCODE_CAST_SITOFP_INT32_FLOAT:   PN_OPCODE_CAST(i32, f32); break;
+    case PN_OPCODE_CAST_SITOFP_INT64_DOUBLE:  PN_OPCODE_CAST(i64, f64); break;
+    case PN_OPCODE_CAST_SITOFP_INT64_FLOAT:   PN_OPCODE_CAST(i64, f32); break;
+    case PN_OPCODE_CAST_TRUNC_INT8_INT1:      PN_OPCODE_CAST_TRUNC1(8); break;
+    case PN_OPCODE_CAST_TRUNC_INT16_INT1:     PN_OPCODE_CAST_TRUNC1(16); break;
+    case PN_OPCODE_CAST_TRUNC_INT16_INT8:     PN_OPCODE_CAST(i16, i8); break;
+    case PN_OPCODE_CAST_TRUNC_INT32_INT1:     PN_OPCODE_CAST_TRUNC1(32); break;
+    case PN_OPCODE_CAST_TRUNC_INT32_INT8:     PN_OPCODE_CAST(i32, i8); break;
+    case PN_OPCODE_CAST_TRUNC_INT32_INT16:    PN_OPCODE_CAST(i32, i16); break;
+    case PN_OPCODE_CAST_TRUNC_INT64_INT8:     PN_OPCODE_CAST(i64, i8); break;
+    case PN_OPCODE_CAST_TRUNC_INT64_INT16:    PN_OPCODE_CAST(i64, i16); break;
+    case PN_OPCODE_CAST_TRUNC_INT64_INT32:    PN_OPCODE_CAST(i64, i32); break;
+    case PN_OPCODE_CAST_UITOFP_INT8_DOUBLE:   PN_OPCODE_CAST(u8, f64); break;
+    case PN_OPCODE_CAST_UITOFP_INT8_FLOAT:    PN_OPCODE_CAST(u8, f32); break;
+    case PN_OPCODE_CAST_UITOFP_INT16_DOUBLE:  PN_OPCODE_CAST(u16, f64); break;
+    case PN_OPCODE_CAST_UITOFP_INT16_FLOAT:   PN_OPCODE_CAST(u16, f32); break;
+    case PN_OPCODE_CAST_UITOFP_INT32_DOUBLE:  PN_OPCODE_CAST(u32, f64); break;
+    case PN_OPCODE_CAST_UITOFP_INT32_FLOAT:   PN_OPCODE_CAST(u32, f32); break;
+    case PN_OPCODE_CAST_UITOFP_INT64_DOUBLE:  PN_OPCODE_CAST(u64, f64); break;
+    case PN_OPCODE_CAST_UITOFP_INT64_FLOAT:   PN_OPCODE_CAST(u64, f32); break;
+    case PN_OPCODE_CAST_ZEXT_INT1_INT8:       PN_OPCODE_CAST_ZEXT1(8); break;
+    case PN_OPCODE_CAST_ZEXT_INT1_INT16:      PN_OPCODE_CAST_ZEXT1(16); break;
+    case PN_OPCODE_CAST_ZEXT_INT1_INT32:      PN_OPCODE_CAST_ZEXT1(32); break;
+    case PN_OPCODE_CAST_ZEXT_INT1_INT64:      PN_OPCODE_CAST_ZEXT1(64); break;
+    case PN_OPCODE_CAST_ZEXT_INT8_INT16:      PN_OPCODE_CAST(u8, u16); break;
+    case PN_OPCODE_CAST_ZEXT_INT8_INT32:      PN_OPCODE_CAST(u8, u32); break;
+    case PN_OPCODE_CAST_ZEXT_INT8_INT64:      PN_OPCODE_CAST(u8, u64); break;
+    case PN_OPCODE_CAST_ZEXT_INT16_INT32:     PN_OPCODE_CAST(u16, u32); break;
+    case PN_OPCODE_CAST_ZEXT_INT16_INT64:     PN_OPCODE_CAST(u16, u64); break;
+    case PN_OPCODE_CAST_ZEXT_INT32_INT64:     PN_OPCODE_CAST(u32, u64); break;
 
-#undef OPCODE_CAST
-#undef OPCODE_CAST_SEXT1
-#undef OPCODE_CAST_TRUNC1
-#undef OPCODE_CAST_ZEXT1
+#undef PN_OPCODE_CAST
+#undef PN_OPCODE_CAST_SEXT1
+#undef PN_OPCODE_CAST_TRUNC1
+#undef PN_OPCODE_CAST_ZEXT1
 
-#define OPCODE_CMP2(op, ty)                                               \
+#define PN_OPCODE_CMP2(op, ty)                                               \
   do {                                                                    \
     PNInstructionCmp2* i = (PNInstructionCmp2*)inst;                      \
     PNRuntimeValue value0 = pn_thread_get_value(thread, i->value0_id);    \
@@ -622,7 +622,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     location->instruction_id++;                                           \
   } while (0) /* no semicolon */
 
-#define OPCODE_CMP2_NOT(op, ty)                                              \
+#define PN_OPCODE_CMP2_NOT(op, ty)                                              \
   do {                                                                       \
     PNInstructionCmp2* i = (PNInstructionCmp2*)inst;                         \
     PNRuntimeValue value0 = pn_thread_get_value(thread, i->value0_id);       \
@@ -636,7 +636,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     location->instruction_id++;                                              \
   } while (0) /* no semicolon */
 
-#define OPCODE_CMP2_ORD(ty)                                                \
+#define PN_OPCODE_CMP2_ORD(ty)                                                \
   do {                                                                     \
     PNInstructionCmp2* i = (PNInstructionCmp2*)inst;                       \
     PNRuntimeValue value0 = pn_thread_get_value(thread, i->value0_id);     \
@@ -651,7 +651,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     location->instruction_id++;                                            \
   } while (0) /* no semicolon */
 
-#define OPCODE_CMP2_UNO(ty)                                            \
+#define PN_OPCODE_CMP2_UNO(ty)                                            \
   do {                                                                 \
     PNInstructionCmp2* i = (PNInstructionCmp2*)inst;                   \
     PNRuntimeValue value0 = pn_thread_get_value(thread, i->value0_id); \
@@ -684,85 +684,85 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     // UNE    1 1 1 0  !(A == B)
     // TRUE   1 1 1 1
 
-    case PN_OPCODE_FCMP_OEQ_DOUBLE: OPCODE_CMP2(==, f64); break;
-    case PN_OPCODE_FCMP_OEQ_FLOAT:  OPCODE_CMP2(==, f32); break;
-    case PN_OPCODE_FCMP_OGE_DOUBLE: OPCODE_CMP2(>=, f64); break;
-    case PN_OPCODE_FCMP_OGE_FLOAT:  OPCODE_CMP2(>=, f32); break;
-    case PN_OPCODE_FCMP_OGT_DOUBLE: OPCODE_CMP2(>, f64); break;
-    case PN_OPCODE_FCMP_OGT_FLOAT:  OPCODE_CMP2(>, f32); break;
-    case PN_OPCODE_FCMP_OLE_DOUBLE: OPCODE_CMP2(<=, f64); break;
-    case PN_OPCODE_FCMP_OLE_FLOAT:  OPCODE_CMP2(<=, f32); break;
-    case PN_OPCODE_FCMP_OLT_DOUBLE: OPCODE_CMP2(<, f64); break;
-    case PN_OPCODE_FCMP_OLT_FLOAT:  OPCODE_CMP2(<, f32); break;
-    case PN_OPCODE_FCMP_ONE_DOUBLE: OPCODE_CMP2(!=, f64); break;
-    case PN_OPCODE_FCMP_ONE_FLOAT:  OPCODE_CMP2(!=, f32); break;
-    case PN_OPCODE_FCMP_ORD_DOUBLE: OPCODE_CMP2_ORD(f64); break;
-    case PN_OPCODE_FCMP_ORD_FLOAT:  OPCODE_CMP2_ORD(f32); break;
-    case PN_OPCODE_FCMP_UEQ_DOUBLE: OPCODE_CMP2_NOT(!=, f64); break;
-    case PN_OPCODE_FCMP_UEQ_FLOAT:  OPCODE_CMP2_NOT(!=, f32); break;
-    case PN_OPCODE_FCMP_UGE_DOUBLE: OPCODE_CMP2_NOT(<, f64); break;
-    case PN_OPCODE_FCMP_UGE_FLOAT:  OPCODE_CMP2_NOT(<, f32); break;
-    case PN_OPCODE_FCMP_UGT_DOUBLE: OPCODE_CMP2_NOT(<=, f64); break;
-    case PN_OPCODE_FCMP_UGT_FLOAT:  OPCODE_CMP2_NOT(<=, f32); break;
-    case PN_OPCODE_FCMP_ULE_DOUBLE: OPCODE_CMP2_NOT(>, f64); break;
-    case PN_OPCODE_FCMP_ULE_FLOAT:  OPCODE_CMP2_NOT(>, f32); break;
-    case PN_OPCODE_FCMP_ULT_DOUBLE: OPCODE_CMP2_NOT(>=, f64); break;
-    case PN_OPCODE_FCMP_ULT_FLOAT:  OPCODE_CMP2_NOT(>=, f32); break;
-    case PN_OPCODE_FCMP_UNE_DOUBLE: OPCODE_CMP2_NOT(==, f64); break;
-    case PN_OPCODE_FCMP_UNE_FLOAT:  OPCODE_CMP2_NOT(==, f32); break;
-    case PN_OPCODE_FCMP_UNO_DOUBLE: OPCODE_CMP2_UNO(f64); break;
-    case PN_OPCODE_FCMP_UNO_FLOAT:  OPCODE_CMP2_UNO(f32); break;
+    case PN_OPCODE_FCMP_OEQ_DOUBLE: PN_OPCODE_CMP2(==, f64); break;
+    case PN_OPCODE_FCMP_OEQ_FLOAT:  PN_OPCODE_CMP2(==, f32); break;
+    case PN_OPCODE_FCMP_OGE_DOUBLE: PN_OPCODE_CMP2(>=, f64); break;
+    case PN_OPCODE_FCMP_OGE_FLOAT:  PN_OPCODE_CMP2(>=, f32); break;
+    case PN_OPCODE_FCMP_OGT_DOUBLE: PN_OPCODE_CMP2(>, f64); break;
+    case PN_OPCODE_FCMP_OGT_FLOAT:  PN_OPCODE_CMP2(>, f32); break;
+    case PN_OPCODE_FCMP_OLE_DOUBLE: PN_OPCODE_CMP2(<=, f64); break;
+    case PN_OPCODE_FCMP_OLE_FLOAT:  PN_OPCODE_CMP2(<=, f32); break;
+    case PN_OPCODE_FCMP_OLT_DOUBLE: PN_OPCODE_CMP2(<, f64); break;
+    case PN_OPCODE_FCMP_OLT_FLOAT:  PN_OPCODE_CMP2(<, f32); break;
+    case PN_OPCODE_FCMP_ONE_DOUBLE: PN_OPCODE_CMP2(!=, f64); break;
+    case PN_OPCODE_FCMP_ONE_FLOAT:  PN_OPCODE_CMP2(!=, f32); break;
+    case PN_OPCODE_FCMP_ORD_DOUBLE: PN_OPCODE_CMP2_ORD(f64); break;
+    case PN_OPCODE_FCMP_ORD_FLOAT:  PN_OPCODE_CMP2_ORD(f32); break;
+    case PN_OPCODE_FCMP_UEQ_DOUBLE: PN_OPCODE_CMP2_NOT(!=, f64); break;
+    case PN_OPCODE_FCMP_UEQ_FLOAT:  PN_OPCODE_CMP2_NOT(!=, f32); break;
+    case PN_OPCODE_FCMP_UGE_DOUBLE: PN_OPCODE_CMP2_NOT(<, f64); break;
+    case PN_OPCODE_FCMP_UGE_FLOAT:  PN_OPCODE_CMP2_NOT(<, f32); break;
+    case PN_OPCODE_FCMP_UGT_DOUBLE: PN_OPCODE_CMP2_NOT(<=, f64); break;
+    case PN_OPCODE_FCMP_UGT_FLOAT:  PN_OPCODE_CMP2_NOT(<=, f32); break;
+    case PN_OPCODE_FCMP_ULE_DOUBLE: PN_OPCODE_CMP2_NOT(>, f64); break;
+    case PN_OPCODE_FCMP_ULE_FLOAT:  PN_OPCODE_CMP2_NOT(>, f32); break;
+    case PN_OPCODE_FCMP_ULT_DOUBLE: PN_OPCODE_CMP2_NOT(>=, f64); break;
+    case PN_OPCODE_FCMP_ULT_FLOAT:  PN_OPCODE_CMP2_NOT(>=, f32); break;
+    case PN_OPCODE_FCMP_UNE_DOUBLE: PN_OPCODE_CMP2_NOT(==, f64); break;
+    case PN_OPCODE_FCMP_UNE_FLOAT:  PN_OPCODE_CMP2_NOT(==, f32); break;
+    case PN_OPCODE_FCMP_UNO_DOUBLE: PN_OPCODE_CMP2_UNO(f64); break;
+    case PN_OPCODE_FCMP_UNO_FLOAT:  PN_OPCODE_CMP2_UNO(f32); break;
 
 
     case PN_OPCODE_FORWARDTYPEREF:
       location->instruction_id++;
       break;
 
-    case PN_OPCODE_ICMP_EQ_INT8:   OPCODE_CMP2(==, u8); break;
-    case PN_OPCODE_ICMP_EQ_INT16:  OPCODE_CMP2(==, u16); break;
-    case PN_OPCODE_ICMP_EQ_INT32:  OPCODE_CMP2(==, u32); break;
-    case PN_OPCODE_ICMP_EQ_INT64:  OPCODE_CMP2(==, u64); break;
-    case PN_OPCODE_ICMP_NE_INT8:   OPCODE_CMP2(!=, u8); break;
-    case PN_OPCODE_ICMP_NE_INT16:  OPCODE_CMP2(!=, u16); break;
-    case PN_OPCODE_ICMP_NE_INT32:  OPCODE_CMP2(!=, u32); break;
-    case PN_OPCODE_ICMP_NE_INT64:  OPCODE_CMP2(!=, u64); break;
-    case PN_OPCODE_ICMP_SGE_INT8:  OPCODE_CMP2(>=, i8); break;
-    case PN_OPCODE_ICMP_SGE_INT16: OPCODE_CMP2(>=, i16); break;
-    case PN_OPCODE_ICMP_SGE_INT32: OPCODE_CMP2(>=, i32); break;
-    case PN_OPCODE_ICMP_SGE_INT64: OPCODE_CMP2(>=, i64); break;
-    case PN_OPCODE_ICMP_SGT_INT8:  OPCODE_CMP2(>, i8); break;
-    case PN_OPCODE_ICMP_SGT_INT16: OPCODE_CMP2(>, i16); break;
-    case PN_OPCODE_ICMP_SGT_INT32: OPCODE_CMP2(>, i32); break;
-    case PN_OPCODE_ICMP_SGT_INT64: OPCODE_CMP2(>, i64); break;
-    case PN_OPCODE_ICMP_SLE_INT8:  OPCODE_CMP2(<=, i8); break;
-    case PN_OPCODE_ICMP_SLE_INT16: OPCODE_CMP2(<=, i16); break;
-    case PN_OPCODE_ICMP_SLE_INT32: OPCODE_CMP2(<=, i32); break;
-    case PN_OPCODE_ICMP_SLE_INT64: OPCODE_CMP2(<=, i64); break;
-    case PN_OPCODE_ICMP_SLT_INT8:  OPCODE_CMP2(<, i8); break;
-    case PN_OPCODE_ICMP_SLT_INT16: OPCODE_CMP2(<, i16); break;
-    case PN_OPCODE_ICMP_SLT_INT32: OPCODE_CMP2(<, i32); break;
-    case PN_OPCODE_ICMP_SLT_INT64: OPCODE_CMP2(<, i64); break;
-    case PN_OPCODE_ICMP_UGE_INT8:  OPCODE_CMP2(>=, u8); break;
-    case PN_OPCODE_ICMP_UGE_INT16: OPCODE_CMP2(>=, u16); break;
-    case PN_OPCODE_ICMP_UGE_INT32: OPCODE_CMP2(>=, u32); break;
-    case PN_OPCODE_ICMP_UGE_INT64: OPCODE_CMP2(>=, u64); break;
-    case PN_OPCODE_ICMP_UGT_INT8:  OPCODE_CMP2(>, u8); break;
-    case PN_OPCODE_ICMP_UGT_INT16: OPCODE_CMP2(>, u16); break;
-    case PN_OPCODE_ICMP_UGT_INT32: OPCODE_CMP2(>, u32); break;
-    case PN_OPCODE_ICMP_UGT_INT64: OPCODE_CMP2(>, u64); break;
-    case PN_OPCODE_ICMP_ULE_INT8:  OPCODE_CMP2(<=, u8); break;
-    case PN_OPCODE_ICMP_ULE_INT16: OPCODE_CMP2(<=, u16); break;
-    case PN_OPCODE_ICMP_ULE_INT32: OPCODE_CMP2(<=, u32); break;
-    case PN_OPCODE_ICMP_ULE_INT64: OPCODE_CMP2(<=, u64); break;
-    case PN_OPCODE_ICMP_ULT_INT8:  OPCODE_CMP2(<, u8); break;
-    case PN_OPCODE_ICMP_ULT_INT16: OPCODE_CMP2(<, u16); break;
-    case PN_OPCODE_ICMP_ULT_INT32: OPCODE_CMP2(<, u32); break;
-    case PN_OPCODE_ICMP_ULT_INT64: OPCODE_CMP2(<, u64); break;
+    case PN_OPCODE_ICMP_EQ_INT8:   PN_OPCODE_CMP2(==, u8); break;
+    case PN_OPCODE_ICMP_EQ_INT16:  PN_OPCODE_CMP2(==, u16); break;
+    case PN_OPCODE_ICMP_EQ_INT32:  PN_OPCODE_CMP2(==, u32); break;
+    case PN_OPCODE_ICMP_EQ_INT64:  PN_OPCODE_CMP2(==, u64); break;
+    case PN_OPCODE_ICMP_NE_INT8:   PN_OPCODE_CMP2(!=, u8); break;
+    case PN_OPCODE_ICMP_NE_INT16:  PN_OPCODE_CMP2(!=, u16); break;
+    case PN_OPCODE_ICMP_NE_INT32:  PN_OPCODE_CMP2(!=, u32); break;
+    case PN_OPCODE_ICMP_NE_INT64:  PN_OPCODE_CMP2(!=, u64); break;
+    case PN_OPCODE_ICMP_SGE_INT8:  PN_OPCODE_CMP2(>=, i8); break;
+    case PN_OPCODE_ICMP_SGE_INT16: PN_OPCODE_CMP2(>=, i16); break;
+    case PN_OPCODE_ICMP_SGE_INT32: PN_OPCODE_CMP2(>=, i32); break;
+    case PN_OPCODE_ICMP_SGE_INT64: PN_OPCODE_CMP2(>=, i64); break;
+    case PN_OPCODE_ICMP_SGT_INT8:  PN_OPCODE_CMP2(>, i8); break;
+    case PN_OPCODE_ICMP_SGT_INT16: PN_OPCODE_CMP2(>, i16); break;
+    case PN_OPCODE_ICMP_SGT_INT32: PN_OPCODE_CMP2(>, i32); break;
+    case PN_OPCODE_ICMP_SGT_INT64: PN_OPCODE_CMP2(>, i64); break;
+    case PN_OPCODE_ICMP_SLE_INT8:  PN_OPCODE_CMP2(<=, i8); break;
+    case PN_OPCODE_ICMP_SLE_INT16: PN_OPCODE_CMP2(<=, i16); break;
+    case PN_OPCODE_ICMP_SLE_INT32: PN_OPCODE_CMP2(<=, i32); break;
+    case PN_OPCODE_ICMP_SLE_INT64: PN_OPCODE_CMP2(<=, i64); break;
+    case PN_OPCODE_ICMP_SLT_INT8:  PN_OPCODE_CMP2(<, i8); break;
+    case PN_OPCODE_ICMP_SLT_INT16: PN_OPCODE_CMP2(<, i16); break;
+    case PN_OPCODE_ICMP_SLT_INT32: PN_OPCODE_CMP2(<, i32); break;
+    case PN_OPCODE_ICMP_SLT_INT64: PN_OPCODE_CMP2(<, i64); break;
+    case PN_OPCODE_ICMP_UGE_INT8:  PN_OPCODE_CMP2(>=, u8); break;
+    case PN_OPCODE_ICMP_UGE_INT16: PN_OPCODE_CMP2(>=, u16); break;
+    case PN_OPCODE_ICMP_UGE_INT32: PN_OPCODE_CMP2(>=, u32); break;
+    case PN_OPCODE_ICMP_UGE_INT64: PN_OPCODE_CMP2(>=, u64); break;
+    case PN_OPCODE_ICMP_UGT_INT8:  PN_OPCODE_CMP2(>, u8); break;
+    case PN_OPCODE_ICMP_UGT_INT16: PN_OPCODE_CMP2(>, u16); break;
+    case PN_OPCODE_ICMP_UGT_INT32: PN_OPCODE_CMP2(>, u32); break;
+    case PN_OPCODE_ICMP_UGT_INT64: PN_OPCODE_CMP2(>, u64); break;
+    case PN_OPCODE_ICMP_ULE_INT8:  PN_OPCODE_CMP2(<=, u8); break;
+    case PN_OPCODE_ICMP_ULE_INT16: PN_OPCODE_CMP2(<=, u16); break;
+    case PN_OPCODE_ICMP_ULE_INT32: PN_OPCODE_CMP2(<=, u32); break;
+    case PN_OPCODE_ICMP_ULE_INT64: PN_OPCODE_CMP2(<=, u64); break;
+    case PN_OPCODE_ICMP_ULT_INT8:  PN_OPCODE_CMP2(<, u8); break;
+    case PN_OPCODE_ICMP_ULT_INT16: PN_OPCODE_CMP2(<, u16); break;
+    case PN_OPCODE_ICMP_ULT_INT32: PN_OPCODE_CMP2(<, u32); break;
+    case PN_OPCODE_ICMP_ULT_INT64: PN_OPCODE_CMP2(<, u64); break;
 
-#undef OPCODE_CMP2
-#undef OPCODE_CMP2_NOT
-#undef OPCODE_CMP2_ORD
-#undef OPCODE_CMP2_UNO
+#undef PN_OPCODE_CMP2
+#undef PN_OPCODE_CMP2_NOT
+#undef PN_OPCODE_CMP2_ORD
+#undef PN_OPCODE_CMP2_UNO
 
     case PN_OPCODE_INTRINSIC_LLVM_MEMCPY: {
       PNInstructionCall* i = (PNInstructionCall*)inst;
@@ -855,7 +855,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       break;
     }
 
-#define OPCODE_INTRINSIC_CMPXCHG(ty)                                          \
+#define PN_OPCODE_INTRINSIC_CMPXCHG(ty)                                       \
   do {                                                                        \
     PNInstructionCall* i = (PNInstructionCall*)inst;                          \
     PN_CHECK(i->num_args == 5);                                               \
@@ -888,21 +888,21 @@ static void pn_thread_execute_instruction(PNThread* thread) {
   } while (0) /* no semicolon */
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I8:
-      OPCODE_INTRINSIC_CMPXCHG(u8);
+      PN_OPCODE_INTRINSIC_CMPXCHG(u8);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I16:
-      OPCODE_INTRINSIC_CMPXCHG(u16);
+      PN_OPCODE_INTRINSIC_CMPXCHG(u16);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I32:
-      OPCODE_INTRINSIC_CMPXCHG(u32);
+      PN_OPCODE_INTRINSIC_CMPXCHG(u32);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I64:
-      OPCODE_INTRINSIC_CMPXCHG(u64);
+      PN_OPCODE_INTRINSIC_CMPXCHG(u64);
       break;
 
-#undef OPCODE_INTRINSIC_CMPXCHG
+#undef PN_OPCODE_INTRINSIC_CMPXCHG
 
-#define OPCODE_INTRINSIC_LOAD(ty)                                              \
+#define PN_OPCODE_INTRINSIC_LOAD(ty)                                           \
   do {                                                                         \
     PNInstructionCall* i = (PNInstructionCall*)inst;                           \
     PN_CHECK(i->num_args == 2);                                                \
@@ -922,21 +922,21 @@ static void pn_thread_execute_instruction(PNThread* thread) {
   } while (0) /* no semicolon */
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I8:
-      OPCODE_INTRINSIC_LOAD(u8);
+      PN_OPCODE_INTRINSIC_LOAD(u8);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I16:
-      OPCODE_INTRINSIC_LOAD(u16);
+      PN_OPCODE_INTRINSIC_LOAD(u16);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I32:
-      OPCODE_INTRINSIC_LOAD(u32);
+      PN_OPCODE_INTRINSIC_LOAD(u32);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I64:
-      OPCODE_INTRINSIC_LOAD(u64);
+      PN_OPCODE_INTRINSIC_LOAD(u64);
       break;
 
-#undef OPCODE_INTRINSIC_LOAD
+#undef PN_OPCODE_INTRINSIC_LOAD
 
-#define OPCODE_INTRINSIC_RMW(opval, op, ty)                                    \
+#define PN_OPCODE_INTRINSIC_RMW(opval, op, ty)                                    \
   do {                                                                         \
     PNInstructionCall* i = (PNInstructionCall*)inst;                           \
     PN_CHECK(i->num_args == 4);                                                \
@@ -962,71 +962,71 @@ static void pn_thread_execute_instruction(PNThread* thread) {
   } while (0) /* no semicolon */
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8:
-      OPCODE_INTRINSIC_RMW(1, +, u8);
+      PN_OPCODE_INTRINSIC_RMW(1, +, u8);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I16:
-      OPCODE_INTRINSIC_RMW(1, +, u16);
+      PN_OPCODE_INTRINSIC_RMW(1, +, u16);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I32:
-      OPCODE_INTRINSIC_RMW(1, +, u32);
+      PN_OPCODE_INTRINSIC_RMW(1, +, u32);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I64:
-      OPCODE_INTRINSIC_RMW(1, +, u64);
+      PN_OPCODE_INTRINSIC_RMW(1, +, u64);
       break;
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I8:
-      OPCODE_INTRINSIC_RMW(2, -, u8);
+      PN_OPCODE_INTRINSIC_RMW(2, -, u8);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I16:
-      OPCODE_INTRINSIC_RMW(2, -, u16);
+      PN_OPCODE_INTRINSIC_RMW(2, -, u16);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I32:
-      OPCODE_INTRINSIC_RMW(2, -, u32);
+      PN_OPCODE_INTRINSIC_RMW(2, -, u32);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I64:
-      OPCODE_INTRINSIC_RMW(2, -, u64);
+      PN_OPCODE_INTRINSIC_RMW(2, -, u64);
       break;
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I8:
-      OPCODE_INTRINSIC_RMW(3, &, u8);
+      PN_OPCODE_INTRINSIC_RMW(3, &, u8);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I16:
-      OPCODE_INTRINSIC_RMW(3, &, u16);
+      PN_OPCODE_INTRINSIC_RMW(3, &, u16);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I32:
-      OPCODE_INTRINSIC_RMW(3, &, u32);
+      PN_OPCODE_INTRINSIC_RMW(3, &, u32);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I64:
-      OPCODE_INTRINSIC_RMW(3, &, u64);
+      PN_OPCODE_INTRINSIC_RMW(3, &, u64);
       break;
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I8:
-      OPCODE_INTRINSIC_RMW(4, |, u8);
+      PN_OPCODE_INTRINSIC_RMW(4, |, u8);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I16:
-      OPCODE_INTRINSIC_RMW(4, |, u16);
+      PN_OPCODE_INTRINSIC_RMW(4, |, u16);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I32:
-      OPCODE_INTRINSIC_RMW(4, |, u32);
+      PN_OPCODE_INTRINSIC_RMW(4, |, u32);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I64:
-      OPCODE_INTRINSIC_RMW(4, |, u64);
+      PN_OPCODE_INTRINSIC_RMW(4, |, u64);
       break;
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I8:
-      OPCODE_INTRINSIC_RMW(5, ^, u8);
+      PN_OPCODE_INTRINSIC_RMW(5, ^, u8);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I16:
-      OPCODE_INTRINSIC_RMW(5, ^, u16);
+      PN_OPCODE_INTRINSIC_RMW(5, ^, u16);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I32:
-      OPCODE_INTRINSIC_RMW(5, ^, u32);
+      PN_OPCODE_INTRINSIC_RMW(5, ^, u32);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I64:
-      OPCODE_INTRINSIC_RMW(5, ^, u64);
+      PN_OPCODE_INTRINSIC_RMW(5, ^, u64);
       break;
 
-#define OPCODE_INTRINSIC_EXCHANGE(opval, ty)                                   \
+#define PN_OPCODE_INTRINSIC_EXCHANGE(opval, ty)                                \
   do {                                                                         \
     PNInstructionCall* i = (PNInstructionCall*)inst;                           \
     PN_CHECK(i->num_args == 4);                                                \
@@ -1052,20 +1052,20 @@ static void pn_thread_execute_instruction(PNThread* thread) {
   } while (0) /* no semicolon */
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I8:
-      OPCODE_INTRINSIC_EXCHANGE(6, u8);
+      PN_OPCODE_INTRINSIC_EXCHANGE(6, u8);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I16:
-      OPCODE_INTRINSIC_EXCHANGE(6, u16);
+      PN_OPCODE_INTRINSIC_EXCHANGE(6, u16);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I32:
-      OPCODE_INTRINSIC_EXCHANGE(6, u32);
+      PN_OPCODE_INTRINSIC_EXCHANGE(6, u32);
       break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I64:
-      OPCODE_INTRINSIC_EXCHANGE(6, u64);
+      PN_OPCODE_INTRINSIC_EXCHANGE(6, u64);
       break;
 
-#undef OPCODE_INTRINSIC_RMW
-#undef OPCODE_INTRINSIC_EXCHANGE
+#undef PN_OPCODE_INTRINSIC_RMW
+#undef PN_OPCODE_INTRINSIC_EXCHANGE
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_LONGJMP: {
       PNInstructionCall* i = (PNInstructionCall*)inst;
@@ -1229,7 +1229,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     PN_OPCODE_INTRINSIC_STUB(LLVM_STACKSAVE)
     PN_OPCODE_INTRINSIC_STUB(START)
 
-#define OPCODE_LOAD(ty)                                             \
+#define PN_OPCODE_LOAD(ty)                                          \
   do {                                                              \
     PNInstructionLoad* i = (PNInstructionLoad*)inst;                \
     PNRuntimeValue src = pn_thread_get_value(thread, i->src_id);    \
@@ -1241,14 +1241,14 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     location->instruction_id++;                                     \
   } while (0) /*no semicolon */
 
-    case PN_OPCODE_LOAD_DOUBLE: OPCODE_LOAD(f64); break;
-    case PN_OPCODE_LOAD_FLOAT: OPCODE_LOAD(f32); break;
-    case PN_OPCODE_LOAD_INT8: OPCODE_LOAD(u8); break;
-    case PN_OPCODE_LOAD_INT16: OPCODE_LOAD(u16); break;
-    case PN_OPCODE_LOAD_INT32: OPCODE_LOAD(u32); break;
-    case PN_OPCODE_LOAD_INT64: OPCODE_LOAD(u64); break;
+    case PN_OPCODE_LOAD_DOUBLE: PN_OPCODE_LOAD(f64); break;
+    case PN_OPCODE_LOAD_FLOAT: PN_OPCODE_LOAD(f32); break;
+    case PN_OPCODE_LOAD_INT8: PN_OPCODE_LOAD(u8); break;
+    case PN_OPCODE_LOAD_INT16: PN_OPCODE_LOAD(u16); break;
+    case PN_OPCODE_LOAD_INT32: PN_OPCODE_LOAD(u32); break;
+    case PN_OPCODE_LOAD_INT64: PN_OPCODE_LOAD(u64); break;
 
-#undef OPCODE_LOAD
+#undef PN_OPCODE_LOAD
 
     case PN_OPCODE_PHI:
       location->instruction_id++;
@@ -1297,7 +1297,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       break;
     }
 
-#define OPCODE_STORE(ty)                                             \
+#define PN_OPCODE_STORE(ty)                                          \
   do {                                                               \
     PNInstructionStore* i = (PNInstructionStore*)inst;               \
     PNRuntimeValue dest = pn_thread_get_value(thread, i->dest_id);   \
@@ -1308,16 +1308,16 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     location->instruction_id++;                                      \
   } while (0) /*no semicolon */
 
-    case PN_OPCODE_STORE_DOUBLE: OPCODE_STORE(f64); break;
-    case PN_OPCODE_STORE_FLOAT: OPCODE_STORE(f32); break;
-    case PN_OPCODE_STORE_INT8: OPCODE_STORE(u8); break;
-    case PN_OPCODE_STORE_INT16: OPCODE_STORE(u16); break;
-    case PN_OPCODE_STORE_INT32: OPCODE_STORE(u32); break;
-    case PN_OPCODE_STORE_INT64: OPCODE_STORE(u64); break;
+    case PN_OPCODE_STORE_DOUBLE: PN_OPCODE_STORE(f64); break;
+    case PN_OPCODE_STORE_FLOAT: PN_OPCODE_STORE(f32); break;
+    case PN_OPCODE_STORE_INT8: PN_OPCODE_STORE(u8); break;
+    case PN_OPCODE_STORE_INT16: PN_OPCODE_STORE(u16); break;
+    case PN_OPCODE_STORE_INT32: PN_OPCODE_STORE(u32); break;
+    case PN_OPCODE_STORE_INT64: PN_OPCODE_STORE(u64); break;
 
-#undef OPCODE_STORE
+#undef PN_OPCODE_STORE
 
-#define OPCODE_SWITCH(ty)                                             \
+#define PN_OPCODE_SWITCH(ty)                                          \
   do {                                                                \
     PNInstructionSwitch* i = (PNInstructionSwitch*)inst;              \
     PNRuntimeValue value = pn_thread_get_value(thread, i->value_id);  \
@@ -1340,12 +1340,12 @@ static void pn_thread_execute_instruction(PNThread* thread) {
   } while (0) /* no semicolon */
 
     case PN_OPCODE_SWITCH_INT1:
-    case PN_OPCODE_SWITCH_INT8: OPCODE_SWITCH(i8); break;
-    case PN_OPCODE_SWITCH_INT16: OPCODE_SWITCH(i16); break;
-    case PN_OPCODE_SWITCH_INT32: OPCODE_SWITCH(i32); break;
-    case PN_OPCODE_SWITCH_INT64: OPCODE_SWITCH(i64); break;
+    case PN_OPCODE_SWITCH_INT8: PN_OPCODE_SWITCH(i8); break;
+    case PN_OPCODE_SWITCH_INT16: PN_OPCODE_SWITCH(i16); break;
+    case PN_OPCODE_SWITCH_INT32: PN_OPCODE_SWITCH(i32); break;
+    case PN_OPCODE_SWITCH_INT64: PN_OPCODE_SWITCH(i64); break;
 
-#undef OPCODE_SWITCH
+#undef PN_OPCODE_SWITCH
 
     case PN_OPCODE_UNREACHABLE:
       PN_FATAL("Reached unreachable instruction!\n");
