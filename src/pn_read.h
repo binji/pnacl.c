@@ -103,8 +103,6 @@ static void pn_type_block_read(PNModule* module,
 
   PNTypeId current_type_id = 0;
 
-  PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
-
   while (!pn_bitstream_at_end(bs)) {
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
@@ -113,7 +111,6 @@ static void pn_type_block_read(PNModule* module,
         PN_TRACE_DEDENT(TYPE_BLOCK, 2);
         PN_TRACE(TYPE_BLOCK, "}\n");
         pn_bitstream_align_32(bs);
-        pn_allocator_reset_to_mark(&module->temp_allocator, mark);
         PN_END_TIME(TYPE_BLOCK_READ);
         return;
 
@@ -227,7 +224,7 @@ static void pn_type_block_read(PNModule* module,
         if (code != PN_TYPE_CODE_NUMENTRY) {
           PN_TRACE(TYPE_BLOCK, "@t%d = %s;\n", current_type_id - 1,
                    pn_type_describe_all(module, current_type_id - 1, NULL,
-                                        PN_FALSE, PN_FALSE));
+                                        PN_FALSE));
         }
 
         pn_record_reader_finish(&reader);
@@ -391,7 +388,7 @@ static void pn_globalvar_block_read(PNModule* module,
 
             PN_TRACE(GLOBALVAR_BLOCK, "%s %s, align %d,\n",
                      global_var->is_constant ? "const" : "var",
-                     pn_value_describe_temp(module, NULL, value_id),
+                     pn_value_describe(module, NULL, value_id),
                      global_var->alignment);
             PN_TRACE_INDENT(GLOBALVAR_BLOCK, 2);
             break;
@@ -472,13 +469,13 @@ static void pn_globalvar_block_read(PNModule* module,
 
             if (addend > 0) {
               PN_TRACE(GLOBALVAR_BLOCK, "reloc %s + %d;\n",
-                       pn_value_describe_temp(module, NULL, index), addend);
+                       pn_value_describe(module, NULL, index), addend);
             } else if (addend < 0) {
               PN_TRACE(GLOBALVAR_BLOCK, "reloc %s - %d;\n",
-                       pn_value_describe_temp(module, NULL, index), -addend);
+                       pn_value_describe(module, NULL, index), -addend);
             } else {
               PN_TRACE(GLOBALVAR_BLOCK, "reloc %s;\n",
-                       pn_value_describe_temp(module, NULL, index));
+                       pn_value_describe(module, NULL, index));
             }
 
             if (index < module->num_values) {
@@ -583,7 +580,7 @@ static void pn_value_symtab_block_read(PNModule* module,
             }
 
             PN_TRACE(VALUE_SYMTAB_BLOCK, "%s : \"%s\";\n",
-                     pn_value_describe_temp(module, NULL, value_id), name);
+                     pn_value_describe(module, NULL, value_id), name);
 
             PNValue* value = pn_module_get_value(module, value_id);
             if (value->code == PN_VALUE_CODE_FUNCTION) {
@@ -638,8 +635,6 @@ static void pn_constants_block_read(PNModule* module,
   PNBlockAbbrevs abbrevs = {};
   pn_block_info_context_get_abbrev(context, PN_BLOCKID_CONSTANTS, &abbrevs);
 
-  PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
-
   /* Indent 2 more, that we we can always dedent 2 on PN_CONSTANTS_CODE_SETTYPE
    */
   PN_TRACE_INDENT(CONSTANTS_BLOCK, 2);
@@ -654,7 +649,6 @@ static void pn_constants_block_read(PNModule* module,
         PN_TRACE(CONSTANTS_BLOCK, "}\n");
         PN_TRACE_DEDENT(CONSTANTS_BLOCK, 2);
         pn_bitstream_align_32(bs);
-        pn_allocator_reset_to_mark(&module->temp_allocator, mark);
         PN_END_TIME(CONSTANTS_BLOCK_READ);
         return;
 
@@ -702,7 +696,7 @@ static void pn_constants_block_read(PNModule* module,
             value->index = constant_id;
 
             PN_TRACE(CONSTANTS_BLOCK, "%s = %s undef;\n",
-                     pn_value_describe_temp(module, function, value_id),
+                     pn_value_describe(module, function, value_id),
                      pn_type_describe(module, cur_type_id));
             break;
           }
@@ -750,7 +744,7 @@ static void pn_constants_block_read(PNModule* module,
                 }
 
                 PN_TRACE(CONSTANTS_BLOCK, "%s = %s %d;\n",
-                         pn_value_describe_temp(module, function, value_id),
+                         pn_value_describe(module, function, value_id),
                          pn_type_describe(module, cur_type_id), data);
                 break;
               }
@@ -761,7 +755,7 @@ static void pn_constants_block_read(PNModule* module,
                 constant->value.i64 = data;
 
                 PN_TRACE(CONSTANTS_BLOCK, "%s = %s %" PRId64 ";\n",
-                         pn_value_describe_temp(module, function, value_id),
+                         pn_value_describe(module, function, value_id),
                          pn_type_describe(module, cur_type_id), data);
                 break;
               }
@@ -794,7 +788,7 @@ static void pn_constants_block_read(PNModule* module,
                 float data = pn_record_read_float(&reader, "float value");
                 constant->value.f32 = data;
                 PN_TRACE(CONSTANTS_BLOCK, "%s = %s %g;\n",
-                         pn_value_describe_temp(module, function, value_id),
+                         pn_value_describe(module, function, value_id),
                          pn_type_describe(module, cur_type_id), data);
                 break;
               }
@@ -803,7 +797,7 @@ static void pn_constants_block_read(PNModule* module,
                 double data = pn_record_read_double(&reader, "double value");
                 constant->value.f64 = data;
                 PN_TRACE(CONSTANTS_BLOCK, "%s = %s %g;\n",
-                         pn_value_describe_temp(module, function, value_id),
+                         pn_value_describe(module, function, value_id),
                          pn_type_describe(module, cur_type_id), data);
                 break;
               }
@@ -1539,13 +1533,19 @@ static void pn_module_block_read(PNModule* module,
             value->type_id = function->type_id;
             value->index = function_id;
 
-            PN_TRACE(MODULE_BLOCK, "%s %s %s;\n",
-                     function->is_proto ? "declare" : "define",
-                     function->linkage ? "internal" : "external",
-                     pn_type_describe_all(
-                         module, function->type_id,
-                         pn_value_describe(module, function, value_id),
-                         PN_FALSE, PN_FALSE));
+            if (PN_IS_TRACE(MODULE_BLOCK)) {
+              PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
+
+              PN_TRACE(
+                  MODULE_BLOCK, "%s %s %s;\n",
+                  function->is_proto ? "declare" : "define",
+                  function->linkage ? "internal" : "external",
+                  pn_type_describe_all(
+                      module, function->type_id,
+                      pn_value_describe(module, function, value_id), PN_FALSE));
+
+              pn_allocator_reset_to_mark(&module->temp_allocator, mark);
+            }
             break;
           }
 

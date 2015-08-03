@@ -27,8 +27,7 @@ static const char* pn_type_describe(PNModule* module, PNTypeId type_id);
 static const char* pn_type_describe_all(PNModule* module,
                                         PNTypeId type_id,
                                         const char* name,
-                                        PNBool with_param_names,
-                                        PNBool basic) {
+                                        PNBool with_param_names) {
   if (type_id == PN_INVALID_TYPE_ID) {
     return "<invalid>";
   }
@@ -61,18 +60,12 @@ static const char* pn_type_describe_all(PNModule* module,
       return "double";
 
     case PN_TYPE_CODE_FUNCTION: {
-      if (basic) {
-        return "i32";
-      }
-
       char* buffer = pn_allocator_alloc(&module->temp_allocator, 1, 1);
       uint32_t buffer_len = 1;
       buffer[0] = 0;
 
       pn_string_concat(&module->temp_allocator, &buffer, &buffer_len,
-                       pn_type_describe_all(module, type->return_type, NULL,
-                                            PN_FALSE, PN_TRUE),
-                       0);
+                       pn_type_describe(module, type->return_type), 0);
       pn_string_concat(&module->temp_allocator, &buffer, &buffer_len, " ", 1);
       if (name) {
         pn_string_concat(&module->temp_allocator, &buffer, &buffer_len, name,
@@ -87,9 +80,7 @@ static const char* pn_type_describe_all(PNModule* module,
         }
 
         pn_string_concat(&module->temp_allocator, &buffer, &buffer_len,
-                         pn_type_describe_all(module, type->arg_types[n], NULL,
-                                              PN_FALSE, PN_TRUE),
-                         0);
+                         pn_type_describe(module, type->arg_types[n]), 0);
 
         if (with_param_names) {
           char param_name[14];
@@ -108,7 +99,28 @@ static const char* pn_type_describe_all(PNModule* module,
 }
 
 static const char* pn_type_describe(PNModule* module, PNTypeId type_id) {
-  return pn_type_describe_all(module, type_id, NULL, PN_FALSE, PN_TRUE);
+  PNType* type = pn_module_get_type(module, type_id);
+  switch (type->code) {
+    case PN_TYPE_CODE_VOID: return "void";
+    case PN_TYPE_CODE_INTEGER:
+      switch (type->width) {
+        case 1: return "i1";
+        case 8: return "i8";
+        case 16: return "i16";
+        case 32: return "i32";
+        case 64: return "i64";
+        default:
+          PN_UNREACHABLE();
+          break;
+      }
+    case PN_TYPE_CODE_FLOAT: return "float";
+    case PN_TYPE_CODE_DOUBLE: return "double";
+    case PN_TYPE_CODE_FUNCTION: return "i32";
+    default:
+      PN_UNREACHABLE();
+      break;
+  }
+  return "<unknown>";
 }
 
 static void pn_value_print_to_string(PNModule* module,
@@ -176,18 +188,10 @@ static void pn_value_print_to_string(PNModule* module,
 static const char* pn_value_describe(PNModule* module,
                                      PNFunction* function,
                                      PNValueId value_id) {
-  char buffer[13];
-  pn_value_print_to_string(module, function, value_id, buffer, sizeof(buffer));
-  size_t len = strlen(buffer) + 1;
-  char* retval = pn_allocator_alloc(&module->temp_allocator, len, 1);
-  strcpy(retval, buffer);
-  return retval;
-}
-
-static const char* pn_value_describe_temp(PNModule* module,
-                                          PNFunction* function,
-                                          PNValueId value_id) {
-  static char buffer[13];
+  const char MAX_BUFFER_INDEX = 16;
+  static int buffer_index = 0;
+  static char buffers[MAX_BUFFER_INDEX][13];
+  char* buffer = &buffers[buffer_index++ & (MAX_BUFFER_INDEX - 1)][0];
   pn_value_print_to_string(module, function, value_id, buffer, sizeof(buffer));
   return buffer;
 }
@@ -264,8 +268,6 @@ static void pn_instruction_trace(PNModule* module,
   if (!(PN_IS_TRACE(INSTRUCTIONS) || force)) {
     return;
   }
-
-  PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
 
   PN_TRACE_PRINT_INDENT();
   switch (inst->code) {
@@ -395,11 +397,10 @@ static void pn_instruction_trace(PNModule* module,
 
     case PN_FUNCTION_CODE_INST_STORE: {
       PNInstructionStore* i = (PNInstructionStore*)inst;
-      PNValue* value = pn_function_get_value(module, function, i->value_id);
-      const char* type_str =
-          pn_type_describe_all(module, value->type_id, NULL, PN_FALSE, PN_TRUE);
-      PN_PRINT("store %s %s, %s* %s, align %d;\n", type_str,
-               pn_value_describe(module, function, i->value_id), type_str,
+      PN_PRINT("store %s %s, %s* %s, align %d;\n",
+               pn_value_describe_type(module, function, i->value_id),
+               pn_value_describe(module, function, i->value_id),
+               pn_value_describe_type(module, function, i->value_id),
                pn_value_describe(module, function, i->dest_id), i->alignment);
       break;
     }
@@ -456,9 +457,8 @@ static void pn_instruction_trace(PNModule* module,
         if (n != 0) {
           PN_PRINT(", ");
         }
-        PNValue* value = pn_function_get_value(module, function, i->arg_ids[n]);
-        PN_PRINT("%s %s", pn_type_describe_all(module, value->type_id, NULL,
-                                               PN_FALSE, PN_TRUE),
+        PN_PRINT("%s %s",
+                 pn_value_describe_type(module, function, i->arg_ids[n]),
                  pn_value_describe(module, function, i->arg_ids[n]));
       }
       PN_PRINT(");\n");
@@ -469,8 +469,6 @@ static void pn_instruction_trace(PNModule* module,
       PN_FATAL("Invalid instruction code: %d\n", inst->code);
       break;
   }
-
-  pn_allocator_reset_to_mark(&module->temp_allocator, mark);
 }
 
 static void pn_basic_block_trace(PNModule* module,
@@ -550,12 +548,11 @@ static void pn_basic_block_trace(PNModule* module,
 static void pn_function_print_header(PNModule* module,
                                      PNFunction* function,
                                      PNFunctionId function_id) {
-  PN_PRINT(
-      "%*sfunction %s {  // BlockID = %d\n", g_pn_trace_indent, "",
-      pn_type_describe_all(module, function->type_id,
-                           pn_value_describe_temp(module, NULL, function_id),
-                           PN_TRUE, PN_FALSE),
-      PN_BLOCKID_FUNCTION);
+  PN_PRINT("%*sfunction %s {  // BlockID = %d\n", g_pn_trace_indent, "",
+           pn_type_describe_all(module, function->type_id,
+                                pn_value_describe(module, NULL, function_id),
+                                PN_TRUE),
+           PN_BLOCKID_FUNCTION);
     g_pn_trace_indent += 2;
 }
 
@@ -600,34 +597,10 @@ static void pn_function_trace(PNModule* module,
 
 #else
 
-static const char* pn_type_describe_all(PNModule* module,
-                                        PNTypeId type_id,
-                                        const char* name,
-                                        PNBool with_param_names) {
-  return "Unknown";
-}
-
-
-static const char* pn_type_describe(PNModule* module,
-                                    PNTypeId type_id) {
-  return "Unknown";
-}
-
-static const char* pn_value_describe(PNModule* module,
-                                     PNFunction* function,
-                                     PNValueId value_id) {
-  return "Unknown";
-}
-
 static void pn_instruction_trace(PNModule* module,
                                  PNFunction* function,
                                  PNInstruction* inst,
                                  PNBool force) {}
-
-static void pn_basic_block_trace(PNModule* module,
-                                 PNFunction* function,
-                                 PNBasicBlock* bb,
-                                 PNBasicBlockId bb_id) {}
 
 static void pn_function_print_header(PNModule* module,
                                      PNFunction* function,
