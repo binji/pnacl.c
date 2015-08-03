@@ -6,7 +6,7 @@ CC = clang
 ALL = pnacl pnacl-opt-assert
 EVERYTHING = pnacl pnacl-liveness pnacl-notrace pnacl-notimers \
 	pnacl-notrace-notimers pnacl-opt pnacl-opt-assert pnacl-msan pnacl-asan \
-	pnacl-32
+	pnacl-ubsan pnacl-32
 
 
 .PHONY: all
@@ -49,6 +49,9 @@ out/pnacl-msan: src/pnacl.c | out
 
 out/pnacl-asan: src/pnacl.c | out
 	clang $(CFLAGS) -fsanitize=address -fno-omit-frame-pointer -o $@ $<
+
+out/pnacl-ubsan: src/pnacl.c | out
+	clang $(CFLAGS) -fsanitize=undefined -fno-omit-frame-pointer -o $@ $<
 
 out/pnacl-32: src/pnacl.c | out
 	$(CC) $(CFLAGS) -m32 -o $@ $<

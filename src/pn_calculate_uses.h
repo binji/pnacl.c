@@ -141,8 +141,9 @@ static void pn_basic_block_calculate_uses(PNModule* module,
     uint32_t b;
     uint32_t first_bit = pn_ctz(word);
     uint32_t last_bit = 32 - pn_clz(word);
+    if (last_bit == 32) last_bit = 31;
     for (b = first_bit; b <= last_bit; ++b) {
-      if (word & (1 << b)) {
+      if (word & (1U << b)) {
         bb->uses[bb->num_uses++] = module->num_values + (w << 5) + b;
       }
     }

@@ -15,7 +15,7 @@ static void pn_bitset_init(PNAllocator* allocator,
 
 static void pn_bitset_set(PNBitSet* bitset, uint32_t bit, PNBool set) {
   uint32_t word = bit >> 5;
-  uint32_t mask = 1 << (bit & 31);
+  uint32_t mask = 1U << (bit & 31);
   assert(word < bitset->num_words);
 
   if (set) {
@@ -27,7 +27,7 @@ static void pn_bitset_set(PNBitSet* bitset, uint32_t bit, PNBool set) {
 
 static PNBool pn_bitset_is_set(PNBitSet* bitset, uint32_t bit) {
   uint32_t word = bit >> 5;
-  uint32_t mask = 1 << (bit & 31);
+  uint32_t mask = 1U << (bit & 31);
   assert(word < bitset->num_words);
 
   return (bitset->words[word] & mask) != 0;
