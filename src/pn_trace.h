@@ -108,7 +108,7 @@ static const char* pn_type_describe_all(PNModule* module,
 }
 
 static const char* pn_type_describe(PNModule* module, PNTypeId type_id) {
-  return pn_type_describe_all(module, type_id, NULL, PN_FALSE, PN_FALSE);
+  return pn_type_describe_all(module, type_id, NULL, PN_FALSE, PN_TRUE);
 }
 
 static void pn_value_print_to_string(PNModule* module,

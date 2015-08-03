@@ -7,6 +7,7 @@ options:
   -r, --run                           
   -e, --env=KEY=VALUE                 set runtime environment variable KEY to VALUE
   -E, --use-host-env                  
+      --no-dedupe-phi-nodes           
   -t, --trace-all                     
       --trace-block                   
       --trace-bcdis                   

@@ -226,7 +226,8 @@ static void pn_type_block_read(PNModule* module,
 
         if (code != PN_TYPE_CODE_NUMENTRY) {
           PN_TRACE(TYPE_BLOCK, "@t%d = %s;\n", current_type_id - 1,
-                   pn_type_describe(module, current_type_id - 1));
+                   pn_type_describe_all(module, current_type_id - 1, NULL,
+                                        PN_FALSE, PN_FALSE));
         }
 
         pn_record_reader_finish(&reader);
@@ -300,7 +301,7 @@ static void pn_globalvar_block_read(PNModule* module,
   typedef struct PNRelocInfo {
     uint32_t offset;
     uint32_t index;
-    uint32_t addend;
+    int32_t addend;
   } PNRelocInfo;
   PNRelocInfo* reloc_infos = NULL;
   uint32_t num_reloc_infos = 0;
@@ -465,13 +466,16 @@ static void pn_globalvar_block_read(PNModule* module,
             PN_CHECK(initializer_id < global_var->num_initializers);
             initializer_id++;
             uint32_t index = pn_record_read_uint32(&reader, "reloc index");
-            uint32_t addend = 0;
+            int32_t addend = 0;
             /* Optional */
-            pn_record_try_read_uint32(&reader, &addend);
+            pn_record_try_read_int32(&reader, &addend);
 
-            if (addend) {
+            if (addend > 0) {
               PN_TRACE(GLOBALVAR_BLOCK, "reloc %s + %d;\n",
                        pn_value_describe_temp(module, NULL, index), addend);
+            } else if (addend < 0) {
+              PN_TRACE(GLOBALVAR_BLOCK, "reloc %s - %d;\n",
+                       pn_value_describe_temp(module, NULL, index), -addend);
             } else {
               PN_TRACE(GLOBALVAR_BLOCK, "reloc %s;\n",
                        pn_value_describe_temp(module, NULL, index));
@@ -728,7 +732,8 @@ static void pn_constants_block_read(PNModule* module,
 
                 switch (cur_basic_type) {
                   case PN_BASIC_TYPE_INT1:
-                    constant->value.i8 = data & 1;
+                    data &= 1;
+                    constant->value.i8 = data;
                     break;
                   case PN_BASIC_TYPE_INT8:
                     constant->value.i8 = data;
@@ -1186,20 +1191,22 @@ static void pn_function_block_read(PNModule* module,
                 PN_FATAL("unable to read phi bb index\n");
               }
 
-              /* Dedupe incoming branches */
               PNBool found = PN_FALSE;
-              for (i = 0; i < inst->num_incoming; ++i) {
-                if (inst->incoming[i].bb_id == bb) {
-                  if (inst->incoming[i].value_id == value) {
-                    found = PN_TRUE;
-                  } else {
-                    /* Found, but values don't match */
-                    PN_FATAL(
-                        "phi duplicated with matching bb %d but different "
-                        "values %d != %d\n",
-                        bb, inst->incoming[i].value_id, value);
+              if (g_pn_dedupe_phi_nodes) {
+                /* Dedupe incoming branches */
+                for (i = 0; i < inst->num_incoming; ++i) {
+                  if (inst->incoming[i].bb_id == bb) {
+                    if (inst->incoming[i].value_id == value) {
+                      found = PN_TRUE;
+                    } else {
+                      /* Found, but values don't match */
+                      PN_FATAL(
+                          "phi duplicated with matching bb %d but different "
+                          "values %d != %d\n",
+                          bb, inst->incoming[i].value_id, value);
+                    }
+                    break;
                   }
-                  break;
                 }
               }
 

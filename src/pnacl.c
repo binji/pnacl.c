@@ -53,6 +53,7 @@ static const char* g_pn_filename;
 static char** g_pn_argv;
 static char** g_pn_environ;
 static uint32_t g_pn_memory_size = PN_DEFAULT_MEMORY_SIZE;
+static PNBool g_pn_dedupe_phi_nodes = PN_TRUE;
 static PNBool g_pn_print_named_functions;
 static PNBool g_pn_print_stats;
 static PNBool g_pn_print_opcode_counts;
@@ -115,6 +116,7 @@ enum {
   PN_FLAG_RUN,
   PN_FLAG_ENV,
   PN_FLAG_USE_HOST_ENV,
+  PN_FLAG_NO_DEDUPE_PHI_NODES,
 #if PN_TRACING
   PN_FLAG_TRACE_ALL,
   PN_FLAG_TRACE_BLOCK,
@@ -141,6 +143,7 @@ static struct option g_pn_long_options[] = {
     {"run", no_argument, NULL, 'r'},
     {"env", required_argument, NULL, 'e'},
     {"use-host-env", no_argument, NULL, 'E'},
+    {"no-dedupe-phi-nodes", no_argument, NULL, 0},
 #if PN_TRACING
     {"trace-all", no_argument, NULL, 't'},
     {"trace-block", no_argument, NULL, 0},
@@ -324,6 +327,10 @@ static void pn_options_parse(int argc, char** argv, char** env) {
           case PN_FLAG_PRINT_ALL:
             /* Handled above by goto */
             PN_UNREACHABLE();
+
+          case PN_FLAG_NO_DEDUPE_PHI_NODES:
+            g_pn_dedupe_phi_nodes = PN_FALSE;
+            break;
 
 #if PN_TRACING
           case PN_FLAG_TRACE_BCDIS:

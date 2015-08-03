@@ -4,12 +4,9 @@
 # found in the LICENSE file.
 
 import argparse
-import difflib
 import fnmatch
 import logging
 import os
-import re
-import shlex
 import subprocess
 import sys
 import time
@@ -23,7 +20,9 @@ AsList = run_tests.AsList
 NACL_SDK_ROOT = os.environ['NACL_SDK_ROOT']
 SEL_LDR_PY = os.path.join(NACL_SDK_ROOT, 'tools', 'sel_ldr.py')
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT_DIR = os.path.dirname(SCRIPT_DIR)
 BENCHMARK_DIR = os.path.join(SCRIPT_DIR, 'benchmark')
+DEFAULT_PNACL_EXE = os.path.join(REPO_ROOT_DIR, 'out', 'pnacl-opt-assert')
 logger = logging.getLogger(__name__)
 
 
@@ -49,7 +48,7 @@ def RunNexe(test_info, override, suffix):
 def main(args):
   parser = argparse.ArgumentParser()
   parser.add_argument('-e', '--executable', help='override executable.',
-                      default='out/pnacl')
+                      default=DEFAULT_PNACL_EXE)
   parser.add_argument('-v', '--verbose', help='print more diagnotic messages. '
                       'Use more than once for more info.', action='count')
   parser.add_argument('-l', '--list', help='list all tests.',
