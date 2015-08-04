@@ -30,5 +30,6 @@ options:
   -p, --print-all                     
       --print-named-functions         
       --print-time                    
+      --print-time-as-zero            
       --print-opcode-counts           
       --print-stats                   

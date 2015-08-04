@@ -71,6 +71,7 @@ PN_FOREACH_TRACE(PN_TRACE_DEFINE)
 #if PN_TIMERS
 static struct timespec g_pn_timer_times[PN_NUM_TIMERS];
 static PNBool g_pn_print_time;
+static PNBool g_pn_print_time_as_zero;
 #endif /* PN_TIMERS */
 
 static const char* g_pn_opcode_names[] = {
@@ -130,6 +131,7 @@ enum {
   PN_FLAG_PRINT_NAMED_FUNCTIONS,
 #if PN_TIMERS
   PN_FLAG_PRINT_TIME,
+  PN_FLAG_PRINT_TIME_AS_ZERO,
 #endif /* PN_TIMERS */
   PN_FLAG_PRINT_OPCODE_COUNTS,
   PN_FLAG_PRINT_STATS,
@@ -158,6 +160,7 @@ static struct option g_pn_long_options[] = {
     {"print-named-functions", no_argument, NULL, 0},
 #if PN_TIMERS
     {"print-time", no_argument, NULL, 0},
+    {"print-time-as-zero", no_argument, NULL, 0},
 #endif /* PN_TIMERS */
     {"print-opcode-counts", no_argument, NULL, 0},
     {"print-stats", no_argument, NULL, 0},
@@ -378,6 +381,10 @@ static void pn_options_parse(int argc, char** argv, char** env) {
 #if PN_TIMERS
           case PN_FLAG_PRINT_TIME:
             g_pn_print_time = PN_TRUE;
+            break;
+
+          case PN_FLAG_PRINT_TIME_AS_ZERO:
+            g_pn_print_time_as_zero = PN_TRUE;
             break;
 #endif /* PN_TIMERS */
 
@@ -656,13 +663,18 @@ int main(int argc, char** argv, char** envp) {
 #if PN_TIMERS
   if (g_pn_print_time) {
     PN_PRINT("-----------------\n");
+    double time = 0;
+    double percent = 0;
 #define PN_PRINT_TIMER(name)                                          \
   struct timespec* timer_##name = &g_pn_timer_times[PN_TIMER_##name]; \
-  PN_PRINT("timer %-30s: %f sec (%%%.0f)\n", #name,                   \
-           pn_timespec_to_double(timer_##name),                       \
-           100 * pn_timespec_to_double(timer_##name) /                \
-               pn_timespec_to_double(timer_TOTAL));
-    PN_FOREACH_TIMER(PN_PRINT_TIMER);
+  if (!g_pn_print_time_as_zero) {                                     \
+    time = pn_timespec_to_double(timer_##name);                       \
+    percent = 100 * pn_timespec_to_double(timer_##name) /             \
+              pn_timespec_to_double(timer_TOTAL);                     \
+  }                                                                   \
+  PN_PRINT("timer %-30s: %f sec (%%%.0f)\n", #name, time, percent);
+  PN_FOREACH_TIMER(PN_PRINT_TIMER);
+#undef PN_PRINT_TIMER
   }
 #endif /* PN_TIMERS */
 

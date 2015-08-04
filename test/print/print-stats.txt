@@ -1,0 +1,19 @@
+# FLAGS: --print-stats
+# FILE: res/main.pexe
+-----------------
+num_types: 17
+num_functions: 16
+num_global_vars: 23
+max num_constants: 29
+max num_values: 181
+max num_bbs: 57
+max num_instructions: 252
+total num_constants: 45
+total num_values: 245
+total num_bbs: 77
+total num_instructions: 295
+global_var size : 3.6K
+startinfo size : 0
+      module allocator: used:   19.0K frag:       0
+       value allocator: used:    4.3K frag:       0
+ instruction allocator: used:    8.1K frag:       0
