@@ -125,6 +125,7 @@ static void pn_thread_do_phi_assigns(PNThread* thread,
                                      PNBasicBlockId dest_bb_id) {
   PNAllocatorMark mark = pn_allocator_mark(&thread->allocator);
   PNModule* module = thread->executor->module;
+  (void)module;
   PNRuntimeValue* temp = pn_allocator_alloc(
       &thread->allocator, sizeof(PNRuntimeValue) * bb->num_phi_assigns,
       sizeof(PNRuntimeValue));
