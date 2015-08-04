@@ -516,41 +516,40 @@ static void pn_options_parse(int argc, char** argv, char** env) {
 #endif /* PN_TRACING */
 }
 
-static uint32_t pn_max_num_constants(PNModule* module) {
-  uint32_t result = 0;
-  uint32_t n;
-  for (n = 0; n < module->num_functions; ++n) {
-    if (module->functions[n].num_constants > result) {
-      result = module->functions[n].num_constants;
-    }
+#define PN_MAX_NUM(name)                                \
+  static uint32_t pn_max_num_##name(PNModule* module) { \
+    uint32_t result = 0;                                \
+    uint32_t n;                                         \
+    for (n = 0; n < module->num_functions; ++n) {       \
+      if (module->functions[n].num_##name > result) {   \
+        result = module->functions[n].num_##name;       \
+      }                                                 \
+    }                                                   \
+    return result;                                      \
   }
 
-  return result;
-}
-
-static uint32_t pn_max_num_values(PNModule* module) {
-  uint32_t result = 0;
-  uint32_t n;
-  for (n = 0; n < module->num_functions; ++n) {
-    if (module->functions[n].num_values > result) {
-      result = module->functions[n].num_values;
-    }
+#define PN_TOTAL_NUM(name)                                \
+  static uint32_t pn_total_num_##name(PNModule* module) { \
+    uint32_t result = 0;                                  \
+    uint32_t n;                                           \
+    for (n = 0; n < module->num_functions; ++n) {         \
+      result += module->functions[n].num_##name;          \
+    }                                                     \
+    return result;                                        \
   }
 
-  return result;
-}
+PN_MAX_NUM(constants)
+PN_MAX_NUM(values)
+PN_MAX_NUM(bbs)
+PN_MAX_NUM(instructions)
 
-static uint32_t pn_max_num_bbs(PNModule* module) {
-  uint32_t result = 0;
-  uint32_t n;
-  for (n = 0; n < module->num_functions; ++n) {
-    if (module->functions[n].num_bbs > result) {
-      result = module->functions[n].num_bbs;
-    }
-  }
+PN_TOTAL_NUM(constants)
+PN_TOTAL_NUM(values)
+PN_TOTAL_NUM(bbs)
+PN_TOTAL_NUM(instructions)
 
-  return result;
-}
+#undef PN_MAX_NUM
+#undef PN_TOTAL_NUM
 
 static const char* pn_human_readable_size_leaky(size_t size) {
   const size_t gig = 1024 * 1024 * 1024;
@@ -686,6 +685,12 @@ int main(int argc, char** argv, char** envp) {
     PN_PRINT("max num_constants: %u\n", pn_max_num_constants(&module));
     PN_PRINT("max num_values: %u\n", pn_max_num_values(&module));
     PN_PRINT("max num_bbs: %u\n", pn_max_num_bbs(&module));
+    PN_PRINT("max num_instructions: %u\n", pn_max_num_instructions(&module));
+    PN_PRINT("total num_constants: %u\n", pn_total_num_constants(&module));
+    PN_PRINT("total num_values: %u\n", pn_total_num_values(&module));
+    PN_PRINT("total num_bbs: %u\n", pn_total_num_bbs(&module));
+    PN_PRINT("total num_instructions: %u\n",
+             pn_total_num_instructions(&module));
     PN_PRINT("global_var size : %s\n",
              pn_human_readable_size_leaky(memory.globalvar_end -
                                           memory.globalvar_start));

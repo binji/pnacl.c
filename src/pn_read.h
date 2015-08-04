@@ -1409,6 +1409,10 @@ static void pn_function_block_read(PNModule* module,
             PN_FATAL("bad record code: %d.\n", code);
         }
 
+        if (code != PN_FUNCTION_CODE_DECLAREBLOCKS) {
+          function->num_instructions++;
+        }
+
         if (is_terminator) {
           PNValueId last_bb_value_id = pn_function_num_values(module, function);
           if (last_bb_value_id != first_bb_value_id) {
@@ -1520,6 +1524,7 @@ static void pn_module_block_read(PNModule* module,
             function->bbs = NULL;
             function->num_values = 0;
             function->values = NULL;
+            function->num_instructions = 0;
 
             /* Cache number of arguments to function */
             PNType* function_type =

@@ -1052,6 +1052,7 @@ typedef struct PNFunction {
   PNBasicBlock* bbs;
   uint32_t num_values;
   PNValue* values;
+  uint32_t num_instructions;
 } PNFunction;
 
 typedef struct PNType {
