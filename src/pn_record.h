@@ -275,6 +275,15 @@ static PNBool pn_record_try_read_int32(PNRecordReader* reader,
   return ret;
 }
 
+static int32_t pn_record_read_uint16(PNRecordReader* reader, const char* name) {
+  uint16_t value;
+  if (!pn_record_try_read_uint16(reader, &value)) {
+    PN_FATAL("unable to read %s.\n", name);
+  }
+
+  return value;
+}
+
 static int32_t pn_record_read_int32(PNRecordReader* reader, const char* name) {
   int32_t value;
   if (!pn_record_try_read_int32(reader, &value)) {
@@ -353,6 +362,21 @@ static double pn_record_read_double(PNRecordReader* reader, const char* name) {
   memcpy(&double_value, &value, sizeof(double));
 
   return double_value;
+}
+
+static uint32_t pn_record_num_values_left(PNRecordReader* reader) {
+  /* Cache record state */
+  uint32_t bit_offset = reader->bs->bit_offset;
+  PNRecordReader copy = *reader;
+  int count = 0;
+  uint32_t dummy;
+  while (pn_record_try_read_uint32(reader, &dummy)) {
+    ++count;
+  }
+  /* Reset to the cached state */
+  *reader = copy;
+  pn_bitstream_seek_bit(reader->bs, bit_offset);
+  return count;
 }
 
 static void pn_record_reader_finish(PNRecordReader* reader) {

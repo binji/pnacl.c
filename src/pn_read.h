@@ -204,15 +204,13 @@ static void pn_type_block_read(PNModule* module,
             type->basic_type = PN_BASIC_TYPE_INT32;
             type->is_varargs = pn_record_read_int32(&reader, "is_varargs");
             type->return_type = pn_record_read_int32(&reader, "return_type");
-            type->num_args = 0;
-            type->arg_types = NULL;
-            PNTypeId arg_type_id;
-            while (pn_record_try_read_uint16(&reader, &arg_type_id)) {
-              PNTypeId* new_arg_type_id = pn_allocator_realloc_add(
-                  &module->allocator, (void**)&type->arg_types,
-                  sizeof(PNTypeId), sizeof(PNTypeId));
-              *new_arg_type_id = arg_type_id;
-              type->num_args++;
+            type->num_args = pn_record_num_values_left(&reader);
+            type->arg_types = pn_allocator_alloc(
+                &module->allocator, type->num_args * sizeof(PNTypeId),
+                sizeof(PNTypeId));
+            uint32_t n;
+            for (n = 0; n < type->num_args; ++n) {
+              type->arg_types[n] = pn_record_read_uint16(&reader, "arg type");
             }
             break;
           }
@@ -562,21 +560,15 @@ static void pn_value_symtab_block_read(PNModule* module,
         switch (code) {
           case PN_VALUESYMBTAB_CODE_ENTRY: {
             PNValueId value_id = pn_record_read_int32(&reader, "value_id");
+            uint32_t len = pn_record_num_values_left(&reader);
             char* name = NULL;
-            char* p;
-            int32_t c;
-
-            while (pn_record_try_read_int32(&reader, &c)) {
-              p = pn_allocator_realloc_add(&module->allocator, (void**)&name, 1,
-                                           1);
-              *p = c;
-            }
-
-            /* NULL-terminate the string if any characters were read. */
-            if (name) {
-              p = pn_allocator_realloc_add(&module->allocator, (void**)&name, 1,
-                                           1);
-              *p = 0;
+            if (len) {
+              name = pn_allocator_alloc(&module->allocator, len + 1, 1);
+              uint32_t i;
+              for (i = 0; i < len; ++i) {
+                name[i] = pn_record_read_int32(&reader, "name char");
+              }
+              name[len] = 0;
             }
 
             PN_TRACE(VALUE_SYMTAB_BLOCK, "%s : \"%s\";\n",
@@ -825,20 +817,19 @@ static void pn_constants_block_read(PNModule* module,
 static void* pn_basic_block_append_instruction(
     PNModule* module,
     PNBasicBlock* bb,
-    uint32_t instruction_size,
-    PNInstructionId* out_instruction_id) {
-  *out_instruction_id = bb->num_instructions;
+    uint32_t instruction_size) {
+  PNInstructionId instruction_id = bb->num_instructions;
   pn_allocator_realloc_add(&module->allocator, (void**)&bb->instructions,
                            sizeof(PNInstruction*), sizeof(PNInstruction*));
   void* p = pn_allocator_allocz(&module->instruction_allocator,
                                 instruction_size, PN_DEFAULT_ALIGN);
-  bb->instructions[*out_instruction_id] = p;
+  bb->instructions[instruction_id] = p;
   bb->num_instructions++;
   return p;
 }
 
-#define PN_BASIC_BLOCK_APPEND_INSTRUCTION(type, module, bb, id) \
-  (type*) pn_basic_block_append_instruction(module, bb, sizeof(type), id)
+#define PN_BASIC_BLOCK_APPEND_INSTRUCTION(type, module, bb) \
+  (type*) pn_basic_block_append_instruction(module, bb, sizeof(type))
 
 static void pn_basic_block_list_append(PNModule* module,
                                        PNBasicBlockId** bb_list,
@@ -986,9 +977,8 @@ static void pn_function_block_read(PNModule* module,
             break;
 
           case PN_FUNCTION_CODE_INST_BINOP: {
-            PNInstructionId inst_id;
             PNInstructionBinop* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
-                PNInstructionBinop, module, cur_bb, &inst_id);
+                PNInstructionBinop, module, cur_bb);
 
             PNValueId value_id;
             PNValue* value =
@@ -996,7 +986,6 @@ static void pn_function_block_read(PNModule* module,
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             /* Fix later, when all values are defined. */
             value->type_id = PN_INVALID_TYPE_ID;
-            value->index = inst_id;
 
             inst->base.code = code;
             inst->result_value_id = value_id;
@@ -1014,15 +1003,13 @@ static void pn_function_block_read(PNModule* module,
           }
 
           case PN_FUNCTION_CODE_INST_CAST: {
-            PNInstructionId inst_id;
             PNInstructionCast* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
-                PNInstructionCast, module, cur_bb, &inst_id);
+                PNInstructionCast, module, cur_bb);
 
             PNValueId value_id;
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
-            value->index = inst_id;
 
             inst->base.code = code;
             inst->result_value_id = value_id;
@@ -1037,9 +1024,8 @@ static void pn_function_block_read(PNModule* module,
           }
 
           case PN_FUNCTION_CODE_INST_RET: {
-            PNInstructionId inst_id;
             PNInstructionRet* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
-                PNInstructionRet, module, cur_bb, &inst_id);
+                PNInstructionRet, module, cur_bb);
             inst->base.code = code;
             inst->value_id = PN_INVALID_VALUE_ID;
 
@@ -1054,9 +1040,8 @@ static void pn_function_block_read(PNModule* module,
           }
 
           case PN_FUNCTION_CODE_INST_BR: {
-            PNInstructionId inst_id;
             PNInstructionBr* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
-                PNInstructionBr, module, cur_bb, &inst_id);
+                PNInstructionBr, module, cur_bb);
             inst->base.code = code;
             inst->true_bb_id = pn_record_read_uint32(&reader, "true_bb");
             inst->false_bb_id = PN_INVALID_BB_ID;
@@ -1080,9 +1065,8 @@ static void pn_function_block_read(PNModule* module,
           }
 
           case PN_FUNCTION_CODE_INST_SWITCH: {
-            PNInstructionId inst_id;
             PNInstructionSwitch* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
-                PNInstructionSwitch, module, cur_bb, &inst_id);
+                PNInstructionSwitch, module, cur_bb);
 
             inst->type_id = pn_record_read_uint32(&reader, "type_id");
             inst->value_id = pn_record_read_uint32(&reader, "value");
@@ -1144,24 +1128,21 @@ static void pn_function_block_read(PNModule* module,
           }
 
           case PN_FUNCTION_CODE_INST_UNREACHABLE: {
-            PNInstructionId inst_id;
             PNInstructionUnreachable* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
-                PNInstructionUnreachable, module, cur_bb, &inst_id);
+                PNInstructionUnreachable, module, cur_bb);
             inst->base.code = code;
             is_terminator = PN_TRUE;
             break;
           }
 
           case PN_FUNCTION_CODE_INST_PHI: {
-            PNInstructionId inst_id;
             PNInstructionPhi* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
-                PNInstructionPhi, module, cur_bb, &inst_id);
+                PNInstructionPhi, module, cur_bb);
 
             PNValueId value_id;
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
-            value->index = inst_id;
 
             inst->base.code = code;
             inst->result_value_id = value_id;
@@ -1217,16 +1198,14 @@ static void pn_function_block_read(PNModule* module,
           }
 
           case PN_FUNCTION_CODE_INST_ALLOCA: {
-            PNInstructionId inst_id;
             PNInstructionAlloca* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
-                PNInstructionAlloca, module, cur_bb, &inst_id);
+                PNInstructionAlloca, module, cur_bb);
 
             PNValueId value_id;
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->type_id = pn_module_find_pointer_type(module);
-            value->index = inst_id;
 
             inst->base.code = code;
             inst->result_value_id = value_id;
@@ -1240,15 +1219,13 @@ static void pn_function_block_read(PNModule* module,
           }
 
           case PN_FUNCTION_CODE_INST_LOAD: {
-            PNInstructionId inst_id;
             PNInstructionLoad* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
-                PNInstructionLoad, module, cur_bb, &inst_id);
+                PNInstructionLoad, module, cur_bb);
 
             PNValueId value_id;
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
-            value->index = inst_id;
 
             inst->base.code = code;
             inst->result_value_id = value_id;
@@ -1265,9 +1242,8 @@ static void pn_function_block_read(PNModule* module,
           }
 
           case PN_FUNCTION_CODE_INST_STORE: {
-            PNInstructionId inst_id;
             PNInstructionStore* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
-                PNInstructionStore, module, cur_bb, &inst_id);
+                PNInstructionStore, module, cur_bb);
 
             inst->base.code = code;
             inst->dest_id = pn_record_read_uint32(&reader, "dest");
@@ -1282,16 +1258,14 @@ static void pn_function_block_read(PNModule* module,
           }
 
           case PN_FUNCTION_CODE_INST_CMP2: {
-            PNInstructionId inst_id;
             PNInstructionCmp2* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
-                PNInstructionCmp2, module, cur_bb, &inst_id);
+                PNInstructionCmp2, module, cur_bb);
 
             PNValueId value_id;
             PNValue* value =
                 pn_function_append_value(module, function, &value_id);
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             value->type_id = pn_module_find_integer_type(module, 1);
-            value->index = inst_id;
 
             inst->base.code = code;
             inst->result_value_id = value_id;
@@ -1305,9 +1279,8 @@ static void pn_function_block_read(PNModule* module,
           }
 
           case PN_FUNCTION_CODE_INST_VSELECT: {
-            PNInstructionId inst_id;
             PNInstructionVselect* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
-                PNInstructionVselect, module, cur_bb, &inst_id);
+                PNInstructionVselect, module, cur_bb);
 
             PNValueId value_id;
             PNValue* value =
@@ -1315,7 +1288,6 @@ static void pn_function_block_read(PNModule* module,
             value->code = PN_VALUE_CODE_LOCAL_VAR;
             /* Fix later, when all values are defined. */
             value->type_id = PN_INVALID_TYPE_ID;
-            value->index = inst_id;
 
             inst->base.code = code;
             inst->result_value_id = value_id;
@@ -1330,10 +1302,9 @@ static void pn_function_block_read(PNModule* module,
           }
 
           case PN_FUNCTION_CODE_INST_FORWARDTYPEREF: {
-            PNInstructionId inst_id;
             PNInstructionForwardtyperef* inst =
                 PN_BASIC_BLOCK_APPEND_INSTRUCTION(PNInstructionForwardtyperef,
-                                                  module, cur_bb, &inst_id);
+                                                  module, cur_bb);
 
             inst->base.code = code;
             inst->value_id = pn_record_read_int32(&reader, "value");
@@ -1343,9 +1314,8 @@ static void pn_function_block_read(PNModule* module,
 
           case PN_FUNCTION_CODE_INST_CALL:
           case PN_FUNCTION_CODE_INST_CALL_INDIRECT: {
-            PNInstructionId inst_id;
             PNInstructionCall* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
-                PNInstructionCall, module, cur_bb, &inst_id);
+                PNInstructionCall, module, cur_bb);
 
             inst->base.code = code;
             inst->is_indirect = code == PN_FUNCTION_CODE_INST_CALL_INDIRECT;
@@ -1381,7 +1351,6 @@ static void pn_function_block_read(PNModule* module,
                   pn_function_append_value(module, function, &value_id);
               value->code = PN_VALUE_CODE_LOCAL_VAR;
               value->type_id = inst->return_type_id;
-              value->index = inst_id;
 
               inst->result_value_id = value_id;
             } else {
@@ -1389,18 +1358,18 @@ static void pn_function_block_read(PNModule* module,
               inst->result_value_id = PN_INVALID_VALUE_ID;
             }
 
-            inst->num_args = 0;
+            inst->num_args = pn_record_num_values_left(&reader);
+            inst->arg_ids = pn_allocator_alloc(
+                &module->instruction_allocator,
+                inst->num_args * sizeof(PNValueId), sizeof(PNValueId));
 
-            int32_t arg;
-            while (pn_record_try_read_int32(&reader, &arg)) {
+            uint32_t n;
+            for (n = 0; n < inst->num_args; ++n) {
+              int32_t arg = pn_record_read_int32(&reader, "arg");
               if (context->use_relative_ids) {
                 arg = value_id - arg;
               }
-
-              pn_allocator_realloc_add(&module->instruction_allocator,
-                                       (void**)&inst->arg_ids,
-                                       sizeof(PNValueId), sizeof(PNValueId));
-              inst->arg_ids[inst->num_args++] = arg;
+              inst->arg_ids[n] = arg;
             }
             break;
           }
