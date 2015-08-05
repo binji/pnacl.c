@@ -8,9 +8,8 @@
 static uint32_t pn_basic_block_instruction_stream_size(PNBasicBlock* bb) {
   PNBool write_phi_assigns = PN_FALSE;
   uint32_t result = 0;
-  uint32_t n;
-  for (n = 0; n < bb->num_instructions; ++n) {
-    PNInstruction* inst = bb->instructions[n];
+  PNInstruction* inst;
+  for (inst = bb->instructions; inst; inst = inst->next) {
     switch (inst->code) {
       case PN_FUNCTION_CODE_INST_BINOP:
         result += sizeof(PNRuntimeInstructionBinop);
@@ -140,9 +139,8 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
   break;
 
   PNBool write_phi_assigns = PN_FALSE;
-  uint32_t n;
-  for (n = 0; n < bb->num_instructions; ++n) {
-    PNInstruction* inst = bb->instructions[n];
+  PNInstruction* inst;
+  for (inst = bb->instructions; inst; inst = inst->next) {
     switch (inst->code) {
       case PN_FUNCTION_CODE_INST_BINOP: {
         PNInstructionBinop* i = (PNInstructionBinop*)inst;
@@ -868,6 +866,7 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
   if (write_phi_assigns) {
     *(uint32_t*)offset = bb->num_phi_assigns;
     offset += sizeof(uint32_t);
+    uint32_t n;
     for (n = 0; n < bb->num_phi_assigns; ++n) {
       PNRuntimePhiAssign* o = (PNRuntimePhiAssign*)offset;
       o->instruction_id = bb_offsets[bb->phi_assigns[n].bb_id];

@@ -843,6 +843,7 @@ typedef struct PNRecordReader {
 
 typedef struct PNInstruction {
   PNFunctionCode code;
+  struct PNInstruction* next;
 } PNInstruction;
 
 typedef struct PNInstructionAlloca {
@@ -974,7 +975,8 @@ typedef struct PNPhiAssign {
 
 typedef struct PNBasicBlock {
   uint32_t num_instructions;
-  PNInstruction** instructions;
+  PNInstruction* instructions;
+  PNInstruction* last_instruction;
   uint32_t num_pred_bbs;
   PNBasicBlockId* pred_bb_ids;
   uint32_t num_succ_bbs;

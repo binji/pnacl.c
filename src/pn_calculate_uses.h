@@ -18,9 +18,8 @@ static void pn_basic_block_calculate_uses(PNModule* module,
     pn_bitset_set(&uses, value_id - module->num_values, PN_TRUE); \
   }
 
-  uint32_t n;
-  for (n = 0; n < bb->num_instructions; ++n) {
-    PNInstruction* inst = bb->instructions[n];
+  PNInstruction* inst;
+  for (inst = bb->instructions; inst; inst = inst->next) {
     switch (inst->code) {
       case PN_FUNCTION_CODE_INST_BINOP: {
         PNInstructionBinop* i = (PNInstructionBinop*)inst;

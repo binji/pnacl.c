@@ -818,12 +818,15 @@ static void* pn_basic_block_append_instruction(
     PNModule* module,
     PNBasicBlock* bb,
     uint32_t instruction_size) {
-  PNInstructionId instruction_id = bb->num_instructions;
-  pn_allocator_realloc_add(&module->allocator, (void**)&bb->instructions,
-                           sizeof(PNInstruction*), sizeof(PNInstruction*));
-  void* p = pn_allocator_allocz(&module->instruction_allocator,
-                                instruction_size, PN_DEFAULT_ALIGN);
-  bb->instructions[instruction_id] = p;
+  void* p = pn_allocator_allocz(&module->temp_allocator, instruction_size,
+                                PN_DEFAULT_ALIGN);
+  if (bb->last_instruction) {
+    bb->last_instruction->next = p;
+  } else {
+    bb->instructions = p;
+  }
+
+  bb->last_instruction = p;
   bb->num_instructions++;
   return p;
 }
@@ -887,6 +890,8 @@ static void pn_function_block_read(PNModule* module,
     value->index = i;
   }
 
+  PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
+
   uint32_t num_bbs = 0;
   PNValueId first_bb_value_id = PN_INVALID_VALUE_ID;
   /* These are initialized with different values so the first instruction
@@ -912,6 +917,7 @@ static void pn_function_block_read(PNModule* module,
         PN_TRACE_DEDENT(FUNCTION_BLOCK, 2);
         PN_TRACE(FUNCTION_BLOCK, "}\n");
         pn_bitstream_align_32(bs);
+        pn_allocator_reset_to_mark(&module->temp_allocator, mark);
         PN_END_TIME(FUNCTION_BLOCK_READ);
         return;
 
@@ -953,7 +959,7 @@ static void pn_function_block_read(PNModule* module,
           function->num_bbs =
               pn_record_read_uint32(&reader, "num basic blocks");
           function->bbs = pn_allocator_allocz(
-              &module->allocator, sizeof(PNBasicBlock) * function->num_bbs,
+              &module->temp_allocator, sizeof(PNBasicBlock) * function->num_bbs,
               PN_DEFAULT_ALIGN);
           PN_TRACE(FUNCTION_BLOCK, "blocks %d;\n", function->num_bbs);
           break;
@@ -1099,7 +1105,7 @@ static void pn_function_block_read(PNModule* module,
 
                 int64_t diff = high - low + 1;
                 PNSwitchCase* new_switch_cases = pn_allocator_realloc_add(
-                    &module->instruction_allocator, (void**)&inst->cases,
+                    &module->temp_allocator, (void**)&inst->cases,
                     diff * sizeof(PNSwitchCase), PN_DEFAULT_ALIGN);
 
                 int64_t n;
@@ -1187,7 +1193,7 @@ static void pn_function_block_read(PNModule* module,
 
               if (!found) {
                 pn_allocator_realloc_add(
-                    &module->instruction_allocator, (void**)&inst->incoming,
+                    &module->temp_allocator, (void**)&inst->incoming,
                     sizeof(PNPhiIncoming), PN_DEFAULT_ALIGN);
                 PNPhiIncoming* incoming = &inst->incoming[inst->num_incoming++];
                 incoming->bb_id = bb;
@@ -1360,8 +1366,8 @@ static void pn_function_block_read(PNModule* module,
 
             inst->num_args = pn_record_num_values_left(&reader);
             inst->arg_ids = pn_allocator_alloc(
-                &module->instruction_allocator,
-                inst->num_args * sizeof(PNValueId), sizeof(PNValueId));
+                &module->temp_allocator, inst->num_args * sizeof(PNValueId),
+                sizeof(PNValueId));
 
             uint32_t n;
             for (n = 0; n < inst->num_args; ++n) {

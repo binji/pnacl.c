@@ -542,9 +542,9 @@ static void pn_basic_block_trace(PNModule* module,
   }
 #endif
 
-  uint32_t i;
-  for (i = 0; i < bb->num_instructions; ++i) {
-    pn_instruction_trace(module, function, bb->instructions[i], force);
+  PNInstruction* inst;
+  for (inst = bb->instructions; inst; inst = inst->next) {
+    pn_instruction_trace(module, function, inst, force);
   }
 }
 

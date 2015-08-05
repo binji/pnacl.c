@@ -86,9 +86,8 @@ static void pn_function_calculate_result_value_types(PNModule* module,
   uint32_t n;
   for (n = 0; n < function->num_bbs; ++n) {
     PNBasicBlock* bb = &function->bbs[n];
-    uint32_t m;
-    for (m = 0; m < bb->num_instructions; ++m) {
-      PNInstruction* inst = bb->instructions[m];
+    PNInstruction* inst;
+    for (inst = bb->instructions; inst; inst = inst->next) {
       if (!pn_instruction_calculate_result_value_type(module, function, inst)) {
         /* One of the types is invalid, try again later */
         pn_allocator_realloc_add(&module->temp_allocator, (void**)&invalid,
