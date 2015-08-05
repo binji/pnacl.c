@@ -8,8 +8,6 @@
 static void pn_basic_block_calculate_opcodes(PNModule* module,
                                              PNFunction* function,
                                              PNBasicBlock* bb) {
-  PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
-
 #define PN_BEGIN_CASE_OPCODE(name) case PN_##name:
 
 #define PN_IF_TYPE(name, type0)                  \
@@ -683,17 +681,247 @@ static void pn_basic_block_calculate_opcodes(PNModule* module,
 #undef PN_IF_TYPE2
 #undef PN_END_CASE_OPCODE
 #undef PN_END_CASE_OPCODE2
+}
 
-  pn_allocator_reset_to_mark(&module->temp_allocator, mark);
+static uint32_t pn_basic_block_instruction_stream_size(PNBasicBlock* bb) {
+  PNBool write_phi_assigns = PN_FALSE;
+  uint32_t result = 0;
+  uint32_t n;
+  for (n = 0; n < bb->num_instructions; ++n) {
+    PNInstruction* inst = bb->instructions[n];
+    switch (inst->code) {
+      case PN_FUNCTION_CODE_INST_BINOP:
+        result += sizeof(PNInstructionBinop);
+        break;
+
+      case PN_FUNCTION_CODE_INST_CAST:
+        result += sizeof(PNInstructionCast);
+        break;
+
+      case PN_FUNCTION_CODE_INST_RET:
+        result += sizeof(PNInstructionRet);
+        break;
+
+      case PN_FUNCTION_CODE_INST_BR:
+        result += sizeof(PNInstructionBr);
+        write_phi_assigns = PN_TRUE;
+        break;
+
+      case PN_FUNCTION_CODE_INST_SWITCH: {
+        PNInstructionSwitch* i = (PNInstructionSwitch*)inst;
+        result += sizeof(PNInstructionSwitch);
+        result += i->num_cases * sizeof(PNSwitchCase);
+        write_phi_assigns = PN_TRUE;
+        break;
+      }
+
+      case PN_FUNCTION_CODE_INST_UNREACHABLE:
+        result += sizeof(PNInstructionUnreachable);
+        break;
+
+      case PN_FUNCTION_CODE_INST_PHI:
+        /* Phi instructions don't need to be written to the instruction stream.
+         * We handle those in the previous basic block */
+        break;
+
+      case PN_FUNCTION_CODE_INST_ALLOCA:
+        result += sizeof(PNInstructionAlloca);
+        break;
+
+      case PN_FUNCTION_CODE_INST_LOAD:
+        result += sizeof(PNInstructionLoad);
+        break;
+
+      case PN_FUNCTION_CODE_INST_STORE:
+        result += sizeof(PNInstructionStore);
+        break;
+
+      case PN_FUNCTION_CODE_INST_CMP2:
+        result += sizeof(PNInstructionCmp2);
+        break;
+
+      case PN_FUNCTION_CODE_INST_VSELECT:
+        result += sizeof(PNInstructionVselect);
+        break;
+
+      case PN_FUNCTION_CODE_INST_CALL:
+      case PN_FUNCTION_CODE_INST_CALL_INDIRECT: {
+        PNInstructionCall* i = (PNInstructionCall*)inst;
+        result += sizeof(PNInstructionCall);
+        result += i->num_args * sizeof(i->arg_ids[0]);
+        break;
+      }
+
+      case PN_FUNCTION_CODE_INST_FORWARDTYPEREF:
+        break;
+
+      default:
+        PN_FATAL("Invalid instruction code: %d\n", inst->code);
+        break;
+    }
+  }
+  if (write_phi_assigns) {
+    result += sizeof(bb->num_phi_assigns);
+    result += bb->num_phi_assigns * sizeof(PNPhiAssign);
+  }
+  return result;
+}
+
+static void* pn_basic_block_write_instruction_stream(PNModule* module,
+                                                     PNFunction* function,
+                                                     PNBasicBlock* bb,
+                                                     PNBasicBlockId* bb_offsets,
+                                                     void* offset) {
+  PNBool write_phi_assigns = PN_FALSE;
+  uint32_t n;
+  for (n = 0; n < bb->num_instructions; ++n) {
+    PNInstruction* inst = bb->instructions[n];
+    switch (inst->code) {
+      case PN_FUNCTION_CODE_INST_BINOP:
+        *(PNInstructionBinop*)offset = *(PNInstructionBinop*)inst;
+        offset += sizeof(PNInstructionBinop);
+        break;
+
+      case PN_FUNCTION_CODE_INST_CAST:
+        *(PNInstructionCast*)offset = *(PNInstructionCast*)inst;
+        offset += sizeof(PNInstructionCast);
+        break;
+
+      case PN_FUNCTION_CODE_INST_RET:
+        *(PNInstructionRet*)offset = *(PNInstructionRet*)inst;
+        offset += sizeof(PNInstructionRet);
+        break;
+
+      case PN_FUNCTION_CODE_INST_BR: {
+        PNInstructionBr* i = (PNInstructionBr*)inst;
+        PNInstructionBr* o = (PNInstructionBr*)offset;
+        *o = *i;
+        o->true_bb_id = bb_offsets[o->true_bb_id];
+        if (o->false_bb_id != PN_INVALID_BB_ID) {
+          o->false_bb_id = bb_offsets[o->false_bb_id];
+        }
+        offset += sizeof(PNInstructionBr);
+        write_phi_assigns = PN_TRUE;
+        break;
+      }
+
+      case PN_FUNCTION_CODE_INST_SWITCH: {
+        PNInstructionSwitch* i = (PNInstructionSwitch*)inst;
+        PNInstructionSwitch* o = (PNInstructionSwitch*)offset;
+        *o = *i;
+        o->default_bb_id = bb_offsets[o->default_bb_id];
+        offset += sizeof(PNInstructionSwitch);
+        o->cases = offset;
+        uint32_t c;
+        for (c = 0; c < i->num_cases; ++c) {
+          PNSwitchCase* switch_case =(PNSwitchCase*)offset;
+          *switch_case = i->cases[c];
+          switch_case->bb_id = bb_offsets[switch_case->bb_id];
+          offset += sizeof(PNSwitchCase);
+        }
+        write_phi_assigns = PN_TRUE;
+        break;
+      }
+
+      case PN_FUNCTION_CODE_INST_UNREACHABLE:
+        *(PNInstructionUnreachable*)offset = *(PNInstructionUnreachable*)inst;
+        offset += sizeof(PNInstructionUnreachable);
+        break;
+
+      case PN_FUNCTION_CODE_INST_ALLOCA:
+        *(PNInstructionAlloca*)offset = *(PNInstructionAlloca*)inst;
+        offset += sizeof(PNInstructionAlloca);
+        break;
+
+      case PN_FUNCTION_CODE_INST_LOAD:
+        *(PNInstructionLoad*)offset = *(PNInstructionLoad*)inst;
+        offset += sizeof(PNInstructionLoad);
+        break;
+
+      case PN_FUNCTION_CODE_INST_STORE:
+        *(PNInstructionStore*)offset = *(PNInstructionStore*)inst;
+        offset += sizeof(PNInstructionStore);
+        break;
+
+      case PN_FUNCTION_CODE_INST_CMP2:
+        *(PNInstructionCmp2*)offset = *(PNInstructionCmp2*)inst;
+        offset += sizeof(PNInstructionCmp2);
+        break;
+
+      case PN_FUNCTION_CODE_INST_VSELECT:
+        *(PNInstructionVselect*)offset = *(PNInstructionVselect*)inst;
+        offset += sizeof(PNInstructionVselect);
+        break;
+
+      case PN_FUNCTION_CODE_INST_CALL:
+      case PN_FUNCTION_CODE_INST_CALL_INDIRECT: {
+        PNInstructionCall* i = (PNInstructionCall*)inst;
+        PNInstructionCall* o = (PNInstructionCall*)offset;
+        *o = *i;
+        offset += sizeof(PNInstructionCall);
+        o->arg_ids = offset;
+        uint32_t a;
+        for (a = 0; a < i->num_args; ++a) {
+          *(PNValueId*)offset = i->arg_ids[a];
+          offset += sizeof(PNValueId);
+        }
+        break;
+      }
+
+      case PN_FUNCTION_CODE_INST_PHI:
+      case PN_FUNCTION_CODE_INST_FORWARDTYPEREF:
+        break;
+
+      default:
+        PN_FATAL("Invalid instruction code: %d\n", inst->code);
+        break;
+    }
+  }
+  if (write_phi_assigns) {
+    *(uint32_t*)offset = bb->num_phi_assigns;
+    offset += sizeof(uint32_t);
+    for (n = 0; n < bb->num_phi_assigns; ++n) {
+      PNPhiAssign* o = (PNPhiAssign*)offset;
+      *o = bb->phi_assigns[n];
+      o->bb_id = bb_offsets[o->bb_id];
+      offset += sizeof(PNPhiAssign);
+    }
+  }
+  return offset;
 }
 
 static void pn_function_calculate_opcodes(PNModule* module,
                                           PNFunction* function) {
   PN_BEGIN_TIME(CALCULATE_OPCODES);
+  PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
+
   uint32_t n;
   for (n = 0; n < function->num_bbs; ++n) {
     pn_basic_block_calculate_opcodes(module, function, &function->bbs[n]);
   }
+
+  PNBasicBlockId* bb_offsets = pn_allocator_alloc(
+      &module->temp_allocator, function->num_bbs * sizeof(PNBasicBlockId),
+      sizeof(PNBasicBlockId));
+
+  uint32_t istream_size = 0;
+  for (n = 0; n < function->num_bbs; ++n) {
+    /* Always align basic blocks to 4 bytes. */
+    istream_size = pn_align_up(istream_size, 4);
+    bb_offsets[n] = istream_size >> 2;
+    istream_size += pn_basic_block_instruction_stream_size(&function->bbs[n]);
+  }
+  function->instructions = pn_allocator_alloc(&module->instruction_allocator,
+                                              istream_size, PN_DEFAULT_ALIGN);
+
+  void* offset = function->instructions;
+  for (n = 0; n < function->num_bbs; ++n) {
+    offset = pn_basic_block_write_instruction_stream(
+        module, function, &function->bbs[n], bb_offsets, offset);
+  }
+  PN_CHECK(offset == function->instructions + istream_size);
+
+  pn_allocator_reset_to_mark(&module->temp_allocator, mark);
   PN_END_TIME(CALCULATE_OPCODES);
 }
 

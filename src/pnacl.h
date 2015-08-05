@@ -41,7 +41,7 @@ typedef uint32_t PNValueId;
 typedef uint32_t PNFunctionId;
 typedef uint16_t PNConstantId;
 typedef uint32_t PNGlobalVarId;
-typedef uint16_t PNInstructionId;
+typedef uint32_t PNInstructionId;
 typedef uint16_t PNBasicBlockId;
 typedef uint16_t PNAlignment;
 typedef uint32_t PNJmpBufId;
@@ -844,16 +844,6 @@ typedef struct PNRecordReader {
   uint32_t value_index;
 } PNRecordReader;
 
-typedef struct PNSwitchCase {
-  int64_t value;
-  PNBasicBlockId bb_id;
-} PNSwitchCase;
-
-typedef struct PNPhiIncoming {
-  PNBasicBlockId bb_id;
-  PNValueId value_id;
-} PNPhiIncoming;
-
 typedef struct PNInstruction {
   PNFunctionCode code;
   PNOpcode opcode;
@@ -888,6 +878,11 @@ typedef struct PNInstructionBr {
   PNValueId value_id;         /* Or PN_INVALID_VALUE_ID */
 } PNInstructionBr;
 
+typedef struct PNSwitchCase {
+  int64_t value;
+  PNBasicBlockId bb_id;
+} PNSwitchCase;
+
 typedef struct PNInstructionSwitch {
   PNInstruction base;
   PNValueId value_id;
@@ -900,6 +895,11 @@ typedef struct PNInstructionSwitch {
 typedef struct PNInstructionUnreachable {
   PNInstruction base;
 } PNInstructionUnreachable;
+
+typedef struct PNPhiIncoming {
+  PNBasicBlockId bb_id;
+  PNValueId value_id;
+} PNPhiIncoming;
 
 typedef struct PNInstructionPhi {
   PNInstruction base;
@@ -1053,6 +1053,7 @@ typedef struct PNFunction {
   uint32_t num_values;
   PNValue* values;
   uint32_t num_instructions;
+  void* instructions;
 } PNFunction;
 
 typedef struct PNType {
@@ -1125,7 +1126,6 @@ typedef struct PNBlockInfoContext {
 
 typedef struct PNLocation {
   PNFunctionId function_id;
-  PNBasicBlockId bb_id;
   PNInstructionId instruction_id;
 } PNLocation;
 

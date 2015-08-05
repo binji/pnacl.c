@@ -93,7 +93,6 @@ static void pn_thread_push_function(PNThread* thread,
   PNCallFrame* prev_frame = thread->current_call_frame;
 
   frame->location.function_id = function_id;
-  frame->location.bb_id = 0;
   frame->location.instruction_id = 0;
   frame->function_values = pn_allocator_alloc(
       &thread->allocator, sizeof(PNRuntimeValue) * function->num_values,
@@ -121,25 +120,30 @@ static void pn_thread_push_function(PNThread* thread,
 
 static void pn_thread_do_phi_assigns(PNThread* thread,
                                      PNFunction* function,
-                                     PNBasicBlock* bb,
-                                     PNBasicBlockId dest_bb_id) {
+                                     PNInstructionId dest_instruction_id) {
+  PNLocation* location = &thread->current_call_frame->location;
+  void* istream = function->instructions + location->instruction_id;
+  uint32_t num_phi_assigns = *(uint32_t*)istream;
+  PNPhiAssign* phi_assigns = (PNPhiAssign*)(istream + 4);
+  istream += 4 + num_phi_assigns * sizeof(PNPhiAssign);
+
   PNAllocatorMark mark = pn_allocator_mark(&thread->allocator);
   PNModule* module = thread->executor->module;
   (void)module;
   PNRuntimeValue* temp = pn_allocator_alloc(
-      &thread->allocator, sizeof(PNRuntimeValue) * bb->num_phi_assigns,
+      &thread->allocator, sizeof(PNRuntimeValue) * num_phi_assigns,
       sizeof(PNRuntimeValue));
 
   /* First pass, read values to temp */
   uint32_t i;
-  for (i = 0; i < bb->num_phi_assigns; ++i) {
-    temp[i] = pn_thread_get_value(thread, bb->phi_assigns[i].source_value_id);
+  for (i = 0; i < num_phi_assigns; ++i) {
+    temp[i] = pn_thread_get_value(thread, phi_assigns[i].source_value_id);
   }
 
   /* Second pass, write values from temp */
-  for (i = 0; i < bb->num_phi_assigns; ++i) {
-    PNPhiAssign* assign = &bb->phi_assigns[i];
-    if (assign->bb_id == dest_bb_id) {
+  for (i = 0; i < num_phi_assigns; ++i) {
+    PNPhiAssign* assign = &phi_assigns[i];
+    if ((assign->bb_id << 2) == dest_instruction_id) {
       pn_thread_set_value(thread, assign->dest_value_id, temp[i]);
       PN_TRACE(EXECUTE, "    %s <= %s\n",
                PN_VALUE_DESCRIBE(assign->dest_value_id),
@@ -156,7 +160,6 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
   executor->memory = module->memory;
   executor->heap_end = executor->memory->heap_start;
   executor->sentinel_frame.location.function_id = PN_INVALID_FUNCTION_ID;
-  executor->sentinel_frame.location.bb_id = PN_INVALID_BB_ID;
   executor->sentinel_frame.location.instruction_id = 0;
   executor->sentinel_frame.function_values = NULL;
   executor->sentinel_frame.memory_stack_top = executor->memory->stack_end;
@@ -261,10 +264,10 @@ static void pn_thread_backtrace(PNThread* thread) {
     PNLocation* location = &frame->location;
     PNFunction* function = &module->functions[location->function_id];
     if (function->name && function->name[0]) {
-      PN_PRINT("%d. %s(%d) %d %d\n", n, function->name, location->function_id,
-               location->bb_id, location->instruction_id);
+      PN_PRINT("%d. %s(%d) %d\n", n, function->name, location->function_id,
+               location->instruction_id);
     } else {
-      PN_PRINT("%d. %d %d %d\n", n, location->function_id, location->bb_id,
+      PN_PRINT("%d. %d %d\n", n, location->function_id,
                location->instruction_id);
     }
 
@@ -289,8 +292,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
   PNLocation* location = &frame->location;
   PNModule* module = executor->module;
   PNFunction* function = &module->functions[location->function_id];
-  PNBasicBlock* bb = &function->bbs[location->bb_id];
-  PNInstruction* inst = bb->instructions[location->instruction_id];
+  PNInstruction* inst = function->instructions + location->instruction_id;
 
 #if PN_TRACING
   if (PN_IS_TRACE(EXECUTE)) {
@@ -319,7 +321,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PN_TRACE(EXECUTE, "    %s = %u  %s = %d\n",
                PN_VALUE_DESCRIBE(i->result_value_id), result.u32,
                PN_VALUE_DESCRIBE(i->size_id), size.i32);
-      location->instruction_id++;
+      location->instruction_id += sizeof(PNInstructionAlloca);
       break;
     }
 
@@ -335,7 +337,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
              PN_VALUE_DESCRIBE(i->result_value_id), result.ty,              \
              PN_VALUE_DESCRIBE(i->value0_id), value0.ty,                    \
              PN_VALUE_DESCRIBE(i->value1_id), value1.ty);                   \
-    location->instruction_id++;                                             \
+    location->instruction_id += sizeof(PNInstructionBinop);                 \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_BINOP_ADD_DOUBLE:  PN_OPCODE_BINOP(+, f64); break;
@@ -402,26 +404,25 @@ static void pn_thread_execute_instruction(PNThread* thread) {
 
     case PN_OPCODE_BR: {
       PNInstructionBr* i = (PNInstructionBr*)inst;
-      PNBasicBlockId new_bb_id = i->true_bb_id;
-      pn_thread_do_phi_assigns(thread, function,
-                               &function->bbs[location->bb_id], new_bb_id);
-      location->bb_id = new_bb_id;
-      location->instruction_id = 0;
-      PN_TRACE(EXECUTE, "bb = %%b%d\n", location->bb_id);
+      PNInstructionId new_instruction_id = i->true_bb_id << 2;
+      location->instruction_id += sizeof(PNInstructionBr);
+      pn_thread_do_phi_assigns(thread, function, new_instruction_id);
+      location->instruction_id = new_instruction_id;
+      PN_TRACE(EXECUTE, "pc = %%%d\n", new_instruction_id);
       break;
     }
 
     case PN_OPCODE_BR_INT1: {
       PNInstructionBr* i = (PNInstructionBr*)inst;
       PNRuntimeValue value = pn_thread_get_value(thread, i->value_id);
-      PNBasicBlockId new_bb_id = value.u8 ? i->true_bb_id : i->false_bb_id;
-      pn_thread_do_phi_assigns(thread, function,
-                               &function->bbs[location->bb_id], new_bb_id);
-      location->bb_id = new_bb_id;
-      location->instruction_id = 0;
+      PNInstructionId new_instruction_id =
+          (value.u8 ? i->true_bb_id : i->false_bb_id) << 2;
+      location->instruction_id += sizeof(PNInstructionBr);
+      pn_thread_do_phi_assigns(thread, function, new_instruction_id);
+      location->instruction_id = new_instruction_id;
       PN_TRACE(EXECUTE, "    %s = %u\n", PN_VALUE_DESCRIBE(i->value_id),
                value.u8);
-      PN_TRACE(EXECUTE, "bb = %%b%d\n", new_bb_id);
+      PN_TRACE(EXECUTE, "pc = %%%d\n", new_instruction_id);
       break;
     }
 
@@ -457,7 +458,8 @@ static void pn_thread_execute_instruction(PNThread* thread) {
            * thread may have been blocked. If so, do not increment the
            * instruction counter */
           if (thread->state == PN_THREAD_RUNNING) {
-            location->instruction_id++;
+            location->instruction_id +=
+                sizeof(PNInstructionCall) + i->num_args * sizeof(PNValueId);
           }
           break;
         } else {
@@ -490,7 +492,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
         pn_thread_set_value(thread, value_id, arg);
       }
 
-      PN_TRACE(EXECUTE, "\nfunction = %%f%d bb = %%b0\n", new_function_id);
+      PN_TRACE(EXECUTE, "\nfunction = %%f%d  pc = %%0\n", new_function_id);
       break;
     }
 
@@ -506,7 +508,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       pn_executor_value_trace(executor, function, i->value_id, result, "    ",
                               "\n");
 
-      location->instruction_id++;
+      location->instruction_id += sizeof(PNInstructionCast);
       break;
     }
 
@@ -520,7 +522,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
              "    %s = " PN_FORMAT_##to "  %s = " PN_FORMAT_##from "\n", \
              PN_VALUE_DESCRIBE(i->result_value_id), result.to,           \
              PN_VALUE_DESCRIBE(i->value_id), result.from);               \
-    location->instruction_id++;                                          \
+    location->instruction_id += sizeof(PNInstructionCast);               \
   } while (0) /* no semicolon */
 
 #define PN_OPCODE_CAST_SEXT1(size)                                   \
@@ -533,7 +535,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_i##size "  %s = %u\n",   \
              PN_VALUE_DESCRIBE(i->result_value_id), result.i##size,  \
              PN_VALUE_DESCRIBE(i->value_id), result.u8);             \
-    location->instruction_id++;                                      \
+    location->instruction_id += sizeof(PNInstructionCast);           \
   } while (0) /* no semicolon */
 
 #define PN_OPCODE_CAST_TRUNC1(size)                                  \
@@ -545,7 +547,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     PN_TRACE(EXECUTE, "    %s = %u  %s = " PN_FORMAT_u##size "\n",   \
              PN_VALUE_DESCRIBE(i->result_value_id), result.u8,       \
              PN_VALUE_DESCRIBE(i->value_id), result.u##size);        \
-    location->instruction_id++;                                      \
+    location->instruction_id += sizeof(PNInstructionCast);           \
   } while (0) /* no semicolon */
 
 #define PN_OPCODE_CAST_ZEXT1(size)                                   \
@@ -558,7 +560,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_u##size "  %s = %u\n",   \
              PN_VALUE_DESCRIBE(i->result_value_id), result.u##size,  \
              PN_VALUE_DESCRIBE(i->value_id), result.u8);             \
-    location->instruction_id++;                                      \
+    location->instruction_id += sizeof(PNInstructionCast);           \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_CAST_FPEXT_FLOAT_DOUBLE:   PN_OPCODE_CAST(f32, f64); break;
@@ -642,7 +644,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
              PN_VALUE_DESCRIBE(i->result_value_id), result.u8,            \
              PN_VALUE_DESCRIBE(i->value0_id), value0.ty,                  \
              PN_VALUE_DESCRIBE(i->value1_id), value1.ty);                 \
-    location->instruction_id++;                                           \
+    location->instruction_id += sizeof(PNInstructionCmp2);                \
   } while (0) /* no semicolon */
 
 #define PN_OPCODE_CMP2_NOT(op, ty)                                           \
@@ -657,7 +659,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
              PN_VALUE_DESCRIBE(i->result_value_id), result.u8,               \
              PN_VALUE_DESCRIBE(i->value0_id), value0.ty,                     \
              PN_VALUE_DESCRIBE(i->value1_id), value1.ty);                    \
-    location->instruction_id++;                                              \
+    location->instruction_id += sizeof(PNInstructionCmp2);                   \
   } while (0) /* no semicolon */
 
 #define PN_OPCODE_CMP2_ORD(ty)                                             \
@@ -673,7 +675,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
              PN_VALUE_DESCRIBE(i->result_value_id), result.u8,             \
              PN_VALUE_DESCRIBE(i->value0_id), value0.ty,                   \
              PN_VALUE_DESCRIBE(i->value1_id), value1.ty);                  \
-    location->instruction_id++;                                            \
+    location->instruction_id += sizeof(PNInstructionCmp2);                 \
   } while (0) /* no semicolon */
 
 #define PN_OPCODE_CMP2_UNO(ty)                                         \
@@ -689,7 +691,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
              PN_VALUE_DESCRIBE(i->result_value_id), result.u8,         \
              PN_VALUE_DESCRIBE(i->value0_id), value0.ty,               \
              PN_VALUE_DESCRIBE(i->value1_id), value1.ty);              \
-    location->instruction_id++;                                        \
+    location->instruction_id += sizeof(PNInstructionCmp2);             \
   } while (0) /* no semicolon */
 
     //        U L G E
@@ -738,11 +740,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     case PN_OPCODE_FCMP_UNE_FLOAT:  PN_OPCODE_CMP2_NOT(==, f32); break;
     case PN_OPCODE_FCMP_UNO_DOUBLE: PN_OPCODE_CMP2_UNO(f64); break;
     case PN_OPCODE_FCMP_UNO_FLOAT:  PN_OPCODE_CMP2_UNO(f32); break;
-
-
-    case PN_OPCODE_FORWARDTYPEREF:
-      location->instruction_id++;
-      break;
 
     case PN_OPCODE_ICMP_EQ_INT8:   PN_OPCODE_CMP2(==, u8); break;
     case PN_OPCODE_ICMP_EQ_INT16:  PN_OPCODE_CMP2(==, u16); break;
@@ -819,7 +816,8 @@ static void pn_thread_execute_instruction(PNThread* thread) {
         void* src_pointer = executor->memory->data + src_p;
         memcpy(dst_pointer, src_pointer, len);
       }
-      location->instruction_id++;
+      location->instruction_id +=
+          sizeof(PNInstructionCall) + i->num_args * sizeof(PNValueId);
       break;
     }
 
@@ -850,7 +848,8 @@ static void pn_thread_execute_instruction(PNThread* thread) {
         void* dst_pointer = executor->memory->data + dst_p;
         memset(dst_pointer, value, len);
       }
-      location->instruction_id++;
+      location->instruction_id +=
+          sizeof(PNInstructionCall) + i->num_args * sizeof(PNValueId);
       break;
     }
 
@@ -883,7 +882,8 @@ static void pn_thread_execute_instruction(PNThread* thread) {
         void* src_pointer = executor->memory->data + src_p;
         memmove(dst_pointer, src_pointer, len);
       }
-      location->instruction_id++;
+      location->instruction_id +=
+          sizeof(PNInstructionCall) + i->num_args * sizeof(PNValueId);
       break;
     }
 
@@ -919,7 +919,8 @@ static void pn_thread_execute_instruction(PNThread* thread) {
              PN_VALUE_DESCRIBE(i->arg_ids[4]), memory_order_failure);     \
     (void) memory_order_success;                                          \
     (void) memory_order_failure;                                          \
-    location->instruction_id++;                                           \
+    location->instruction_id +=                                           \
+        sizeof(PNInstructionCall) + i->num_args * sizeof(PNValueId);      \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I8:
@@ -954,7 +955,8 @@ static void pn_thread_execute_instruction(PNThread* thread) {
              PN_VALUE_DESCRIBE(i->arg_ids[0]), addr_p,                   \
              PN_VALUE_DESCRIBE(i->arg_ids[1]), flags);                   \
     (void) flags;                                                        \
-    location->instruction_id++;                                          \
+    location->instruction_id +=                                          \
+        sizeof(PNInstructionCall) + i->num_args * sizeof(PNValueId);     \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I8:
@@ -996,7 +998,8 @@ static void pn_thread_execute_instruction(PNThread* thread) {
              PN_VALUE_DESCRIBE(i->arg_ids[2]), value,                        \
              PN_VALUE_DESCRIBE(i->arg_ids[3]), memory_order);                \
     (void) memory_order;                                                     \
-    location->instruction_id++;                                              \
+    location->instruction_id +=                                              \
+        sizeof(PNInstructionCall) + i->num_args * sizeof(PNValueId);         \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8:
@@ -1088,7 +1091,8 @@ static void pn_thread_execute_instruction(PNThread* thread) {
              PN_VALUE_DESCRIBE(i->arg_ids[2]), value,                       \
              PN_VALUE_DESCRIBE(i->arg_ids[3]), memory_order);               \
     (void) memory_order;                                                    \
-    location->instruction_id++;                                             \
+    location->instruction_id +=                                             \
+        sizeof(PNInstructionCall) + i->num_args * sizeof(PNValueId);        \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I8:
@@ -1133,19 +1137,18 @@ static void pn_thread_execute_instruction(PNThread* thread) {
             /* Reset the frame to its original state */
             *thread->current_call_frame = buf->frame;
             location = &thread->current_call_frame->location;
-            PN_TRACE(EXECUTE, "function = %%f%d  bb = %%b%d\n",
-                     location->function_id, location->bb_id);
+            PN_TRACE(EXECUTE, "function = %%f%d  pc = %%%d\n",
+                     location->function_id, location->instruction_id);
             /* Set the return value */
             PNFunction* new_function =
                 &module->functions[location->function_id];
-            PNBasicBlock* new_bb = &new_function->bbs[location->bb_id];
             PNInstructionCall* c =
-                (PNInstructionCall*)
-                    new_bb->instructions[location->instruction_id];
+                new_function->instructions + location->instruction_id;
             pn_thread_set_value(thread, c->result_value_id, value);
             pn_executor_value_trace(executor, function, i->arg_ids[1], value,
                                     "    ", "\n");
-            location->instruction_id++;
+            location->instruction_id +=
+                sizeof(PNInstructionCall) + c->num_args * sizeof(PNValueId);
             goto longjmp_done;
           }
           buf = buf->next;
@@ -1175,7 +1178,8 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PN_TRACE(EXECUTE, "    %s = %u  %s = %u\n",
                PN_VALUE_DESCRIBE(i->result_value_id), result.u32,
                PN_VALUE_DESCRIBE(i->arg_ids[0]), jmpbuf_p);
-      location->instruction_id++;
+      location->instruction_id +=
+          sizeof(PNInstructionCall) + i->num_args * sizeof(PNValueId);
       break;
     }
 
@@ -1196,7 +1200,8 @@ static void pn_thread_execute_instruction(PNThread* thread) {
                PN_VALUE_DESCRIBE(i->arg_ids[1]), addr_p,
                PN_VALUE_DESCRIBE(i->arg_ids[2]), flags);
       (void)flags;
-      location->instruction_id++;
+      location->instruction_id +=
+          sizeof(PNInstructionCall) + i->num_args * sizeof(PNValueId);
       break;
     }
 
@@ -1209,7 +1214,8 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PN_TRACE(INTRINSICS, "    llvm.nacl.read.tp()\n");
       PN_TRACE(EXECUTE, "    %s = %u\n", PN_VALUE_DESCRIBE(i->result_value_id),
                result.u32);
-      location->instruction_id++;
+      location->instruction_id +=
+          sizeof(PNInstructionCall) + i->num_args * sizeof(PNValueId);
       break;
     }
 
@@ -1224,7 +1230,8 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PN_TRACE(EXECUTE, "    %s = %f  %s = %f\n",
                PN_VALUE_DESCRIBE(i->result_value_id), result.f32,
                PN_VALUE_DESCRIBE(i->arg_ids[0]), value);
-      location->instruction_id++;
+      location->instruction_id +=
+          sizeof(PNInstructionCall) + i->num_args * sizeof(PNValueId);
       break;
     }
 
@@ -1239,7 +1246,8 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PN_TRACE(EXECUTE, "    %s = %f  %s = %f\n",
                PN_VALUE_DESCRIBE(i->result_value_id), result.f64,
                PN_VALUE_DESCRIBE(i->arg_ids[0]), value);
-      location->instruction_id++;
+      location->instruction_id +=
+          sizeof(PNInstructionCall) + i->num_args * sizeof(PNValueId);
       break;
     }
 
@@ -1286,7 +1294,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_##ty "  %s = %u\n",  \
              PN_VALUE_DESCRIBE(i->result_value_id), result.ty,   \
              PN_VALUE_DESCRIBE(i->src_id), src.u32);             \
-    location->instruction_id++;                                  \
+    location->instruction_id += sizeof(PNInstructionLoad);       \
   } while (0) /*no semicolon */
 
     case PN_OPCODE_LOAD_DOUBLE: PN_OPCODE_LOAD(f64); break;
@@ -1298,17 +1306,18 @@ static void pn_thread_execute_instruction(PNThread* thread) {
 
 #undef PN_OPCODE_LOAD
 
-    case PN_OPCODE_PHI:
-      location->instruction_id++;
-      break;
-
     case PN_OPCODE_RET: {
       thread->current_call_frame = frame->parent;
       location = &frame->parent->location;
+      PNFunction* new_function = &module->functions[location->function_id];
+      PNInstructionCall* c =
+          new_function->instructions + location->instruction_id;
+
       pn_allocator_reset_to_mark(&thread->allocator, frame->parent->mark);
-      PN_TRACE(EXECUTE, "function = %%f%d  bb = %%b%d\n", location->function_id,
-               location->bb_id);
-      location->instruction_id++;
+      PN_TRACE(EXECUTE, "function = %%f%d  pc = %%%d\n", location->function_id,
+               location->instruction_id);
+      location->instruction_id +=
+          sizeof(PNInstructionCall) + c->num_args * sizeof(PNValueId);
       break;
     }
 
@@ -1321,27 +1330,28 @@ static void pn_thread_execute_instruction(PNThread* thread) {
 
       if (location->function_id != PN_INVALID_FUNCTION_ID) {
         PNFunction* new_function = &module->functions[location->function_id];
-        PNBasicBlock* new_bb = &new_function->bbs[location->bb_id];
         PNInstructionCall* c =
-            (PNInstructionCall*)new_bb->instructions[location->instruction_id];
+            new_function->instructions + location->instruction_id;
         pn_thread_set_value(thread, c->result_value_id, value);
         pn_executor_value_trace(executor, function, i->value_id, value, "    ",
                                 "\n");
         pn_allocator_reset_to_mark(&thread->allocator, frame->parent->mark);
-        PN_TRACE(EXECUTE, "function = %%f%d  bb = %%b%d\n",
-                 location->function_id, location->bb_id);
+        PN_TRACE(EXECUTE, "function = %%f%d  pc = %%%d\n",
+                 location->function_id, location->instruction_id);
         pn_executor_value_trace(executor, new_function, c->result_value_id,
                                 value, "    ", "\n");
+        location->instruction_id +=
+            sizeof(PNInstructionCall) + c->num_args * sizeof(PNValueId);
       } else {
         /* Returning a value from _start; let's consider that the exit code */
         executor->exit_code = value.i32;
+        executor->exiting = PN_TRUE;
         pn_executor_value_trace(executor, function, i->value_id, value, "    ",
                                 "\n");
-        PN_TRACE(EXECUTE, "function = %%f%d  bb = %%b%d\n",
-                 location->function_id, location->bb_id);
+        PN_TRACE(EXECUTE, "function = %%f%d  pc = %%%d\n",
+                 location->function_id, location->instruction_id);
       }
 
-      location->instruction_id++;
       break;
     }
 
@@ -1354,7 +1364,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
              PN_VALUE_DESCRIBE(i->dest_id), dest.u32,                \
              PN_VALUE_DESCRIBE(i->value_id), value.ty);              \
     pn_memory_write_##ty(executor->memory, dest.u32, value.ty);      \
-    location->instruction_id++;                                      \
+    location->instruction_id += sizeof(PNInstructionStore);          \
   } while (0) /*no semicolon */
 
     case PN_OPCODE_STORE_DOUBLE: PN_OPCODE_STORE(f64); break;
@@ -1366,26 +1376,26 @@ static void pn_thread_execute_instruction(PNThread* thread) {
 
 #undef PN_OPCODE_STORE
 
-#define PN_OPCODE_SWITCH(ty)                                              \
-  do {                                                                    \
-    PNInstructionSwitch* i = (PNInstructionSwitch*)inst;                  \
-    PNRuntimeValue value = pn_thread_get_value(thread, i->value_id);      \
-    PNBasicBlockId new_bb_id = i->default_bb_id;                          \
-    uint32_t c;                                                           \
-    for (c = 0; c < i->num_cases; ++c) {                                  \
-      PNSwitchCase* switch_case = &i->cases[c];                           \
-      if (value.ty == switch_case->value) {                               \
-        new_bb_id = switch_case->bb_id;                                   \
-        break;                                                            \
-      }                                                                   \
-    }                                                                     \
-    pn_thread_do_phi_assigns(thread, function,                            \
-                             &function->bbs[location->bb_id], new_bb_id); \
-    location->bb_id = new_bb_id;                                          \
-    location->instruction_id = 0;                                         \
-    PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_##ty "\n",                    \
-             PN_VALUE_DESCRIBE(i->value_id), value.ty);                   \
-    PN_TRACE(EXECUTE, "bb = %%b%d\n", new_bb_id);                         \
+#define PN_OPCODE_SWITCH(ty)                                         \
+  do {                                                               \
+    PNInstructionSwitch* i = (PNInstructionSwitch*)inst;             \
+    PNRuntimeValue value = pn_thread_get_value(thread, i->value_id); \
+    PNInstructionId new_instruction_id = i->default_bb_id << 2;      \
+    uint32_t c;                                                      \
+    for (c = 0; c < i->num_cases; ++c) {                             \
+      PNSwitchCase* switch_case = &i->cases[c];                      \
+      if (value.ty == switch_case->value) {                          \
+        new_instruction_id = switch_case->bb_id << 2;                \
+        break;                                                       \
+      }                                                              \
+    }                                                                \
+    location->instruction_id += sizeof(PNInstructionSwitch);         \
+    location->instruction_id += i->num_cases * sizeof(PNSwitchCase); \
+    pn_thread_do_phi_assigns(thread, function, new_instruction_id);  \
+    location->instruction_id = new_instruction_id;                   \
+    PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_##ty "\n",               \
+             PN_VALUE_DESCRIBE(i->value_id), value.ty);              \
+    PN_TRACE(EXECUTE, "pc = %%%d\n", new_instruction_id);            \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_SWITCH_INT1:
@@ -1398,7 +1408,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
 
     case PN_OPCODE_UNREACHABLE:
       PN_FATAL("Reached unreachable instruction!\n");
-      location->instruction_id++;
       break;
 
     case PN_OPCODE_VSELECT: {
@@ -1411,7 +1420,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
                               "    ", "  ");
       pn_executor_value_trace(executor, function, i->cond_id, cond, "", "  ");
       pn_executor_value_trace(executor, function, value_id, result, "", "\n");
-      location->instruction_id++;
+      location->instruction_id += sizeof(PNInstructionVselect);
       break;
     }
 

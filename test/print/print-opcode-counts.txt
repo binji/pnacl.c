@@ -2,9 +2,7 @@
 # FILE: res/printf.pexe
 -----------------
                          BINOP_ADD_INT32 745
-                                     PHI 458
                                  BR_INT1 380
-                          FORWARDTYPEREF 297
                            ICMP_EQ_INT32 262
                              STORE_INT32 236
                               LOAD_INT32 216

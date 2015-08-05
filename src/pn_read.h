@@ -909,13 +909,13 @@ static void pn_function_block_read(PNModule* module,
       case PN_ENTRY_END_BLOCK:
         PN_CHECK(num_bbs == function->num_bbs);
         pn_function_calculate_result_value_types(module, function);
-        pn_function_calculate_opcodes(module, function);
         pn_function_calculate_uses(module, function);
         pn_function_calculate_pred_bbs(module, function);
         pn_function_calculate_phi_assigns(module, function);
 #if PN_CALCULATE_LIVENESS
         pn_function_calculate_liveness(module, function);
 #endif
+        pn_function_calculate_opcodes(module, function);
         pn_function_trace(module, function, function_id);
 
         PN_TRACE_DEDENT(FUNCTION_BLOCK, 2);
