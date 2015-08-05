@@ -595,6 +595,439 @@ static void pn_function_trace(PNModule* module,
   PN_END_TIME(FUNCTION_TRACE);
 }
 
+static void pn_runtime_instruction_trace(PNModule* module,
+                                         PNFunction* function,
+                                         PNRuntimeInstruction* inst) {
+  PN_TRACE_PRINT_INDENT();
+  const char* opname = NULL;
+
+  switch (inst->opcode) {
+    case PN_OPCODE_ALLOCA_INT32: {
+      PNRuntimeInstructionAlloca* i = (PNRuntimeInstructionAlloca*)inst;
+      PN_PRINT("%s = alloca i8, %s %s, align %d;\n",
+               pn_value_describe(module, function, i->result_value_id),
+               pn_value_describe_type(module, function, i->size_id),
+               pn_value_describe(module, function, i->size_id), i->alignment);
+      break;
+    }
+
+    case PN_OPCODE_BINOP_ADD_DOUBLE:
+    case PN_OPCODE_BINOP_ADD_FLOAT:  opname = "fadd"; goto binop;
+    case PN_OPCODE_BINOP_ADD_INT8:
+    case PN_OPCODE_BINOP_ADD_INT16:
+    case PN_OPCODE_BINOP_ADD_INT32:
+    case PN_OPCODE_BINOP_ADD_INT64:  opname = "add"; goto binop;
+    case PN_OPCODE_BINOP_AND_INT1:
+    case PN_OPCODE_BINOP_AND_INT8:
+    case PN_OPCODE_BINOP_AND_INT16:
+    case PN_OPCODE_BINOP_AND_INT32:
+    case PN_OPCODE_BINOP_AND_INT64:  opname = "and"; goto binop;
+    case PN_OPCODE_BINOP_ASHR_INT8:
+    case PN_OPCODE_BINOP_ASHR_INT16:
+    case PN_OPCODE_BINOP_ASHR_INT32:
+    case PN_OPCODE_BINOP_ASHR_INT64: opname = "ashr"; goto binop;
+    case PN_OPCODE_BINOP_LSHR_INT8:
+    case PN_OPCODE_BINOP_LSHR_INT16:
+    case PN_OPCODE_BINOP_LSHR_INT32:
+    case PN_OPCODE_BINOP_LSHR_INT64: opname = "lshr"; goto binop;
+    case PN_OPCODE_BINOP_MUL_DOUBLE:
+    case PN_OPCODE_BINOP_MUL_FLOAT:  opname = "fmul"; goto binop;
+    case PN_OPCODE_BINOP_MUL_INT8:
+    case PN_OPCODE_BINOP_MUL_INT16:
+    case PN_OPCODE_BINOP_MUL_INT32:
+    case PN_OPCODE_BINOP_MUL_INT64:  opname = "mul"; goto binop;
+    case PN_OPCODE_BINOP_OR_INT1:
+    case PN_OPCODE_BINOP_OR_INT8:
+    case PN_OPCODE_BINOP_OR_INT16:
+    case PN_OPCODE_BINOP_OR_INT32:
+    case PN_OPCODE_BINOP_OR_INT64:   opname = "or"; goto binop;
+    case PN_OPCODE_BINOP_SDIV_DOUBLE:
+    case PN_OPCODE_BINOP_SDIV_FLOAT: opname = "fdiv"; goto binop;
+    case PN_OPCODE_BINOP_SDIV_INT32:
+    case PN_OPCODE_BINOP_SDIV_INT64: opname = "sdiv"; goto binop;
+    case PN_OPCODE_BINOP_SHL_INT8:
+    case PN_OPCODE_BINOP_SHL_INT16:
+    case PN_OPCODE_BINOP_SHL_INT32:
+    case PN_OPCODE_BINOP_SHL_INT64:  opname = "shl"; goto binop;
+    case PN_OPCODE_BINOP_SREM_INT32:
+    case PN_OPCODE_BINOP_SREM_INT64: opname = "srem"; goto binop;
+    case PN_OPCODE_BINOP_SUB_DOUBLE:
+    case PN_OPCODE_BINOP_SUB_FLOAT:  opname = "fsub"; goto binop;
+    case PN_OPCODE_BINOP_SUB_INT8:
+    case PN_OPCODE_BINOP_SUB_INT16:
+    case PN_OPCODE_BINOP_SUB_INT32:
+    case PN_OPCODE_BINOP_SUB_INT64:  opname = "sub"; goto binop;
+    case PN_OPCODE_BINOP_UDIV_INT8:
+    case PN_OPCODE_BINOP_UDIV_INT16:
+    case PN_OPCODE_BINOP_UDIV_INT32:
+    case PN_OPCODE_BINOP_UDIV_INT64: opname = "udiv"; goto binop;
+    case PN_OPCODE_BINOP_UREM_INT8:
+    case PN_OPCODE_BINOP_UREM_INT16:
+    case PN_OPCODE_BINOP_UREM_INT32:
+    case PN_OPCODE_BINOP_UREM_INT64: opname = "urem"; goto binop;
+    case PN_OPCODE_BINOP_XOR_INT1:
+    case PN_OPCODE_BINOP_XOR_INT8:
+    case PN_OPCODE_BINOP_XOR_INT16:
+    case PN_OPCODE_BINOP_XOR_INT32:
+    case PN_OPCODE_BINOP_XOR_INT64:  opname = "xor"; goto binop;
+    binop: {
+      PNRuntimeInstructionBinop* i = (PNRuntimeInstructionBinop*)inst;
+      PN_PRINT("%s = %s %s %s, %s;\n",
+               pn_value_describe(module, function, i->result_value_id), opname,
+               pn_value_describe_type(module, function, i->result_value_id),
+               pn_value_describe(module, function, i->value0_id),
+               pn_value_describe(module, function, i->value1_id));
+      break;
+    }
+
+    case PN_OPCODE_BR: {
+      PNRuntimeInstructionBr* i = (PNRuntimeInstructionBr*)inst;
+      PN_PRINT("br label %%%d;\n", i->instruction_id);
+      break;
+    }
+
+    case PN_OPCODE_BR_INT1: {
+      PNRuntimeInstructionBrInt1* i = (PNRuntimeInstructionBrInt1*)inst;
+      PN_PRINT("br %s %s, label %%%d, label %%%d;\n",
+               pn_value_describe_type(module, function, i->value_id),
+               pn_value_describe(module, function, i->value_id),
+               i->true_instruction_id, i->false_instruction_id);
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_MEMCPY:
+    case PN_OPCODE_INTRINSIC_LLVM_MEMSET:
+    case PN_OPCODE_INTRINSIC_LLVM_MEMMOVE:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_LONGJMP:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_SETJMP:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_READ_TP:
+    case PN_OPCODE_INTRINSIC_LLVM_SQRT_F32:
+    case PN_OPCODE_INTRINSIC_LLVM_SQRT_F64:
+    case PN_OPCODE_INTRINSIC_LLVM_TRAP:
+    case PN_OPCODE_INTRINSIC_LLVM_BSWAP_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_BSWAP_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_BSWAP_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_CTLZ_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_CTTZ_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_FABS_F32:
+    case PN_OPCODE_INTRINSIC_LLVM_FABS_F64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_STACKRESTORE:
+    case PN_OPCODE_INTRINSIC_LLVM_STACKSAVE:
+    case PN_OPCODE_INTRINSIC_START:
+    case PN_OPCODE_CALL: {
+      PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+
+      if (i->flags & PN_CALL_FLAGS_RETURN_TYPE_VOID) {
+        PN_PRINT("%scall void ",
+                 (i->flags & PN_CALL_FLAGS_TAIL_CALL) ? "tail " : "");
+      } else {
+        PN_PRINT("%s = %scall %s ",
+                 pn_value_describe(module, function, i->result_value_id),
+                 (i->flags & PN_CALL_FLAGS_TAIL_CALL) ? "tail " : "",
+                 pn_value_describe_type(module, function, i->result_value_id));
+      }
+      PN_PRINT("%s(", pn_value_describe(module, function, i->callee_id));
+
+      int32_t n;
+      for (n = 0; n < i->num_args; ++n) {
+        if (n != 0) {
+          PN_PRINT(", ");
+        }
+        PN_PRINT("%s %s", pn_value_describe_type(module, function, arg_ids[n]),
+                 pn_value_describe(module, function, arg_ids[n]));
+      }
+      PN_PRINT(");\n");
+      break;
+    }
+
+    case PN_OPCODE_CAST_BITCAST_DOUBLE_INT64:
+    case PN_OPCODE_CAST_BITCAST_FLOAT_INT32:
+    case PN_OPCODE_CAST_BITCAST_INT32_FLOAT:
+    case PN_OPCODE_CAST_BITCAST_INT64_DOUBLE: opname = "bitcast"; goto cast;
+    case PN_OPCODE_CAST_FPEXT_FLOAT_DOUBLE:   opname = "fpext"; goto cast;
+    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT8:
+    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT16:
+    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT32:
+    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT64:
+    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT8:
+    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT16:
+    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT32:
+    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT64:   opname = "fptosi"; goto cast;
+    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT8:
+    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT16:
+    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT32:
+    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT64:
+    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT8:
+    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT16:
+    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT32:
+    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT64:   opname = "fptoui"; goto cast;
+    case PN_OPCODE_CAST_FPTRUNC_DOUBLE_FLOAT: opname = "fptrunc"; goto cast;
+    case PN_OPCODE_CAST_SEXT_INT1_INT8:
+    case PN_OPCODE_CAST_SEXT_INT1_INT16:
+    case PN_OPCODE_CAST_SEXT_INT1_INT32:
+    case PN_OPCODE_CAST_SEXT_INT1_INT64:
+    case PN_OPCODE_CAST_SEXT_INT8_INT16:
+    case PN_OPCODE_CAST_SEXT_INT8_INT32:
+    case PN_OPCODE_CAST_SEXT_INT8_INT64:
+    case PN_OPCODE_CAST_SEXT_INT16_INT32:
+    case PN_OPCODE_CAST_SEXT_INT16_INT64:
+    case PN_OPCODE_CAST_SEXT_INT32_INT64:     opname = "sext"; goto cast;
+    case PN_OPCODE_CAST_SITOFP_INT8_DOUBLE:
+    case PN_OPCODE_CAST_SITOFP_INT8_FLOAT:
+    case PN_OPCODE_CAST_SITOFP_INT16_DOUBLE:
+    case PN_OPCODE_CAST_SITOFP_INT16_FLOAT:
+    case PN_OPCODE_CAST_SITOFP_INT32_DOUBLE:
+    case PN_OPCODE_CAST_SITOFP_INT32_FLOAT:
+    case PN_OPCODE_CAST_SITOFP_INT64_DOUBLE:
+    case PN_OPCODE_CAST_SITOFP_INT64_FLOAT:   opname = "sitofp"; goto cast;
+    case PN_OPCODE_CAST_TRUNC_INT8_INT1:
+    case PN_OPCODE_CAST_TRUNC_INT16_INT1:
+    case PN_OPCODE_CAST_TRUNC_INT16_INT8:
+    case PN_OPCODE_CAST_TRUNC_INT32_INT1:
+    case PN_OPCODE_CAST_TRUNC_INT32_INT8:
+    case PN_OPCODE_CAST_TRUNC_INT32_INT16:
+    case PN_OPCODE_CAST_TRUNC_INT64_INT8:
+    case PN_OPCODE_CAST_TRUNC_INT64_INT16:
+    case PN_OPCODE_CAST_TRUNC_INT64_INT32:    opname = "trunc"; goto cast;
+    case PN_OPCODE_CAST_UITOFP_INT8_DOUBLE:
+    case PN_OPCODE_CAST_UITOFP_INT8_FLOAT:
+    case PN_OPCODE_CAST_UITOFP_INT16_DOUBLE:
+    case PN_OPCODE_CAST_UITOFP_INT16_FLOAT:
+    case PN_OPCODE_CAST_UITOFP_INT32_DOUBLE:
+    case PN_OPCODE_CAST_UITOFP_INT32_FLOAT:
+    case PN_OPCODE_CAST_UITOFP_INT64_DOUBLE:
+    case PN_OPCODE_CAST_UITOFP_INT64_FLOAT:   opname = "uitofp"; goto cast;
+    case PN_OPCODE_CAST_ZEXT_INT1_INT8:
+    case PN_OPCODE_CAST_ZEXT_INT1_INT16:
+    case PN_OPCODE_CAST_ZEXT_INT1_INT32:
+    case PN_OPCODE_CAST_ZEXT_INT1_INT64:
+    case PN_OPCODE_CAST_ZEXT_INT8_INT16:
+    case PN_OPCODE_CAST_ZEXT_INT8_INT32:
+    case PN_OPCODE_CAST_ZEXT_INT8_INT64:
+    case PN_OPCODE_CAST_ZEXT_INT16_INT32:
+    case PN_OPCODE_CAST_ZEXT_INT16_INT64:
+    case PN_OPCODE_CAST_ZEXT_INT32_INT64:     opname = "zext"; goto cast;
+    cast: {
+      PNRuntimeInstructionCast* i = (PNRuntimeInstructionCast*)inst;
+      PN_PRINT("%s = %s %s %s to %s;\n",
+               pn_value_describe(module, function, i->result_value_id), opname,
+               pn_value_describe_type(module, function, i->value_id),
+               pn_value_describe(module, function, i->value_id),
+               pn_value_describe_type(module, function, i->result_value_id));
+      break;
+    }
+
+    case PN_OPCODE_FCMP_OEQ_DOUBLE:
+    case PN_OPCODE_FCMP_OEQ_FLOAT:  opname = "fcmp oeq"; goto cmp2;
+    case PN_OPCODE_FCMP_OGE_DOUBLE:
+    case PN_OPCODE_FCMP_OGE_FLOAT:  opname = "fcmp oge"; goto cmp2;
+    case PN_OPCODE_FCMP_OGT_DOUBLE:
+    case PN_OPCODE_FCMP_OGT_FLOAT:  opname = "fcmp ogt"; goto cmp2;
+    case PN_OPCODE_FCMP_OLE_DOUBLE:
+    case PN_OPCODE_FCMP_OLE_FLOAT:  opname = "fcmp ogt"; goto cmp2;
+    case PN_OPCODE_FCMP_OLT_DOUBLE:
+    case PN_OPCODE_FCMP_OLT_FLOAT:  opname = "fcmp olt"; goto cmp2;
+    case PN_OPCODE_FCMP_ONE_DOUBLE:
+    case PN_OPCODE_FCMP_ONE_FLOAT:  opname = "fcmp one"; goto cmp2;
+    case PN_OPCODE_FCMP_ORD_DOUBLE:
+    case PN_OPCODE_FCMP_ORD_FLOAT:  opname = "fcmp ord"; goto cmp2;
+    case PN_OPCODE_FCMP_UEQ_DOUBLE:
+    case PN_OPCODE_FCMP_UEQ_FLOAT:  opname = "fcmp ueq"; goto cmp2;
+    case PN_OPCODE_FCMP_UGE_DOUBLE:
+    case PN_OPCODE_FCMP_UGE_FLOAT:  opname = "fcmp uge"; goto cmp2;
+    case PN_OPCODE_FCMP_UGT_DOUBLE:
+    case PN_OPCODE_FCMP_UGT_FLOAT:  opname = "fcmp ugt"; goto cmp2;
+    case PN_OPCODE_FCMP_ULE_DOUBLE:
+    case PN_OPCODE_FCMP_ULE_FLOAT:  opname = "fcmp ule"; goto cmp2;
+    case PN_OPCODE_FCMP_ULT_DOUBLE:
+    case PN_OPCODE_FCMP_ULT_FLOAT:  opname = "fcmp ult"; goto cmp2;
+    case PN_OPCODE_FCMP_UNE_DOUBLE:
+    case PN_OPCODE_FCMP_UNE_FLOAT:  opname = "fcmp une"; goto cmp2;
+    case PN_OPCODE_FCMP_UNO_DOUBLE:
+    case PN_OPCODE_FCMP_UNO_FLOAT:  opname = "fcmp uno"; goto cmp2;
+    case PN_OPCODE_ICMP_EQ_INT8:
+    case PN_OPCODE_ICMP_EQ_INT16:
+    case PN_OPCODE_ICMP_EQ_INT32:
+    case PN_OPCODE_ICMP_EQ_INT64:  opname = "icmp eq"; goto cmp2;
+    case PN_OPCODE_ICMP_NE_INT8:
+    case PN_OPCODE_ICMP_NE_INT16:
+    case PN_OPCODE_ICMP_NE_INT32:
+    case PN_OPCODE_ICMP_NE_INT64:  opname = "icmp ne"; goto cmp2;
+    case PN_OPCODE_ICMP_SGE_INT8:
+    case PN_OPCODE_ICMP_SGE_INT16:
+    case PN_OPCODE_ICMP_SGE_INT32:
+    case PN_OPCODE_ICMP_SGE_INT64:  opname = "icmp sge"; goto cmp2;
+    case PN_OPCODE_ICMP_SGT_INT8:
+    case PN_OPCODE_ICMP_SGT_INT16:
+    case PN_OPCODE_ICMP_SGT_INT32:
+    case PN_OPCODE_ICMP_SGT_INT64:  opname = "icmp sgt"; goto cmp2;
+    case PN_OPCODE_ICMP_SLE_INT8:
+    case PN_OPCODE_ICMP_SLE_INT16:
+    case PN_OPCODE_ICMP_SLE_INT32:
+    case PN_OPCODE_ICMP_SLE_INT64:  opname = "icmp sle"; goto cmp2;
+    case PN_OPCODE_ICMP_SLT_INT8:
+    case PN_OPCODE_ICMP_SLT_INT16:
+    case PN_OPCODE_ICMP_SLT_INT32:
+    case PN_OPCODE_ICMP_SLT_INT64:  opname = "icmp slt"; goto cmp2;
+    case PN_OPCODE_ICMP_UGE_INT8:
+    case PN_OPCODE_ICMP_UGE_INT16:
+    case PN_OPCODE_ICMP_UGE_INT32:
+    case PN_OPCODE_ICMP_UGE_INT64:  opname = "icmp uge"; goto cmp2;
+    case PN_OPCODE_ICMP_UGT_INT8:
+    case PN_OPCODE_ICMP_UGT_INT16:
+    case PN_OPCODE_ICMP_UGT_INT32:
+    case PN_OPCODE_ICMP_UGT_INT64:  opname = "icmp ugt"; goto cmp2;
+    case PN_OPCODE_ICMP_ULE_INT8:
+    case PN_OPCODE_ICMP_ULE_INT16:
+    case PN_OPCODE_ICMP_ULE_INT32:
+    case PN_OPCODE_ICMP_ULE_INT64:  opname = "icmp ule"; goto cmp2;
+    case PN_OPCODE_ICMP_ULT_INT8:
+    case PN_OPCODE_ICMP_ULT_INT16:
+    case PN_OPCODE_ICMP_ULT_INT32:
+    case PN_OPCODE_ICMP_ULT_INT64:  opname = "icmp ult"; goto cmp2;
+    cmp2: {
+      PNRuntimeInstructionCmp2* i = (PNRuntimeInstructionCmp2*)inst;
+      PN_PRINT("%s = %s %s %s, %s;\n",
+               pn_value_describe(module, function, i->result_value_id), opname,
+               pn_value_describe_type(module, function, i->value0_id),
+               pn_value_describe(module, function, i->value0_id),
+               pn_value_describe(module, function, i->value1_id));
+      break;
+    }
+
+    case PN_OPCODE_LOAD_DOUBLE:
+    case PN_OPCODE_LOAD_FLOAT:
+    case PN_OPCODE_LOAD_INT8:
+    case PN_OPCODE_LOAD_INT16:
+    case PN_OPCODE_LOAD_INT32:
+    case PN_OPCODE_LOAD_INT64: {
+      PNRuntimeInstructionLoad* i = (PNRuntimeInstructionLoad*)inst;
+      PN_PRINT("%s = load %s* %s, align %d;\n",
+               pn_value_describe(module, function, i->result_value_id),
+               pn_value_describe_type(module, function, i->result_value_id),
+               pn_value_describe(module, function, i->src_id), i->alignment);
+      break;
+    }
+
+    case PN_OPCODE_RET: {
+      PN_PRINT("ret void;\n");
+      break;
+    }
+
+    case PN_OPCODE_RET_VALUE: {
+      PNRuntimeInstructionRetValue* i = (PNRuntimeInstructionRetValue*)inst;
+      PN_PRINT("ret %s %s;\n",
+               pn_value_describe_type(module, function, i->value_id),
+               pn_value_describe(module, function, i->value_id));
+      break;
+    }
+
+    case PN_OPCODE_STORE_DOUBLE:
+    case PN_OPCODE_STORE_FLOAT:
+    case PN_OPCODE_STORE_INT8:
+    case PN_OPCODE_STORE_INT16:
+    case PN_OPCODE_STORE_INT32:
+    case PN_OPCODE_STORE_INT64: {
+      PNRuntimeInstructionStore* i = (PNRuntimeInstructionStore*)inst;
+      PN_PRINT("store %s %s, %s* %s, align %d;\n",
+               pn_value_describe_type(module, function, i->value_id),
+               pn_value_describe(module, function, i->value_id),
+               pn_value_describe_type(module, function, i->value_id),
+               pn_value_describe(module, function, i->dest_id), i->alignment);
+      break;
+    }
+
+    case PN_OPCODE_SWITCH_INT1:
+    case PN_OPCODE_SWITCH_INT8:
+    case PN_OPCODE_SWITCH_INT16:
+    case PN_OPCODE_SWITCH_INT32:
+    case PN_OPCODE_SWITCH_INT64: {
+      PNRuntimeInstructionSwitch* i = (PNRuntimeInstructionSwitch*)inst;
+      PNRuntimeSwitchCase* cases =
+          (void*)inst + sizeof(PNRuntimeInstructionSwitch);
+      const char* type_str =
+          pn_value_describe_type(module, function, i->value_id);
+      PN_PRINT("switch %s %s {\n", type_str,
+               pn_value_describe(module, function, i->value_id));
+      PN_TRACE_PRINT_INDENTX(2);
+      PN_PRINT("default: br label %%%d;\n", i->default_instruction_id);
+
+      uint32_t c;
+      for (c = 0; c < i->num_cases; ++c) {
+        PNRuntimeSwitchCase* switch_case = &cases[c];
+        PN_TRACE_PRINT_INDENTX(2);
+        PN_PRINT("%s %" PRId64 ": br label %%%d;\n", type_str,
+                 switch_case->value, switch_case->instruction_id);
+      }
+      PN_TRACE_PRINT_INDENT();
+      PN_PRINT("}\n");
+      break;
+    }
+
+    case PN_OPCODE_UNREACHABLE:
+      PN_PRINT("unreachable;\n");
+      break;
+
+    case PN_OPCODE_VSELECT: {
+      PNRuntimeInstructionVselect* i = (PNRuntimeInstructionVselect*)inst;
+      PN_PRINT("%s = select %s %s, %s %s, %s %s;\n",
+               pn_value_describe(module, function, i->result_value_id),
+               pn_value_describe_type(module, function, i->cond_id),
+               pn_value_describe(module, function, i->cond_id),
+               pn_value_describe_type(module, function, i->true_value_id),
+               pn_value_describe(module, function, i->true_value_id),
+               pn_value_describe_type(module, function, i->false_value_id),
+               pn_value_describe(module, function, i->false_value_id));
+      break;
+    }
+
+    default:
+      PN_FATAL("Invalid runtime instruction opcode: %d\n", inst->opcode);
+      break;
+  }
+}
+
 #else
 
 static void pn_instruction_trace(PNModule* module,

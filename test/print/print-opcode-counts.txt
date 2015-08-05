@@ -9,16 +9,15 @@
                                       BR 114
                          BINOP_MUL_INT32 101
                          BINOP_AND_INT32 87
+                                    CALL 49
                          BINOP_SUB_INT32 44
                          BINOP_SHL_INT32 36
                             ALLOCA_INT32 35
                           ICMP_SGT_INT32 35
                                LOAD_INT8 34
-                                    CALL 30
                               LOAD_INT16 30
                                  VSELECT 28
                                RET_VALUE 24
-                           CALL_INDIRECT 19
                             ICMP_EQ_INT8 19
                            ICMP_EQ_INT16 18
                           ICMP_UGT_INT32 18

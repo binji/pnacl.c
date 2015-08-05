@@ -469,7 +469,6 @@ typedef enum PNIntrinsicId {
   V(BR)                                      \
   V(BR_INT1)                                 \
   V(CALL)                                    \
-  V(CALL_INDIRECT)                           \
   V(CAST_BITCAST_DOUBLE_INT64)               \
   V(CAST_BITCAST_FLOAT_INT32)                \
   V(CAST_BITCAST_INT32_FLOAT)                \
@@ -844,8 +843,14 @@ typedef struct PNRecordReader {
 
 typedef struct PNInstruction {
   PNFunctionCode code;
-  PNOpcode opcode;
 } PNInstruction;
+
+typedef struct PNInstructionAlloca {
+  PNInstruction base;
+  PNValueId result_value_id;
+  PNValueId size_id;
+  PNAlignment alignment;
+} PNInstructionAlloca;
 
 typedef struct PNInstructionBinop {
   PNInstruction base;
@@ -856,6 +861,25 @@ typedef struct PNInstructionBinop {
   int32_t flags;
 } PNInstructionBinop;
 
+typedef struct PNInstructionBr {
+  PNInstruction base;
+  PNBasicBlockId true_bb_id;
+  PNBasicBlockId false_bb_id; /* Or PN_INVALID_BB_ID */
+  PNValueId value_id;         /* Or PN_INVALID_VALUE_ID */
+} PNInstructionBr;
+
+typedef struct PNInstructionCall {
+  PNInstruction base;
+  PNValueId result_value_id;
+  uint32_t calling_convention;
+  PNValueId callee_id;
+  uint32_t num_args;
+  PNValueId* arg_ids;
+  PNTypeId return_type_id;
+  PNBool is_indirect;
+  PNBool is_tail_call;
+} PNInstructionCall;
+
 typedef struct PNInstructionCast {
   PNInstruction base;
   PNValueId result_value_id;
@@ -864,17 +888,52 @@ typedef struct PNInstructionCast {
   PNTypeId type_id;
 } PNInstructionCast;
 
+typedef struct PNInstructionCmp2 {
+  PNInstruction base;
+  PNValueId result_value_id;
+  PNValueId value0_id;
+  PNValueId value1_id;
+  PNCmp2 cmp2_opcode;
+} PNInstructionCmp2;
+
+typedef struct PNInstructionForwardtyperef {
+  PNInstruction base;
+  PNValueId value_id;
+  PNValueId type_id;
+} PNInstructionForwardtyperef;
+
+typedef struct PNInstructionLoad {
+  PNInstruction base;
+  PNValueId result_value_id;
+  PNValueId src_id;
+  PNAlignment alignment;
+  PNTypeId type_id;
+} PNInstructionLoad;
+
+typedef struct PNPhiIncoming {
+  PNBasicBlockId bb_id;
+  PNValueId value_id;
+} PNPhiIncoming;
+
+typedef struct PNInstructionPhi {
+  PNInstruction base;
+  PNValueId result_value_id;
+  uint32_t num_incoming;
+  PNPhiIncoming* incoming;
+  PNTypeId type_id;
+} PNInstructionPhi;
+
 typedef struct PNInstructionRet {
   PNInstruction base;
   PNValueId value_id; /* Or PN_INVALID_VALUE_ID */
 } PNInstructionRet;
 
-typedef struct PNInstructionBr {
+typedef struct PNInstructionStore {
   PNInstruction base;
-  PNBasicBlockId true_bb_id;
-  PNBasicBlockId false_bb_id; /* Or PN_INVALID_BB_ID */
-  PNValueId value_id;         /* Or PN_INVALID_VALUE_ID */
-} PNInstructionBr;
+  PNValueId dest_id;
+  PNValueId value_id;
+  PNAlignment alignment;
+} PNInstructionStore;
 
 typedef struct PNSwitchCase {
   int64_t value;
@@ -894,49 +953,6 @@ typedef struct PNInstructionUnreachable {
   PNInstruction base;
 } PNInstructionUnreachable;
 
-typedef struct PNPhiIncoming {
-  PNBasicBlockId bb_id;
-  PNValueId value_id;
-} PNPhiIncoming;
-
-typedef struct PNInstructionPhi {
-  PNInstruction base;
-  PNValueId result_value_id;
-  uint32_t num_incoming;
-  PNPhiIncoming* incoming;
-  PNTypeId type_id;
-} PNInstructionPhi;
-
-typedef struct PNInstructionAlloca {
-  PNInstruction base;
-  PNValueId result_value_id;
-  PNValueId size_id;
-  PNAlignment alignment;
-} PNInstructionAlloca;
-
-typedef struct PNInstructionLoad {
-  PNInstruction base;
-  PNValueId result_value_id;
-  PNValueId src_id;
-  PNAlignment alignment;
-  PNTypeId type_id;
-} PNInstructionLoad;
-
-typedef struct PNInstructionStore {
-  PNInstruction base;
-  PNValueId dest_id;
-  PNValueId value_id;
-  PNAlignment alignment;
-} PNInstructionStore;
-
-typedef struct PNInstructionCmp2 {
-  PNInstruction base;
-  PNValueId result_value_id;
-  PNValueId value0_id;
-  PNValueId value1_id;
-  PNCmp2 cmp2_opcode;
-} PNInstructionCmp2;
-
 typedef struct PNInstructionVselect {
   PNInstruction base;
   PNValueId result_value_id;
@@ -944,24 +960,6 @@ typedef struct PNInstructionVselect {
   PNValueId true_value_id;
   PNValueId false_value_id;
 } PNInstructionVselect;
-
-typedef struct PNInstructionForwardtyperef {
-  PNInstruction base;
-  PNValueId value_id;
-  PNValueId type_id;
-} PNInstructionForwardtyperef;
-
-typedef struct PNInstructionCall {
-  PNInstruction base;
-  PNValueId result_value_id;
-  uint32_t calling_convention;
-  PNValueId callee_id;
-  uint32_t num_args;
-  PNValueId* arg_ids;
-  PNTypeId return_type_id;
-  PNBool is_indirect;
-  PNBool is_tail_call;
-} PNInstructionCall;
 
 typedef struct PNPhiUse {
   PNValueId dest_value_id;
@@ -1174,6 +1172,114 @@ typedef struct PNExecutor {
   int32_t exit_code;
   PNBool exiting;
 } PNExecutor;
+
+typedef struct PNRuntimeInstruction {
+  PNOpcode opcode;
+} PNRuntimeInstruction;
+
+typedef struct PNRuntimeInstructionAlloca {
+  PNRuntimeInstruction base;
+  PNValueId result_value_id;
+  PNValueId size_id;
+  PNAlignment alignment;
+} PNRuntimeInstructionAlloca;
+
+typedef struct PNRuntimeInstructionBinop {
+  PNRuntimeInstruction base;
+  PNValueId result_value_id;
+  PNValueId value0_id;
+  PNValueId value1_id;
+} PNRuntimeInstructionBinop;
+
+typedef struct PNRuntimeInstructionBr {
+  PNRuntimeInstruction base;
+  PNInstructionId instruction_id;
+} PNRuntimeInstructionBr;
+
+typedef struct PNRuntimeInstructionBrInt1 {
+  PNRuntimeInstruction base;
+  PNValueId value_id;
+  PNInstructionId true_instruction_id;
+  PNInstructionId false_instruction_id;
+} PNRuntimeInstructionBrInt1;
+
+#define PN_CALL_FLAGS_INDIRECT 1
+#define PN_CALL_FLAGS_TAIL_CALL 2
+#define PN_CALL_FLAGS_RETURN_TYPE_VOID 4
+
+typedef struct PNRuntimeInstructionCall {
+  PNRuntimeInstruction base;
+  PNValueId result_value_id;
+  PNValueId callee_id;
+  uint8_t num_args;
+  uint8_t flags;
+} PNRuntimeInstructionCall;
+
+typedef struct PNRuntimeInstructionCast {
+  PNRuntimeInstruction base;
+  PNValueId result_value_id;
+  PNValueId value_id;
+} PNRuntimeInstructionCast;
+
+typedef struct PNRuntimeInstructionCmp2 {
+  PNRuntimeInstruction base;
+  PNValueId result_value_id;
+  PNValueId value0_id;
+  PNValueId value1_id;
+} PNRuntimeInstructionCmp2;
+
+typedef struct PNRuntimeInstructionLoad {
+  PNRuntimeInstruction base;
+  PNValueId result_value_id;
+  PNValueId src_id;
+  PNAlignment alignment;
+} PNRuntimeInstructionLoad;
+
+typedef struct PNRuntimeInstructionRet {
+  PNRuntimeInstruction base;
+} PNRuntimeInstructionRet;
+
+typedef struct PNRuntimeInstructionRetValue {
+  PNRuntimeInstruction base;
+  PNValueId value_id;
+} PNRuntimeInstructionRetValue;
+
+typedef struct PNRuntimeInstructionStore {
+  PNRuntimeInstruction base;
+  PNValueId dest_id;
+  PNValueId value_id;
+  PNAlignment alignment;
+} PNRuntimeInstructionStore;
+
+typedef struct PNRuntimeSwitchCase {
+  int64_t value;
+  PNInstructionId instruction_id;
+} PNRuntimeSwitchCase;
+
+typedef struct PNRuntimeInstructionSwitch {
+  PNRuntimeInstruction base;
+  PNValueId value_id;
+  PNInstructionId default_instruction_id;
+  uint32_t num_cases;
+} PNRuntimeInstructionSwitch;
+
+typedef struct PNRuntimeInstructionUnreachable {
+  PNRuntimeInstruction base;
+} PNRuntimeInstructionUnreachable;
+
+typedef struct PNRuntimeInstructionVselect {
+  PNRuntimeInstruction base;
+  PNValueId result_value_id;
+  PNValueId cond_id;
+  PNValueId true_value_id;
+  PNValueId false_value_id;
+} PNRuntimeInstructionVselect;
+
+typedef struct PNRuntimePhiAssign {
+  PNInstructionId instruction_id;
+  PNValueId source_value_id;
+  PNValueId dest_value_id;
+} PNRuntimePhiAssign;
 
 /**** FORWARD DECLARATIONS ****************************************************/
 
