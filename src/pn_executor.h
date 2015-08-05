@@ -341,6 +341,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     location->instruction_id += sizeof(PNRuntimeInstructionBinop);          \
   } while (0) /* no semicolon */
 
+    // clang-format off
     case PN_OPCODE_BINOP_ADD_DOUBLE:  PN_OPCODE_BINOP(+, f64); break;
     case PN_OPCODE_BINOP_ADD_FLOAT:   PN_OPCODE_BINOP(+, f32); break;
     case PN_OPCODE_BINOP_ADD_INT8:    PN_OPCODE_BINOP(+, u8); break;
@@ -400,6 +401,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     case PN_OPCODE_BINOP_XOR_INT16:   PN_OPCODE_BINOP(^, u16); break;
     case PN_OPCODE_BINOP_XOR_INT32:   PN_OPCODE_BINOP(^, u32); break;
     case PN_OPCODE_BINOP_XOR_INT64:   PN_OPCODE_BINOP(^, u64); break;
+// clang-format on
 
 #undef PN_OPCODE_BINOP
 
@@ -563,6 +565,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     location->instruction_id += sizeof(PNRuntimeInstructionCast);    \
   } while (0) /* no semicolon */
 
+    // clang-format off
     case PN_OPCODE_CAST_FPEXT_FLOAT_DOUBLE:   PN_OPCODE_CAST(f32, f64); break;
     case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT8:   PN_OPCODE_CAST(f64, i8); break;
     case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT16:  PN_OPCODE_CAST(f64, i16); break;
@@ -626,6 +629,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     case PN_OPCODE_CAST_ZEXT_INT16_INT32:     PN_OPCODE_CAST(u16, u32); break;
     case PN_OPCODE_CAST_ZEXT_INT16_INT64:     PN_OPCODE_CAST(u16, u64); break;
     case PN_OPCODE_CAST_ZEXT_INT32_INT64:     PN_OPCODE_CAST(u32, u64); break;
+// clang-format on
 
 #undef PN_OPCODE_CAST
 #undef PN_OPCODE_CAST_SEXT1
@@ -712,6 +716,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     // UNE    1 1 1 0  !(A == B)
     // TRUE   1 1 1 1
 
+    // clang-format off
     case PN_OPCODE_FCMP_OEQ_DOUBLE: PN_OPCODE_CMP2(==, f64); break;
     case PN_OPCODE_FCMP_OEQ_FLOAT:  PN_OPCODE_CMP2(==, f32); break;
     case PN_OPCODE_FCMP_OGE_DOUBLE: PN_OPCODE_CMP2(>=, f64); break;
@@ -781,6 +786,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     case PN_OPCODE_ICMP_ULT_INT16: PN_OPCODE_CMP2(<, u16); break;
     case PN_OPCODE_ICMP_ULT_INT32: PN_OPCODE_CMP2(<, u32); break;
     case PN_OPCODE_ICMP_ULT_INT64: PN_OPCODE_CMP2(<, u64); break;
+// clang-format on
 
 #undef PN_OPCODE_CMP2
 #undef PN_OPCODE_CMP2_NOT
@@ -1126,9 +1132,8 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PNRuntimeValue value = pn_thread_get_value(thread, arg_ids[1]);
       PN_TRACE(INTRINSICS, "    llvm.nacl.longjmp(jmpbuf: %u, value: %u)\n",
                jmpbuf_p, value.u32);
-      PN_TRACE(EXECUTE, "    %s = %u  %s = %u\n",
-               PN_VALUE_DESCRIBE(arg_ids[0]), jmpbuf_p,
-               PN_VALUE_DESCRIBE(arg_ids[1]), value.u32);
+      PN_TRACE(EXECUTE, "    %s = %u  %s = %u\n", PN_VALUE_DESCRIBE(arg_ids[0]),
+               jmpbuf_p, PN_VALUE_DESCRIBE(arg_ids[1]), value.u32);
 
       PNJmpBufId id = pn_memory_read_u32(executor->memory, jmpbuf_p);
 
@@ -1308,12 +1313,14 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     location->instruction_id += sizeof(PNRuntimeInstructionLoad);  \
   } while (0) /*no semicolon */
 
+    // clang-format off
     case PN_OPCODE_LOAD_DOUBLE: PN_OPCODE_LOAD(f64); break;
     case PN_OPCODE_LOAD_FLOAT: PN_OPCODE_LOAD(f32); break;
     case PN_OPCODE_LOAD_INT8: PN_OPCODE_LOAD(u8); break;
     case PN_OPCODE_LOAD_INT16: PN_OPCODE_LOAD(u16); break;
     case PN_OPCODE_LOAD_INT32: PN_OPCODE_LOAD(u32); break;
     case PN_OPCODE_LOAD_INT64: PN_OPCODE_LOAD(u64); break;
+// clang-format on
 
 #undef PN_OPCODE_LOAD
 
@@ -1327,8 +1334,8 @@ static void pn_thread_execute_instruction(PNThread* thread) {
             new_function->instructions + location->instruction_id;
 
         pn_allocator_reset_to_mark(&thread->allocator, frame->parent->mark);
-        PN_TRACE(EXECUTE, "function = %%f%d  pc = %%%d\n", location->function_id,
-                 location->instruction_id);
+        PN_TRACE(EXECUTE, "function = %%f%d  pc = %%%d\n",
+                 location->function_id, location->instruction_id);
         location->instruction_id +=
             sizeof(PNRuntimeInstructionCall) + c->num_args * sizeof(PNValueId);
       } else {
@@ -1387,12 +1394,14 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     location->instruction_id += sizeof(PNRuntimeInstructionStore);   \
   } while (0) /*no semicolon */
 
+    // clang-format off
     case PN_OPCODE_STORE_DOUBLE: PN_OPCODE_STORE(f64); break;
     case PN_OPCODE_STORE_FLOAT: PN_OPCODE_STORE(f32); break;
     case PN_OPCODE_STORE_INT8: PN_OPCODE_STORE(u8); break;
     case PN_OPCODE_STORE_INT16: PN_OPCODE_STORE(u16); break;
     case PN_OPCODE_STORE_INT32: PN_OPCODE_STORE(u32); break;
     case PN_OPCODE_STORE_INT64: PN_OPCODE_STORE(u64); break;
+// clang-format on
 
 #undef PN_OPCODE_STORE
 
@@ -1420,19 +1429,13 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     PN_TRACE(EXECUTE, "pc = %%%d\n", new_instruction_id);                \
   } while (0) /* no semicolon */
 
+    // clang-format off
     case PN_OPCODE_SWITCH_INT1:
-    case PN_OPCODE_SWITCH_INT8:
-      PN_OPCODE_SWITCH(i8);
-      break;
-    case PN_OPCODE_SWITCH_INT16:
-      PN_OPCODE_SWITCH(i16);
-      break;
-    case PN_OPCODE_SWITCH_INT32:
-      PN_OPCODE_SWITCH(i32);
-      break;
-    case PN_OPCODE_SWITCH_INT64:
-      PN_OPCODE_SWITCH(i64);
-      break;
+    case PN_OPCODE_SWITCH_INT8:  PN_OPCODE_SWITCH(i8); break;
+    case PN_OPCODE_SWITCH_INT16: PN_OPCODE_SWITCH(i16); break;
+    case PN_OPCODE_SWITCH_INT32: PN_OPCODE_SWITCH(i32); break;
+    case PN_OPCODE_SWITCH_INT64: PN_OPCODE_SWITCH(i64); break;
+// clang-format on
 
 #undef PN_OPCODE_SWITCH
 

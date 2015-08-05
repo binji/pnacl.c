@@ -100,6 +100,7 @@ static const char* pn_type_describe_all(PNModule* module,
 
 static const char* pn_type_describe(PNModule* module, PNTypeId type_id) {
   PNType* type = pn_module_get_type(module, type_id);
+  // clang-format off
   switch (type->code) {
     case PN_TYPE_CODE_VOID: return "void";
     case PN_TYPE_CODE_INTEGER:
@@ -120,6 +121,7 @@ static const char* pn_type_describe(PNModule* module, PNTypeId type_id) {
       PN_UNREACHABLE();
       break;
   }
+  // clang-format on
   return "<unknown>";
 }
 
@@ -179,7 +181,9 @@ static void pn_value_print_to_string(PNModule* module,
       code = 'v';
       base = module->num_values + function->num_args + function->num_constants;
       break;
-    default: PN_UNREACHABLE(); break;
+    default:
+      PN_UNREACHABLE();
+      break;
   }
 
   snprintf(buffer, buffer_size, "%c%c%d", sigil, code, value_id - base);
@@ -366,7 +370,7 @@ static void pn_instruction_trace(PNModule* module,
             buffer, sizeof(buffer), "[%s, %%b%d]",
             pn_value_describe(module, function, i->incoming[n].value_id),
             i->incoming[n].bb_id);
-        if (col + len + 2 > 80) {  /* +2 for ", " */
+        if (col + len + 2 > 80) { /* +2 for ", " */
           PN_PRINT("\n");
           PN_TRACE_PRINT_INDENTX(4);
           col = g_pn_trace_indent + 4;
@@ -431,8 +435,7 @@ static void pn_instruction_trace(PNModule* module,
 
     case PN_FUNCTION_CODE_INST_FORWARDTYPEREF: {
       PNInstructionForwardtyperef* i = (PNInstructionForwardtyperef*)inst;
-      PN_PRINT("declare %s %s;\n",
-               pn_type_describe(module, i->type_id),
+      PN_PRINT("declare %s %s;\n", pn_type_describe(module, i->type_id),
                pn_value_describe(module, function, i->value_id));
       break;
     }
@@ -553,7 +556,7 @@ static void pn_function_print_header(PNModule* module,
                                 pn_value_describe(module, NULL, function_id),
                                 PN_TRUE),
            PN_BLOCKID_FUNCTION);
-    g_pn_trace_indent += 2;
+  g_pn_trace_indent += 2;
 }
 
 static void pn_function_trace(PNModule* module,
@@ -611,6 +614,7 @@ static void pn_runtime_instruction_trace(PNModule* module,
       break;
     }
 
+    // clang-format off
     case PN_OPCODE_BINOP_ADD_DOUBLE:
     case PN_OPCODE_BINOP_ADD_FLOAT:  opname = "fadd"; goto binop;
     case PN_OPCODE_BINOP_ADD_INT8:
@@ -671,6 +675,7 @@ static void pn_runtime_instruction_trace(PNModule* module,
     case PN_OPCODE_BINOP_XOR_INT32:
     case PN_OPCODE_BINOP_XOR_INT64:  opname = "xor"; goto binop;
     binop: {
+      // clang-format on
       PNRuntimeInstructionBinop* i = (PNRuntimeInstructionBinop*)inst;
       PN_PRINT("%s = %s %s %s, %s;\n",
                pn_value_describe(module, function, i->result_value_id), opname,
@@ -695,6 +700,7 @@ static void pn_runtime_instruction_trace(PNModule* module,
       break;
     }
 
+    // clang-format off
     case PN_OPCODE_INTRINSIC_LLVM_MEMCPY:
     case PN_OPCODE_INTRINSIC_LLVM_MEMSET:
     case PN_OPCODE_INTRINSIC_LLVM_MEMMOVE:
@@ -755,6 +761,7 @@ static void pn_runtime_instruction_trace(PNModule* module,
     case PN_OPCODE_INTRINSIC_LLVM_STACKSAVE:
     case PN_OPCODE_INTRINSIC_START:
     case PN_OPCODE_CALL: {
+      // clang-format on
       PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
       PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
 
@@ -781,6 +788,7 @@ static void pn_runtime_instruction_trace(PNModule* module,
       break;
     }
 
+    // clang-format off
     case PN_OPCODE_CAST_BITCAST_DOUBLE_INT64:
     case PN_OPCODE_CAST_BITCAST_FLOAT_INT32:
     case PN_OPCODE_CAST_BITCAST_INT32_FLOAT:
@@ -849,6 +857,7 @@ static void pn_runtime_instruction_trace(PNModule* module,
     case PN_OPCODE_CAST_ZEXT_INT16_INT64:
     case PN_OPCODE_CAST_ZEXT_INT32_INT64:     opname = "zext"; goto cast;
     cast: {
+      // clang-format on
       PNRuntimeInstructionCast* i = (PNRuntimeInstructionCast*)inst;
       PN_PRINT("%s = %s %s %s to %s;\n",
                pn_value_describe(module, function, i->result_value_id), opname,
@@ -858,6 +867,7 @@ static void pn_runtime_instruction_trace(PNModule* module,
       break;
     }
 
+    // clang-format off
     case PN_OPCODE_FCMP_OEQ_DOUBLE:
     case PN_OPCODE_FCMP_OEQ_FLOAT:  opname = "fcmp oeq"; goto cmp2;
     case PN_OPCODE_FCMP_OGE_DOUBLE:
@@ -927,6 +937,7 @@ static void pn_runtime_instruction_trace(PNModule* module,
     case PN_OPCODE_ICMP_ULT_INT32:
     case PN_OPCODE_ICMP_ULT_INT64:  opname = "icmp ult"; goto cmp2;
     cmp2: {
+      // clang-format on
       PNRuntimeInstructionCmp2* i = (PNRuntimeInstructionCmp2*)inst;
       PN_PRINT("%s = %s %s %s, %s;\n",
                pn_value_describe(module, function, i->result_value_id), opname,
