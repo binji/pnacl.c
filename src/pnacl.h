@@ -565,7 +565,6 @@ typedef enum PNIntrinsicId {
   V(FCMP_UNE_FLOAT)                          \
   V(FCMP_UNO_DOUBLE)                         \
   V(FCMP_UNO_FLOAT)                          \
-  V(FORWARDTYPEREF)                          \
   V(ICMP_EQ_INT8)                            \
   V(ICMP_EQ_INT16)                           \
   V(ICMP_EQ_INT32)                           \
@@ -636,7 +635,6 @@ typedef enum PNIntrinsicId {
   V(LOAD_INT16)                              \
   V(LOAD_INT32)                              \
   V(LOAD_INT64)                              \
-  V(PHI)                                     \
   V(RET)                                     \
   V(RET_VALUE)                               \
   V(STORE_DOUBLE)                            \

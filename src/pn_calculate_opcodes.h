@@ -313,11 +313,8 @@ static void pn_basic_block_calculate_opcodes(PNModule* module,
         break;
       }
 
-      case PN_FUNCTION_CODE_INST_PHI: {
-        PNInstructionPhi* i = (PNInstructionPhi*)inst;
-        i->base.opcode = PN_OPCODE_PHI;
+      case PN_FUNCTION_CODE_INST_PHI:
         break;
-      }
 
       case PN_FUNCTION_CODE_INST_ALLOCA: {
         PNInstructionAlloca* i = (PNInstructionAlloca*)inst;
@@ -664,11 +661,8 @@ static void pn_basic_block_calculate_opcodes(PNModule* module,
         i->base.opcode = PN_OPCODE_UNREACHABLE;
       }
 
-      case PN_FUNCTION_CODE_INST_FORWARDTYPEREF: {
-        PNInstructionForwardtyperef* i = (PNInstructionForwardtyperef*)inst;
-        i->base.opcode = PN_OPCODE_FORWARDTYPEREF;
+      case PN_FUNCTION_CODE_INST_FORWARDTYPEREF:
         break;
-      }
 
       default:
         PN_FATAL("Invalid instruction code: %d\n", inst->code);
