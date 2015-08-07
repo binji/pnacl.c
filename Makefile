@@ -66,6 +66,16 @@ test: out/pnacl-opt-assert
 	@make -C test
 	@python test/run-tests.py
 
+.PHONY: test-all
+test-all: out/pnacl-opt-assert
+	@make -C test
+	@python test/run-tests.py -s
+
+.PHONY: benchmark
+benchmark: out/pnacl-opt-assert
+	@make -C test
+	@python test/run-benchmarks.py
+
 #### FUZZ ####
 
 AFL_DIR ?= ~/dev/afl/afl-1.83b

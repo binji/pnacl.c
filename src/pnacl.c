@@ -151,7 +151,7 @@ static struct option g_pn_long_options[] = {
     {"trace-block", no_argument, NULL, 0},
     {"trace-bcdis", no_argument, NULL, 0},
 #define PN_TRACE_FLAGS(name, flag)        \
-    { "trace-" flag, no_argument, NULL, 0 },
+    {"trace-" flag, no_argument, NULL, 0},
     PN_FOREACH_TRACE(PN_TRACE_FLAGS)
 #undef PN_TRACE_FLAGS
     {"trace-function-filter", required_argument, NULL, 0},
