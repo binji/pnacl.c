@@ -1267,6 +1267,35 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       break;
     }
 
+    case PN_OPCODE_INTRINSIC_LLVM_STACKRESTORE: {
+      PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_CHECK(i->num_args == 1);
+      PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
+      uint32_t value = pn_thread_get_value(thread, arg_ids[0]).u32;
+      /* TODO(binji): validate stack pointer */
+      frame->memory_stack_top = value;
+      PN_TRACE(INTRINSICS, "    llvm.stackrestore(%u)\n", value);
+      PN_TRACE(EXECUTE, "    %s = %u\n", PN_VALUE_DESCRIBE(arg_ids[0]), value);
+      location->instruction_id +=
+          sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId);
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_STACKSAVE: {
+      PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
+      PN_CHECK(i->num_args == 0);
+      PN_CHECK(i->result_value_id != PN_INVALID_VALUE_ID);
+      PNRuntimeValue result = pn_executor_value_u32(frame->memory_stack_top);
+      pn_thread_set_value(thread, i->result_value_id, result);
+      PN_TRACE(INTRINSICS, "    llvm.stacksave()\n");
+      PN_TRACE(EXECUTE, "    %s = %u\n", PN_VALUE_DESCRIBE(i->result_value_id),
+               result.u32);
+      location->instruction_id +=
+          sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId);
+      break;
+    }
+
     case PN_OPCODE_INTRINSIC_LLVM_TRAP: {
       PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
       PN_CHECK(i->num_args == 0);
@@ -1296,8 +1325,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I8)
       PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I16)
       PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I64)
-      PN_OPCODE_INTRINSIC_STUB(LLVM_STACKRESTORE)
-      PN_OPCODE_INTRINSIC_STUB(LLVM_STACKSAVE)
       PN_OPCODE_INTRINSIC_STUB(START)
 
 #define PN_OPCODE_LOAD(ty)                                         \
