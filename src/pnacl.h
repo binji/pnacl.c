@@ -25,8 +25,6 @@
 #define PN_DEFAULT_ALIGN 8
 
 #define PN_MIN_CHUNKSIZE (64 * 1024)
-#define PN_MAX_BLOCK_ABBREV_OP 10
-#define PN_MAX_BLOCK_ABBREV 100
 #define PN_DEFAULT_MEMORY_SIZE (1024 * 1024)
 #define PN_MEMORY_GUARD_SIZE 1024
 #define PN_PAGESHIFT 12
@@ -824,12 +822,12 @@ typedef struct PNBlockAbbrevOp {
 
 typedef struct PNBlockAbbrev {
   uint32_t num_ops;
-  PNBlockAbbrevOp ops[PN_MAX_BLOCK_ABBREV_OP];
+  PNBlockAbbrevOp* ops;
 } PNBlockAbbrev;
 
 typedef struct PNBlockAbbrevs {
   uint32_t num_abbrevs;
-  PNBlockAbbrev abbrevs[PN_MAX_BLOCK_ABBREV];
+  PNBlockAbbrev* abbrevs;
 } PNBlockAbbrevs;
 
 typedef struct PNRecordReader {

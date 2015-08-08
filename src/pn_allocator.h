@@ -124,7 +124,9 @@ static void* pn_allocator_realloc_add(PNAllocator* allocator,
 
 static size_t pn_allocator_last_alloc_size(PNAllocator* allocator) {
   PNAllocatorChunk* chunk = allocator->chunk_head;
-  assert(chunk);
+  if (!chunk) {
+    return 0;
+  }
   return chunk->current - allocator->last_alloc;
 }
 

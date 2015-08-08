@@ -5,7 +5,8 @@
 #ifndef PN_READ_H_
 #define PN_READ_H_
 
-static void pn_blockinfo_block_read(PNBlockInfoContext* context,
+static void pn_blockinfo_block_read(PNModule* module,
+                                    PNBlockInfoContext* context,
                                     PNBitStream* bs) {
   PN_BEGIN_TIME(BLOCKINFO_BLOCK_READ);
   PN_TRACE(BLOCKINFO_BLOCK, "abbreviations {  // BlockID = %d\n",
@@ -35,9 +36,10 @@ static void pn_blockinfo_block_read(PNBlockInfoContext* context,
         PN_FATAL("unexpected subblock in blockinfo_block\n");
 
       case PN_ENTRY_DEFINE_ABBREV: {
-        PNBlockAbbrev* abbrev = pn_block_abbrev_read(bs, &abbrevs);
-        uint32_t abbrev_id =
-            pn_block_info_context_append_abbrev(context, block_id, abbrev);
+        PNBlockAbbrev* abbrev =
+            pn_block_abbrev_read(&module->temp_allocator, bs, &abbrevs);
+        uint32_t abbrev_id = pn_block_info_context_append_abbrev(
+            &module->allocator, context, block_id, abbrev);
         pn_abbrev_trace(abbrev, abbrev_id, PN_TRUE);
         break;
       }
@@ -99,7 +101,8 @@ static void pn_type_block_read(PNModule* module,
   pn_bitstream_read(bs, 32); /* num_words */
 
   PNBlockAbbrevs abbrevs = {};
-  pn_block_info_context_get_abbrev(context, PN_BLOCKID_TYPE, &abbrevs);
+  pn_block_info_context_copy_abbrevs_for_block_id(
+      &module->temp_allocator, context, PN_BLOCKID_TYPE, &abbrevs);
 
   PNTypeId current_type_id = 0;
 
@@ -118,7 +121,8 @@ static void pn_type_block_read(PNModule* module,
         PN_FATAL("unexpected subblock in type_block\n");
 
       case PN_ENTRY_DEFINE_ABBREV: {
-        PNBlockAbbrev* abbrev = pn_block_abbrev_read(bs, &abbrevs);
+        PNBlockAbbrev* abbrev =
+            pn_block_abbrev_read(&module->temp_allocator, bs, &abbrevs);
         uint32_t abbrev_id = abbrev - abbrevs.abbrevs;
         pn_abbrev_trace(abbrev, abbrev_id, PN_FALSE);
         break;
@@ -278,7 +282,8 @@ static void pn_globalvar_block_read(PNModule* module,
   pn_bitstream_read(bs, 32); /* num words */
 
   PNBlockAbbrevs abbrevs = {};
-  pn_block_info_context_get_abbrev(context, PN_BLOCKID_GLOBALVAR, &abbrevs);
+  pn_block_info_context_copy_abbrevs_for_block_id(
+      &module->temp_allocator, context, PN_BLOCKID_GLOBALVAR, &abbrevs);
 
   PNGlobalVar* global_var = NULL;
 
@@ -290,8 +295,6 @@ static void pn_globalvar_block_read(PNModule* module,
   uint32_t data_offset = PN_MEMORY_GUARD_SIZE;
 
   memory->globalvar_start = data_offset;
-
-  PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
 
   typedef struct PNRelocInfo {
     uint32_t offset;
@@ -327,8 +330,6 @@ static void pn_globalvar_block_read(PNModule* module,
         }
 
         memory->globalvar_end = data_offset;
-
-        pn_allocator_reset_to_mark(&module->temp_allocator, mark);
         PN_END_TIME(GLOBALVAR_BLOCK_READ);
         return;
       }
@@ -337,7 +338,8 @@ static void pn_globalvar_block_read(PNModule* module,
         PN_FATAL("unexpected subblock in globalvar_block\n");
 
       case PN_ENTRY_DEFINE_ABBREV: {
-        PNBlockAbbrev* abbrev = pn_block_abbrev_read(bs, &abbrevs);
+        PNBlockAbbrev* abbrev =
+            pn_block_abbrev_read(&module->temp_allocator, bs, &abbrevs);
         uint32_t abbrev_id = abbrev - abbrevs.abbrevs;
         pn_abbrev_trace(abbrev, abbrev_id, PN_FALSE);
         break;
@@ -528,7 +530,8 @@ static void pn_value_symtab_block_read(PNModule* module,
   pn_bitstream_read(bs, 32); /* num words */
 
   PNBlockAbbrevs abbrevs = {};
-  pn_block_info_context_get_abbrev(context, PN_BLOCKID_VALUE_SYMTAB, &abbrevs);
+  pn_block_info_context_copy_abbrevs_for_block_id(
+      &module->temp_allocator, context, PN_BLOCKID_VALUE_SYMTAB, &abbrevs);
 
   while (!pn_bitstream_at_end(bs)) {
     uint32_t entry = pn_bitstream_read(bs, codelen);
@@ -544,7 +547,8 @@ static void pn_value_symtab_block_read(PNModule* module,
         PN_FATAL("unexpected subblock in valuesymtab_block\n");
 
       case PN_ENTRY_DEFINE_ABBREV: {
-        PNBlockAbbrev* abbrev = pn_block_abbrev_read(bs, &abbrevs);
+        PNBlockAbbrev* abbrev =
+            pn_block_abbrev_read(&module->temp_allocator, bs, &abbrevs);
         uint32_t abbrev_id = abbrev - abbrevs.abbrevs;
         pn_abbrev_trace(abbrev, abbrev_id, PN_FALSE);
         break;
@@ -625,7 +629,8 @@ static void pn_constants_block_read(PNModule* module,
   pn_bitstream_read(bs, 32); /* num words */
 
   PNBlockAbbrevs abbrevs = {};
-  pn_block_info_context_get_abbrev(context, PN_BLOCKID_CONSTANTS, &abbrevs);
+  pn_block_info_context_copy_abbrevs_for_block_id(
+      &module->temp_allocator, context, PN_BLOCKID_CONSTANTS, &abbrevs);
 
   /* Indent 2 more, that we we can always dedent 2 on PN_CONSTANTS_CODE_SETTYPE
    */
@@ -648,7 +653,8 @@ static void pn_constants_block_read(PNModule* module,
         PN_FATAL("unexpected subblock in constants_block\n");
 
       case PN_ENTRY_DEFINE_ABBREV: {
-        PNBlockAbbrev* abbrev = pn_block_abbrev_read(bs, &abbrevs);
+        PNBlockAbbrev* abbrev =
+            pn_block_abbrev_read(&module->temp_allocator, bs, &abbrevs);
         uint32_t abbrev_id = abbrev - abbrevs.abbrevs;
         pn_abbrev_trace(abbrev, abbrev_id, PN_FALSE);
         break;
@@ -870,7 +876,8 @@ static void pn_function_block_read(PNModule* module,
   pn_bitstream_read(bs, 32); /* num words */
 
   PNBlockAbbrevs abbrevs = {};
-  pn_block_info_context_get_abbrev(context, PN_BLOCKID_FUNCTION, &abbrevs);
+  pn_block_info_context_copy_abbrevs_for_block_id(
+      &module->temp_allocator, context, PN_BLOCKID_FUNCTION, &abbrevs);
 
   PNFunction* function = pn_module_get_function(module, function_id);
   if (PN_IS_TRACE(FUNCTION_BLOCK)) {
@@ -889,8 +896,6 @@ static void pn_function_block_read(PNModule* module,
     value->type_id = type->arg_types[i];
     value->index = i;
   }
-
-  PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
 
   uint32_t num_bbs = 0;
   PNValueId first_bb_value_id = PN_INVALID_VALUE_ID;
@@ -917,12 +922,12 @@ static void pn_function_block_read(PNModule* module,
         PN_TRACE_DEDENT(FUNCTION_BLOCK, 2);
         PN_TRACE(FUNCTION_BLOCK, "}\n");
         pn_bitstream_align_32(bs);
-        pn_allocator_reset_to_mark(&module->temp_allocator, mark);
         PN_END_TIME(FUNCTION_BLOCK_READ);
         return;
 
       case PN_ENTRY_SUBBLOCK: {
         uint32_t id = pn_bitstream_read_vbr(bs, 8);
+        PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
         switch (id) {
           case PN_BLOCKID_CONSTANTS:
             pn_constants_block_read(module, function, context, bs);
@@ -935,11 +940,13 @@ static void pn_function_block_read(PNModule* module,
           default:
             PN_FATAL("bad block id %d\n", id);
         }
+        pn_allocator_reset_to_mark(&module->temp_allocator, mark);
         break;
       }
 
       case PN_ENTRY_DEFINE_ABBREV: {
-        PNBlockAbbrev* abbrev = pn_block_abbrev_read(bs, &abbrevs);
+        PNBlockAbbrev* abbrev =
+            pn_block_abbrev_read(&module->temp_allocator, bs, &abbrevs);
         uint32_t abbrev_id = abbrev - abbrevs.abbrevs;
         pn_abbrev_trace(abbrev, abbrev_id, PN_FALSE);
         break;
@@ -1428,9 +1435,10 @@ static void pn_module_block_read(PNModule* module,
       case PN_ENTRY_SUBBLOCK: {
         uint32_t id = pn_bitstream_read_vbr(bs, 8);
 
+        PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
         switch (id) {
           case PN_BLOCKID_BLOCKINFO:
-            pn_blockinfo_block_read(context, bs);
+            pn_blockinfo_block_read(module, context, bs);
             break;
           case PN_BLOCKID_TYPE:
             pn_type_block_read(module, context, bs);
@@ -1454,12 +1462,13 @@ static void pn_module_block_read(PNModule* module,
             PN_TRACE(MODULE_BLOCK, "*** SUBBLOCK (BAD) (%d)\n", id);
             PN_FATAL("bad block id %d\n", id);
         }
-
+        pn_allocator_reset_to_mark(&module->temp_allocator, mark);
         break;
       }
 
       case PN_ENTRY_DEFINE_ABBREV: {
-        PNBlockAbbrev* abbrev = pn_block_abbrev_read(bs, &abbrevs);
+        PNBlockAbbrev* abbrev =
+            pn_block_abbrev_read(&module->temp_allocator, bs, &abbrevs);
         uint32_t abbrev_id = abbrev - abbrevs.abbrevs;
         pn_abbrev_trace(abbrev, abbrev_id, PN_FALSE);
         break;
