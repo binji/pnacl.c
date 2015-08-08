@@ -5,43 +5,41 @@
 #ifndef PN_ABBREV_H_
 #define PN_ABBREV_H_
 
-static PNBlockAbbrev* pn_block_abbrevs_allocate(PNAllocator* allocator,
-                                                PNBlockAbbrevs* abbrevs,
-                                                uint32_t num_ops) {
+static PNAbbrev* pn_abbrevs_allocate(PNAllocator* allocator,
+                                     PNAbbrevs* abbrevs,
+                                     uint32_t num_ops) {
   /* This is more complicated than it would otherwise be, because our allocator
    * doesn't allow realloc'ing multiple allocations at the same time.
    *
-   * When we add a PNBlockAbbrev, we want to resize the PNBlockAbbrevs.abbrevs
-   * member and allocate num_ops PNBlockAbbrevOps as well. When we add another
-   * block, we need to resize PNBlockAbbrevs.abbrevs again, but the list is no
-   * longer the last allocation (the PNBlockAbbrevOps are), so the reallocation
-   * fails.
+   * When we add a PNAbbrev, we want to resize the PNAbbrevs.abbrevs member and
+   * allocate num_ops PNAbbrevOps as well. When we add another block, we need
+   * to resize PNAbbrevs.abbrevs again, but the list is no longer the last
+   * allocation (the PNAbbrevOps are), so the reallocation fails.
    *
-   * To work around this, we allocate all the PNBlockAbbrev objects and
-   * PNBlockAbbrevOps objects (for each PNBlockAbbrev object) as one
-   * allocation. When we want to add a new PNBlockAbbrev, we need to move all
-   * the PNBlockAbbrevOps (which are all allocated as a contiguous block) down,
-   * to make space for the new PNBlockAbbrev. We also need to allocate space
-   * for the new PNBlockAbbrevOps that are referenced by the new PNBlockAbbrev.
+   * To work around this, we allocate all the PNAbbrev objects and PNAbbrevOps
+   * objects (for each PNAbbrev object) as one allocation. When we want to add
+   * a new PNAbbrev, we need to move all the PNAbbrevOps (which are all
+   * allocated as a contiguous block) down, to make space for the new PNAbbrev.
+   * We also need to allocate space for the new PNAbbrevOps that are referenced
+   * by the new PNAbbrev.
    */
-  size_t add_size = sizeof(PNBlockAbbrev) + num_ops * sizeof(PNBlockAbbrevOp);
+  size_t add_size = sizeof(PNAbbrev) + num_ops * sizeof(PNAbbrevOp);
   size_t last_size =
       abbrevs->abbrevs ? pn_allocator_last_alloc_size(allocator) : 0;
   pn_allocator_realloc_add(allocator, (void**)&abbrevs->abbrevs, add_size,
                            PN_DEFAULT_ALIGN);
-  size_t all_ops_size =
-      last_size - sizeof(PNBlockAbbrev) * abbrevs->num_abbrevs;
+  size_t all_ops_size = last_size - sizeof(PNAbbrev) * abbrevs->num_abbrevs;
   void* prev_ops = &abbrevs->abbrevs[abbrevs->num_abbrevs];
-  void* ops = prev_ops + sizeof(PNBlockAbbrev);
+  void* ops = prev_ops + sizeof(PNAbbrev);
   memmove(ops, prev_ops, all_ops_size);
 
-  /* Since all the PNBlockAbbrevOps have moved down, we need to fix all of the
-   * PNBlockAbbrev.ops pointers by pushing them down by the same amount. */
-  PNBlockAbbrev* abbrev = &abbrevs->abbrevs[0];
+  /* Since all the PNAbbrevOps have moved down, we need to fix all of the
+   * PNAbbrev.ops pointers by pushing them down by the same amount. */
+  PNAbbrev* abbrev = &abbrevs->abbrevs[0];
   uint32_t i;
   for (i = 0; i < abbrevs->num_abbrevs; ++i) {
     abbrev->ops = ops;
-    ops += abbrev->num_ops * sizeof(PNBlockAbbrevOp);
+    ops += abbrev->num_ops * sizeof(PNAbbrevOp);
     ++abbrev;
   }
 
@@ -51,11 +49,11 @@ static PNBlockAbbrev* pn_block_abbrevs_allocate(PNAllocator* allocator,
   return abbrev;
 }
 
-static void pn_block_abbrev_copy(PNAllocator* allocator,
-                                 PNBlockAbbrevs* dest_abbrevs,
-                                 PNBlockAbbrev* src_abbrev) {
-  PNBlockAbbrev* dest_abbrev =
-      pn_block_abbrevs_allocate(allocator, dest_abbrevs, src_abbrev->num_ops);
+static void pn_abbrev_copy(PNAllocator* allocator,
+                           PNAbbrevs* dest_abbrevs,
+                           PNAbbrev* src_abbrev) {
+  PNAbbrev* dest_abbrev =
+      pn_abbrevs_allocate(allocator, dest_abbrevs, src_abbrev->num_ops);
   uint32_t i;
   for (i = 0; i < src_abbrev->num_ops; ++i) {
     dest_abbrev->ops[i] = src_abbrev->ops[i];
@@ -66,38 +64,37 @@ static void pn_block_info_context_copy_abbrevs_for_block_id(
     PNAllocator* allocator,
     PNBlockInfoContext* context,
     PNBlockId block_id,
-    PNBlockAbbrevs* dest_abbrevs) {
+    PNAbbrevs* dest_abbrevs) {
   PN_CHECK(block_id < PN_MAX_BLOCK_IDS);
-  PNBlockAbbrevs* src_abbrevs = &context->block_abbrev_map[block_id];
-  PNBlockAbbrev* src_abbrev = &src_abbrevs->abbrevs[0];
+  PNAbbrevs* src_abbrevs = &context->block_abbrev_map[block_id];
+  PNAbbrev* src_abbrev = &src_abbrevs->abbrevs[0];
   uint32_t i;
   for (i = 0; i < src_abbrevs->num_abbrevs; ++i) {
     /* TODO(binji): Could optimize this to do all allocation in one step */
-    pn_block_abbrev_copy(allocator, dest_abbrevs, src_abbrev++);
+    pn_abbrev_copy(allocator, dest_abbrevs, src_abbrev++);
   }
 }
 
 static uint32_t pn_block_info_context_append_abbrev(PNAllocator* allocator,
                                                     PNBlockInfoContext* context,
                                                     PNBlockId block_id,
-                                                    PNBlockAbbrev* abbrev) {
+                                                    PNAbbrev* abbrev) {
   PN_CHECK(block_id < PN_MAX_BLOCK_IDS);
-  PNBlockAbbrevs* abbrevs = &context->block_abbrev_map[block_id];
+  PNAbbrevs* abbrevs = &context->block_abbrev_map[block_id];
   uint32_t abbrev_id = abbrevs->num_abbrevs;
-  pn_block_abbrev_copy(allocator, abbrevs, abbrev);
+  pn_abbrev_copy(allocator, abbrevs, abbrev);
   return abbrev_id;
 }
 
-static PNBlockAbbrev* pn_block_abbrev_read(PNAllocator* allocator,
-                                           PNBitStream* bs,
-                                           PNBlockAbbrevs* abbrevs) {
+static PNAbbrev* pn_abbrev_read(PNAllocator* allocator,
+                                PNBitStream* bs,
+                                PNAbbrevs* abbrevs) {
   uint32_t num_ops = pn_bitstream_read_vbr(bs, 5);
-  PNBlockAbbrev* abbrev =
-      pn_block_abbrevs_allocate(allocator, abbrevs, num_ops);
+  PNAbbrev* abbrev = pn_abbrevs_allocate(allocator, abbrevs, num_ops);
   abbrev->num_ops = 0;
 
   while (abbrev->num_ops < num_ops) {
-    PNBlockAbbrevOp* op = &abbrev->ops[abbrev->num_ops++];
+    PNAbbrevOp* op = &abbrev->ops[abbrev->num_ops++];
 
     PNBool is_literal = pn_bitstream_read(bs, 1);
     if (is_literal) {
@@ -115,7 +112,7 @@ static PNBlockAbbrev* pn_block_abbrev_read(PNAllocator* allocator,
           break;
 
         case PN_ENCODING_ARRAY: {
-          PNBlockAbbrevOp* elt_op = &abbrev->ops[abbrev->num_ops++];
+          PNAbbrevOp* elt_op = &abbrev->ops[abbrev->num_ops++];
 
           PNBool is_literal = pn_bitstream_read(bs, 1);
           if (is_literal) {
@@ -158,7 +155,7 @@ static PNBlockAbbrev* pn_block_abbrev_read(PNAllocator* allocator,
 }
 
 #if PN_TRACING
-static void pn_abbrev_trace(PNBlockAbbrev* abbrev,
+static void pn_abbrev_trace(PNAbbrev* abbrev,
                             uint32_t abbrev_id,
                             PNBool global) {
   if (!PN_IS_TRACE(ABBREV)) {
@@ -168,13 +165,13 @@ static void pn_abbrev_trace(PNBlockAbbrev* abbrev,
   PN_PRINT("%ca%d = abbrev <", global ? '@' : '%', abbrev_id);
   uint32_t i;
   for (i = 0; i < abbrev->num_ops; ++i) {
-    PNBlockAbbrevOp* op = &abbrev->ops[i];
+    PNAbbrevOp* op = &abbrev->ops[i];
     switch (op->encoding) {
       case PN_ENCODING_LITERAL: PN_PRINT("%d", op->value); break;
       case PN_ENCODING_FIXED: PN_PRINT("fixed(%d)", op->num_bits); break;
       case PN_ENCODING_VBR: PN_PRINT("vbr(%d)", op->num_bits); break;
       case PN_ENCODING_ARRAY: {
-        PNBlockAbbrevOp* elt = &abbrev->ops[i + 1];
+        PNAbbrevOp* elt = &abbrev->ops[i + 1];
         PN_PRINT("array(");
         switch (elt->encoding) {
           case PN_ENCODING_FIXED: PN_PRINT("fixed(%d)", elt->num_bits); break;
@@ -198,7 +195,7 @@ static void pn_abbrev_trace(PNBlockAbbrev* abbrev,
   PN_PRINT(">;\n");
 }
 #else
-static void pn_abbrev_trace(PNBlockAbbrev* abbrev,
+static void pn_abbrev_trace(PNAbbrev* abbrev,
                             uint32_t abbrev_id,
                             PNBool global) {}
 #endif /* PN_TRACING */

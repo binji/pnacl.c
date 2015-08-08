@@ -7,7 +7,7 @@
 
 static void pn_record_reader_init(PNRecordReader* reader,
                                   PNBitStream* bs,
-                                  PNBlockAbbrevs* abbrevs,
+                                  PNAbbrevs* abbrevs,
                                   uint32_t entry) {
   reader->bs = bs;
   reader->abbrevs = abbrevs;
@@ -30,12 +30,12 @@ static uint32_t pn_decode_char6(uint32_t value) {
 static PNBool pn_record_read_abbrev(PNRecordReader* reader,
                                     uint32_t* out_value) {
   PN_CHECK(reader->entry - 4 < reader->abbrevs->num_abbrevs);
-  PNBlockAbbrev* abbrev = &reader->abbrevs->abbrevs[reader->entry - 4];
+  PNAbbrev* abbrev = &reader->abbrevs->abbrevs[reader->entry - 4];
   if (reader->op_index >= abbrev->num_ops) {
     return PN_FALSE;
   }
 
-  PNBlockAbbrevOp* op = &abbrev->ops[reader->op_index];
+  PNAbbrevOp* op = &abbrev->ops[reader->op_index];
 
   switch (op->encoding) {
     case PN_ENCODING_LITERAL:
@@ -63,7 +63,7 @@ static PNBool pn_record_read_abbrev(PNRecordReader* reader,
         PN_CHECK(reader->num_values > 0);
       }
 
-      PNBlockAbbrevOp* elt_op = &abbrev->ops[reader->op_index + 1];
+      PNAbbrevOp* elt_op = &abbrev->ops[reader->op_index + 1];
       switch (elt_op->encoding) {
         case PN_ENCODING_LITERAL:
           *out_value = elt_op->value;
@@ -121,12 +121,12 @@ static PNBool pn_record_read_abbrev(PNRecordReader* reader,
 static PNBool pn_record_read_abbrev_uint64(PNRecordReader* reader,
                                            uint64_t* out_value) {
   assert(reader->entry - 4 < reader->abbrevs->num_abbrevs);
-  PNBlockAbbrev* abbrev = &reader->abbrevs->abbrevs[reader->entry - 4];
+  PNAbbrev* abbrev = &reader->abbrevs->abbrevs[reader->entry - 4];
   if (reader->op_index >= abbrev->num_ops) {
     return PN_FALSE;
   }
 
-  PNBlockAbbrevOp* op = &abbrev->ops[reader->op_index];
+  PNAbbrevOp* op = &abbrev->ops[reader->op_index];
 
   switch (op->encoding) {
     case PN_ENCODING_LITERAL:
@@ -153,7 +153,7 @@ static PNBool pn_record_read_abbrev_uint64(PNRecordReader* reader,
         reader->num_values = pn_bitstream_read_vbr(reader->bs, 6);
       }
 
-      PNBlockAbbrevOp* elt_op = &abbrev->ops[reader->op_index + 1];
+      PNAbbrevOp* elt_op = &abbrev->ops[reader->op_index + 1];
       switch (elt_op->encoding) {
         case PN_ENCODING_LITERAL:
           *out_value = elt_op->value;

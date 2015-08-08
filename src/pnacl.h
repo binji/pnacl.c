@@ -809,7 +809,7 @@ typedef struct PNBitStream {
   uint32_t bit_offset;
 } PNBitStream;
 
-typedef struct PNBlockAbbrevOp {
+typedef struct PNAbbrevOp {
   PNEncoding encoding;
   union {
     /* PN_ENCODING_LITERAL */
@@ -818,21 +818,21 @@ typedef struct PNBlockAbbrevOp {
     /* PN_ENCODING_VBR */
     int num_bits;
   };
-} PNBlockAbbrevOp;
+} PNAbbrevOp;
 
-typedef struct PNBlockAbbrev {
+typedef struct PNAbbrev {
   uint32_t num_ops;
-  PNBlockAbbrevOp* ops;
-} PNBlockAbbrev;
+  PNAbbrevOp* ops;
+} PNAbbrev;
 
-typedef struct PNBlockAbbrevs {
+typedef struct PNAbbrevs {
   uint32_t num_abbrevs;
-  PNBlockAbbrev* abbrevs;
-} PNBlockAbbrevs;
+  PNAbbrev* abbrevs;
+} PNAbbrevs;
 
 typedef struct PNRecordReader {
   struct PNBitStream* bs;
-  struct PNBlockAbbrevs* abbrevs;
+  struct PNAbbrevs* abbrevs;
   uint32_t entry;
   uint32_t op_index;
   uint32_t num_values;
@@ -1116,7 +1116,7 @@ typedef struct PNLivenessState {
 
 typedef struct PNBlockInfoContext {
   uint32_t num_abbrevs;
-  PNBlockAbbrevs block_abbrev_map[PN_MAX_BLOCK_IDS];
+  PNAbbrevs block_abbrev_map[PN_MAX_BLOCK_IDS];
   PNBool use_relative_ids;
 } PNBlockInfoContext;
 
