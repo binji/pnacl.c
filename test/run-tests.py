@@ -68,7 +68,6 @@ class TestInfo(object):
     self.flags = []
     self.args = []
     self.expected_error = 0
-    self.cmd = []
     self.slow = False
 
   def Parse(self, filename):
@@ -147,16 +146,22 @@ class TestInfo(object):
       value = getattr(self, name)
     return value
 
-  def Run(self, override):
-    cmd = ['pnacl']
+  def GetExecutable(self, override):
+    return self.GetWithOverride('exe', override, self.exe)
+
+  def GetCommand(self, override, exe=None):
+    if exe is None:
+      exe = self.GetExecutable(override)
+    cmd = [exe]
     cmd += self.GetWithOverride('flags', override)
     cmd += AsList(self.GetWithOverride('pexe', override))
     cmd += ['--'] + AsList(self.GetWithOverride('args', override))
-    exe = self.GetWithOverride('exe', override, self.exe)
+    return cmd
 
-    # self.cmd is displayed to the user as a command that can reproduce the
-    # bug. So it should display the executable that was actually run.
-    self.cmd = [exe] + cmd[1:]
+  def Run(self, override):
+    # Pass 'pnacl' as the executable name so the output is consistent
+    cmd = self.GetCommand(override, 'pnacl')
+    exe = self.GetExecutable(override)
     try:
       start_time = time.time()
       process = subprocess.Popen(cmd, executable=exe, stdout=subprocess.PIPE,
@@ -251,11 +256,11 @@ def main(args):
   if options.executable:
     if not os.path.exists(options.executable):
       parser.error('executable %s does not exist' % options.executable)
-    # We always run from SCRIPT_DIR, but allow the user to pass in executables
-    # with a relative path from where they ran run-tests.py
-    override['exe'] = os.path.relpath(
-        os.path.join(os.getcwd(), options.executable), SCRIPT_DIR)
+    # We  allow the user to pass in executables with a relative path from where
+    # they ran run-tests.py
+    override['exe'] = os.path.relpath(options.executable, SCRIPT_DIR)
 
+  run_cwd = os.getcwd()
   os.chdir(SCRIPT_DIR)
 
   isatty = os.isatty(1)
@@ -263,6 +268,7 @@ def main(args):
 
   passed = 0
   failed = 0
+  failed_tests = []
   start_time = time.time()
   for test in tests:
     info = TestInfo()
@@ -292,10 +298,10 @@ def main(args):
       passed += 1
       logger.info('+ %s (%.3fs)' % (info.name, duration))
     except Error as e:
+      failed_tests.append(test)
       failed += 1
       msg = ''
-      if logger.isEnabledFor(logging.DEBUG) and info.cmd:
-        msg += Indent('cmd = %s\n' % ' '.join(info.cmd), 2)
+      cmd = info.GetCommand(override)
       msg += Indent(str(e), 2)
       if short_display:
         ClearStatus()
@@ -304,14 +310,23 @@ def main(args):
     if short_display:
       PrintStatus(passed, failed, start_time, True)
 
-  if not short_display:
-    PrintStatus(passed, failed, start_time, False)
-  else:
-    sys.stderr.write('\n')
+  if short_display:
+    ClearStatus()
+
+  ret = 0
 
   if failed:
-    return 1
-  return 0
+    logging.error('**** FAILED %s' % ('*' * (80 - 14)))
+    for test in failed_tests:
+      msg = Indent('cmd = (cd %s && %s)\n' % (
+          os.path.relpath(SCRIPT_DIR, run_cwd), ' '.join(cmd)), 2)
+      msg += Indent('rerun = %s\n' % ' '.join(
+          [sys.executable, sys.argv[0], '-e', options.executable, test]), 2)
+      logger.error('- %s\n%s' % (test, msg))
+    ret = 1
+
+  PrintStatus(passed, failed, start_time, False)
+  return ret
 
 
 if __name__ == '__main__':
