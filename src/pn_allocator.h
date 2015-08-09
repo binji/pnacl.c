@@ -5,6 +5,7 @@
 #ifndef PN_ALLOCATOR_H_
 #define PN_ALLOCATOR_H_
 
+static PNAllocatorMark pn_allocator_mark(PNAllocator* allocator);
 static void pn_allocator_init(PNAllocator* allocator,
                               size_t min_chunk_size,
                               const char* name) {
@@ -17,6 +18,7 @@ static void pn_allocator_init(PNAllocator* allocator,
   allocator->min_chunk_size = min_chunk_size;
   allocator->total_used = 0;
   allocator->internal_fragmentation = 0;
+  allocator->reset_mark = pn_allocator_mark(allocator);
 }
 
 static size_t pn_max(size_t x, size_t y) {
@@ -161,6 +163,10 @@ static void pn_allocator_reset_to_mark(PNAllocator* allocator,
   allocator->last_alloc = mark.last_alloc;
   allocator->total_used = mark.total_used;
   allocator->internal_fragmentation = mark.internal_fragmentation;
+}
+
+static void pn_allocator_reset(PNAllocator* allocator) {
+  pn_allocator_reset_to_mark(allocator, allocator->reset_mark);
 }
 
 #endif /* PN_ALLOCATOR_H_ */

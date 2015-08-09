@@ -123,6 +123,19 @@ static int pn_string_list_count(char** p) {
   return result;
 }
 
+static void pn_memory_init(PNMemory* memory, uint32_t size) {
+  memset(memory, 0, sizeof(PNMemory));
+  memory->size = size;
+  memory->data = pn_malloc(memory->size);
+}
+
+static void pn_memory_reset(PNMemory* memory) {
+  PNMemory copy = *memory;
+  memset(memory, 0, sizeof(PNMemory));
+  memory->data = copy.data;
+  memory->size = copy.size;
+}
+
 static void pn_memory_init_startinfo(PNMemory* memory,
                                      char** argv,
                                      char** envp) {

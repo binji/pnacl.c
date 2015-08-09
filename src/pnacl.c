@@ -59,6 +59,7 @@ static PNBool g_pn_print_stats;
 static PNBool g_pn_print_opcode_counts;
 static PNBool g_pn_run;
 static uint32_t g_pn_opcode_count[PN_MAX_OPCODE];
+static PNBool g_pn_repeat_load_times = 1;
 
 #if PN_TRACING
 static const char* g_pn_trace_function_filter;
@@ -94,6 +95,7 @@ static const char* g_pn_opcode_names[] = {
 #include "pn_bitstream.h"
 #include "pn_record.h"
 #include "pn_abbrev.h"
+#include "pn_memory.h"
 #include "pn_module.h"
 #include "pn_function.h"
 #include "pn_trace.h"
@@ -103,7 +105,6 @@ static const char* g_pn_opcode_names[] = {
 #include "pn_calculate_pred_bbs.h"
 #include "pn_calculate_phi_assigns.h"
 #include "pn_calculate_liveness.h"
-#include "pn_memory.h"
 #include "pn_read.h"
 #include "pn_executor.h"
 #include "pn_builtins.h"
@@ -135,6 +136,7 @@ enum {
 #endif /* PN_TIMERS */
   PN_FLAG_PRINT_OPCODE_COUNTS,
   PN_FLAG_PRINT_STATS,
+  PN_FLAG_REPEAT_LOAD,
   PN_NUM_FLAGS
 };
 
@@ -164,6 +166,7 @@ static struct option g_pn_long_options[] = {
 #endif /* PN_TIMERS */
     {"print-opcode-counts", no_argument, NULL, 0},
     {"print-stats", no_argument, NULL, 0},
+    {"repeat-load", required_argument, NULL, 0},
     {NULL, 0, NULL, 0},
 };
 
@@ -183,6 +186,8 @@ static PNOptionHelp g_pn_option_help[] = {
     {PN_FLAG_TRACE_FUNCTION_FILTER, "NAME",
      "only trace function with given name or id"},
 #endif /* PN_TRACING */
+    {PN_FLAG_REPEAT_LOAD, "TIMES",
+     "number of times to repeat loading. Useful for profiling"},
     {PN_NUM_FLAGS, NULL},
 };
 
@@ -396,7 +401,19 @@ static void pn_options_parse(int argc, char** argv, char** env) {
             g_pn_print_opcode_counts = PN_TRUE;
             break;
 
+          case PN_FLAG_REPEAT_LOAD: {
+            char* endptr;
+            errno = 0;
+            long int times = strtol(optarg, &endptr, 10);
+            size_t optarg_len = strlen(optarg);
+
+            if (errno != 0 || optarg_len != (endptr - optarg)) {
+              PN_FATAL("Unable to parse repeat-times flag \"%s\".\n", optarg);
+            }
+
+            g_pn_repeat_load_times = times;
             break;
+          }
         }
         break;
 
@@ -613,36 +630,40 @@ int main(int argc, char** argv, char** envp) {
   fclose(f);
   PN_END_TIME(FILE_READ);
 
+  PNMemory memory;
+  PNModule module;
   PNBitStream bs;
+
+  pn_memory_init(&memory, g_pn_memory_size);
+  pn_module_init(&module, &memory);
   pn_bitstream_init(&bs, data, fsize);
-  pn_header_read(&bs);
 
-  uint32_t entry = pn_bitstream_read(&bs, 2);
-  if (entry != PN_ENTRY_SUBBLOCK) {
-    PN_FATAL("expected subblock at top-level\n");
+  uint32_t load_count;
+  for (load_count = 0; load_count < g_pn_repeat_load_times; ++load_count) {
+    pn_header_read(&bs);
+    uint32_t entry = pn_bitstream_read(&bs, 2);
+    if (entry != PN_ENTRY_SUBBLOCK) {
+      PN_FATAL("expected subblock at top-level\n");
+    }
+
+    PNBlockId block_id = pn_bitstream_read_vbr(&bs, 8);
+    PN_CHECK(block_id == PN_BLOCKID_MODULE);
+    PN_TRACE(MODULE_BLOCK, "module {  // BlockID = %d\n", block_id);
+    PN_TRACE_INDENT(MODULE_BLOCK, 2);
+
+    PNBlockInfoContext context = {};
+    pn_module_block_read(&module, &context, &bs);
+    PN_TRACE_DEDENT(MODULE_BLOCK, 2);
+    PN_TRACE(MODULE_BLOCK, "}\n");
+
+    /* Reset the state so everything can be reloaded */
+    if (g_pn_repeat_load_times > 1 &&
+        load_count != g_pn_repeat_load_times - 1) {
+      pn_bitstream_seek_bit(&bs, 0);
+      pn_memory_reset(&memory);
+      pn_module_reset(&module);
+    }
   }
-
-  PNBlockId block_id = pn_bitstream_read_vbr(&bs, 8);
-  PN_CHECK(block_id == PN_BLOCKID_MODULE);
-  PN_TRACE(MODULE_BLOCK, "module {  // BlockID = %d\n", block_id);
-  PN_TRACE_INDENT(MODULE_BLOCK, 2);
-
-  PNMemory memory = {};
-  memory.size = g_pn_memory_size;
-  memory.data = pn_malloc(memory.size);
-
-  PNModule module = {};
-  module.memory = &memory;
-  pn_allocator_init(&module.allocator, PN_MIN_CHUNKSIZE, "module");
-  pn_allocator_init(&module.value_allocator, PN_MIN_CHUNKSIZE, "value");
-  pn_allocator_init(&module.instruction_allocator, PN_MIN_CHUNKSIZE,
-                    "instruction");
-  pn_allocator_init(&module.temp_allocator, PN_MIN_CHUNKSIZE, "temp");
-
-  PNBlockInfoContext context = {};
-  pn_module_block_read(&module, &context, &bs);
-  PN_TRACE_DEDENT(MODULE_BLOCK, 2);
-  PN_TRACE(MODULE_BLOCK, "}\n");
 
   if (g_pn_run) {
     PN_BEGIN_TIME(EXECUTE);

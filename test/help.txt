@@ -33,3 +33,4 @@ options:
       --print-time-as-zero            
       --print-opcode-counts           
       --print-stats                   
+      --repeat-load=TIMES             number of times to repeat loading. Useful for profiling

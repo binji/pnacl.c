@@ -779,6 +779,13 @@ typedef struct PNAllocatorChunk {
   void* end;
 } PNAllocatorChunk;
 
+typedef struct PNAllocatorMark {
+  void* current;
+  void* last_alloc;
+  size_t total_used;
+  size_t internal_fragmentation;
+} PNAllocatorMark;
+
 typedef struct PNAllocator {
   const char* name;
   PNAllocatorChunk* chunk_head;
@@ -787,14 +794,8 @@ typedef struct PNAllocator {
   size_t min_chunk_size;
   size_t total_used;
   size_t internal_fragmentation;
+  PNAllocatorMark reset_mark;
 } PNAllocator;
-
-typedef struct PNAllocatorMark {
-  void* current;
-  void* last_alloc;
-  size_t total_used;
-  size_t internal_fragmentation;
-} PNAllocatorMark;
 
 typedef struct PNBitSet {
   uint32_t num_words;

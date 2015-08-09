@@ -5,6 +5,36 @@
 #ifndef PN_MODULE_H_
 #define PN_MODULE_H_
 
+static void pn_module_init(PNModule* module, PNMemory* memory) {
+  memset(module, 0, sizeof(PNModule));
+  module->memory = memory;
+  pn_allocator_init(&module->allocator, PN_MIN_CHUNKSIZE, "module");
+  pn_allocator_init(&module->value_allocator, PN_MIN_CHUNKSIZE, "value");
+  pn_allocator_init(&module->instruction_allocator, PN_MIN_CHUNKSIZE,
+                    "instruction");
+  pn_allocator_init(&module->temp_allocator, PN_MIN_CHUNKSIZE, "temp");
+}
+
+static void pn_module_reset(PNModule* module) {
+  PNModule copy = *module;
+  /* Keep the allocators and memory, clear everything else */
+  memset(module, 0, sizeof(PNModule));
+  module->allocator = copy.allocator;
+  module->value_allocator = copy.value_allocator;
+  module->instruction_allocator = copy.instruction_allocator;
+  module->temp_allocator = copy.temp_allocator;
+  module->memory = copy.memory;
+
+  /* Reset the allocators */
+  pn_allocator_reset(&module->allocator);
+  pn_allocator_reset(&module->value_allocator);
+  pn_allocator_reset(&module->instruction_allocator);
+  pn_allocator_reset(&module->temp_allocator);
+
+  /* Reset the memory */
+  pn_memory_reset(module->memory);
+}
+
 static PNType* pn_module_get_type(PNModule* module, PNTypeId type_id) {
   if (type_id < 0 || type_id >= module->num_types) {
     PN_FATAL("accessing invalid type %d (max %d)\n", type_id,

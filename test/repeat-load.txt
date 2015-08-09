@@ -1,0 +1,37 @@
+# FLAGS: --repeat-load=10 -p --print-time-as-zero
+# FILE: res/puts.pexe
+-----------------
+timer TOTAL                         : 0.000000 sec (%0)
+timer FILE_READ                     : 0.000000 sec (%0)
+timer BLOCKINFO_BLOCK_READ          : 0.000000 sec (%0)
+timer MODULE_BLOCK_READ             : 0.000000 sec (%0)
+timer CONSTANTS_BLOCK_READ          : 0.000000 sec (%0)
+timer FUNCTION_BLOCK_READ           : 0.000000 sec (%0)
+timer VALUE_SYMTAB_BLOCK_READ       : 0.000000 sec (%0)
+timer TYPE_BLOCK_READ               : 0.000000 sec (%0)
+timer GLOBALVAR_BLOCK_READ          : 0.000000 sec (%0)
+timer CALCULATE_RESULT_VALUE_TYPES  : 0.000000 sec (%0)
+timer CALCULATE_OPCODES             : 0.000000 sec (%0)
+timer CALCULATE_USES                : 0.000000 sec (%0)
+timer CALCULATE_PRED_BBS            : 0.000000 sec (%0)
+timer CALCULATE_PHI_ASSIGNS         : 0.000000 sec (%0)
+timer CALCULATE_LIVENESS            : 0.000000 sec (%0)
+timer FUNCTION_TRACE                : 0.000000 sec (%0)
+timer EXECUTE                       : 0.000000 sec (%0)
+-----------------
+num_types: 19
+num_functions: 40
+num_global_vars: 31
+max num_constants: 61
+max num_values: 1608
+max num_bbs: 341
+max num_instructions: 2208
+total num_constants: 436
+total num_values: 4557
+total num_bbs: 1113
+total num_instructions: 6086
+global_var size : 4.2K
+startinfo size : 0
+      module allocator: used:   59.1K frag:       0
+       value allocator: used:   55.2K frag:       0
+ instruction allocator: used:   98.9K frag:   41.5K
