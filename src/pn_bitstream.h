@@ -14,7 +14,8 @@ static void pn_bitstream_init(PNBitStream* bs, void* data, uint32_t data_len) {
 }
 
 static uint32_t pn_bitstream_read_frac_bits(PNBitStream* bs, int num_bits) {
-  PN_CHECK(num_bits <= bs->curword_bits);
+  assert(num_bits <= 32);
+  assert(num_bits <= bs->curword_bits);
   uint32_t result;
   if (num_bits == 32) {
     result = bs->curword;
@@ -30,21 +31,22 @@ static uint32_t pn_bitstream_read_frac_bits(PNBitStream* bs, int num_bits) {
 
 static void pn_bitstream_fill_curword(PNBitStream* bs) {
   uint32_t byte_offset = bs->bit_offset >> 3;
-  if (byte_offset + 4 < bs->data_len) {
+  if (byte_offset + sizeof(uint32_t) < bs->data_len) {
     bs->curword_bits = 32;
     bs->curword = *(uint32_t*)(bs->data + byte_offset);
   } else {
+    /* Near the end of the stream */
     PN_CHECK(byte_offset <= bs->data_len);
-    bs->curword_bits = (bs->data_len - byte_offset) * 8;
+    bs->curword_bits = (bs->data_len - byte_offset) * (sizeof(uint8_t) << 3);
     if (bs->curword_bits) {
       bs->curword = *(uint32_t*)(bs->data + byte_offset);
     }
+    assert(bs->curword_bits <= 32);
   }
-  assert(bs->curword_bits <= 32);
 }
 
 static uint32_t pn_bitstream_read(PNBitStream* bs, int num_bits) {
-  PN_CHECK(num_bits <= 32);
+  assert(num_bits <= 32);
   if (num_bits <= bs->curword_bits) {
     return pn_bitstream_read_frac_bits(bs, num_bits);
   }
@@ -54,6 +56,7 @@ static uint32_t pn_bitstream_read(PNBitStream* bs, int num_bits) {
   int bits_left = num_bits - bs->curword_bits;
   bs->bit_offset += bits_read;
   pn_bitstream_fill_curword(bs);
+  PN_CHECK(bits_left <= bs->curword_bits);
   result |= pn_bitstream_read_frac_bits(bs, bits_left) << bits_read;
   return result;
 }

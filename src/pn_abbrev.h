@@ -105,10 +105,12 @@ static PNAbbrev* pn_abbrev_read(PNAllocator* allocator,
       switch (op->encoding) {
         case PN_ENCODING_FIXED:
           op->num_bits = pn_bitstream_read_vbr(bs, 5);
+          PN_CHECK(op->num_bits <= 32);
           break;
 
         case PN_ENCODING_VBR:
           op->num_bits = pn_bitstream_read_vbr(bs, 5);
+          PN_CHECK(op->num_bits <= 32);
           break;
 
         case PN_ENCODING_ARRAY: {
@@ -123,10 +125,12 @@ static PNAbbrev* pn_abbrev_read(PNAllocator* allocator,
             switch (elt_op->encoding) {
               case PN_ENCODING_FIXED:
                 elt_op->num_bits = pn_bitstream_read_vbr(bs, 5);
+                PN_CHECK(elt_op->num_bits <= 32);
                 break;
 
               case PN_ENCODING_VBR:
                 elt_op->num_bits = pn_bitstream_read_vbr(bs, 5);
+                PN_CHECK(elt_op->num_bits <= 32);
                 break;
 
               case PN_ENCODING_CHAR6:

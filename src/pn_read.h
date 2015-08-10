@@ -13,6 +13,7 @@ static void pn_blockinfo_block_read(PNModule* module,
            PN_BLOCKID_BLOCKINFO);
   PN_TRACE_INDENT(BLOCKINFO_BLOCK, 2);
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
+  PN_CHECK(codelen <= 32);
   pn_bitstream_align_32(bs);
   (void)pn_bitstream_read(bs, 32); /* num words */
 
@@ -99,6 +100,7 @@ static void pn_type_block_read(PNModule* module,
   PN_TRACE(TYPE_BLOCK, "types {  // BlockID = %d\n", PN_BLOCKID_TYPE);
   PN_TRACE_INDENT(TYPE_BLOCK, 2);
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
+  PN_CHECK(codelen <= 32);
   pn_bitstream_align_32(bs);
   pn_bitstream_read(bs, 32); /* num_words */
 
@@ -280,6 +282,7 @@ static void pn_globalvar_block_read(PNModule* module,
            PN_BLOCKID_GLOBALVAR);
   PN_TRACE_INDENT(GLOBALVAR_BLOCK, 2);
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
+  PN_CHECK(codelen <= 32);
   pn_bitstream_align_32(bs);
   pn_bitstream_read(bs, 32); /* num words */
 
@@ -528,6 +531,7 @@ static void pn_value_symtab_block_read(PNModule* module,
            PN_BLOCKID_VALUE_SYMTAB);
   PN_TRACE_INDENT(VALUE_SYMTAB_BLOCK, 2);
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
+  PN_CHECK(codelen <= 32);
   pn_bitstream_align_32(bs);
   pn_bitstream_read(bs, 32); /* num words */
 
@@ -628,6 +632,7 @@ static void pn_constants_block_read(PNModule* module,
            PN_BLOCKID_CONSTANTS);
   PN_TRACE_INDENT(CONSTANTS_BLOCK, 2);
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
+  PN_CHECK(codelen <= 32);
   pn_bitstream_align_32(bs);
   pn_bitstream_read(bs, 32); /* num words */
 
@@ -874,6 +879,7 @@ static void pn_function_block_read(PNModule* module,
                                    PNFunctionId function_id) {
   PN_BEGIN_TIME(FUNCTION_BLOCK_READ);
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
+  PN_CHECK(codelen <= 32);
   pn_bitstream_align_32(bs);
   pn_bitstream_read(bs, 32); /* num words */
 
@@ -1420,6 +1426,7 @@ static void pn_module_block_read(PNModule* module,
                                  PNBitStream* bs) {
   PN_BEGIN_TIME(MODULE_BLOCK_READ);
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
+  PN_CHECK(codelen <= 32);
   pn_bitstream_align_32(bs);
   pn_bitstream_read(bs, 32); /* num words */
 
