@@ -61,7 +61,35 @@ static uint32_t pn_bitstream_read(PNBitStream* bs, int num_bits) {
   return result;
 }
 
+static uint32_t pn_bitstream_read_vbr6(PNBitStream* bs) {
+  uint64_t piece = pn_bitstream_read(bs, 6);
+  if ((piece & 32) == 0) {
+    return piece;
+  }
+
+  uint64_t result = piece & 31;
+  int shift = 5;
+  while (shift < 64) {
+    piece = pn_bitstream_read(bs, 6);
+    result |= (piece & 31) << shift;
+    if ((piece & 32) == 0) {
+      /* The value should be < 2**32, or should be sign-extended so the top
+       * 32-bits are all 1 */
+      PN_CHECK(result <= UINT32_MAX ||
+               ((result & 0x80000000) && ((result >> 32) == UINT32_MAX)));
+      return result;
+    }
+    shift += 5;
+  }
+  PN_UNREACHABLE();
+}
+
 static uint32_t pn_bitstream_read_vbr(PNBitStream* bs, int num_bits) {
+  /* 6 bits is very common, so special case it */
+  if (num_bits == 6) {
+    return pn_bitstream_read_vbr6(bs);
+  }
+
   uint64_t piece = pn_bitstream_read(bs, num_bits);
   uint64_t hi_mask = 1 << (num_bits - 1);
   if ((piece & hi_mask) == 0) {
@@ -69,10 +97,10 @@ static uint32_t pn_bitstream_read_vbr(PNBitStream* bs, int num_bits) {
   }
 
   uint64_t lo_mask = hi_mask - 1;
-  uint64_t result = 0;
-  int shift = 0;
-  while (1) {
-    PN_CHECK(shift < 64);
+  uint64_t result = piece & lo_mask;
+  int shift = num_bits - 1;
+  while (shift < 64) {
+    piece = pn_bitstream_read(bs, num_bits);
     result |= (piece & lo_mask) << shift;
     if ((piece & hi_mask) == 0) {
       /* The value should be < 2**32, or should be sign-extended so the top
@@ -82,8 +110,8 @@ static uint32_t pn_bitstream_read_vbr(PNBitStream* bs, int num_bits) {
       return result;
     }
     shift += num_bits - 1;
-    piece = pn_bitstream_read(bs, num_bits);
   }
+  PN_UNREACHABLE();
 }
 
 static uint64_t pn_bitstream_read_vbr_uint64(PNBitStream* bs, int num_bits) {
@@ -94,17 +122,17 @@ static uint64_t pn_bitstream_read_vbr_uint64(PNBitStream* bs, int num_bits) {
   }
 
   uint32_t lo_mask = hi_mask - 1;
-  uint64_t result = 0;
-  int shift = 0;
-  while (1) {
-    PN_CHECK(shift < 64);
+  uint64_t result = piece & lo_mask;
+  int shift = num_bits - 1;
+  while (shift < 64) {
+    piece = pn_bitstream_read(bs, num_bits);
     result |= (uint64_t)(piece & lo_mask) << shift;
     if ((piece & hi_mask) == 0) {
       return result;
     }
     shift += num_bits - 1;
-    piece = pn_bitstream_read(bs, num_bits);
   }
+  PN_UNREACHABLE();
 }
 
 static void pn_bitstream_seek_bit(PNBitStream* bs, uint32_t bit_offset) {
