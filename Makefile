@@ -56,9 +56,6 @@ out/pnacl-ubsan: src/pnacl.c | out
 out/pnacl-32: src/pnacl.c | out
 	$(CC) $(CFLAGS) -m32 -o $@ $<
 
-out/pnacl-prof: src/pnacl.c | out
-	$(CC) $(CFLAGS) -lprofiler -O3 -o $@ $<
-
 #### TESTS ####
 
 .PHONY: test
