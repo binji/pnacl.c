@@ -36,7 +36,7 @@ static void pn_module_reset(PNModule* module) {
 }
 
 static PNType* pn_module_get_type(PNModule* module, PNTypeId type_id) {
-  if (type_id < 0 || type_id >= module->num_types) {
+  if (type_id >= module->num_types) {
     PN_FATAL("accessing invalid type %d (max %d)\n", type_id,
              module->num_types);
   }

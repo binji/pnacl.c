@@ -856,23 +856,6 @@ static void pn_basic_block_list_append(PNModule* module,
   (*bb_list)[(*num_els)++] = bb_id;
 }
 
-static void pn_context_fix_value_ids(PNBlockInfoContext* context,
-                                     PNValueId rel_id,
-                                     uint32_t count,
-                                     ...) {
-  if (!context->use_relative_ids)
-    return;
-
-  va_list args;
-  va_start(args, count);
-  uint32_t i;
-  for (i = 0; i < count; ++i) {
-    PNValueId* value_id = va_arg(args, PNValueId*);
-    *value_id = rel_id - *value_id;
-  }
-  va_end(args);
-}
-
 static void pn_function_block_read(PNModule* module,
                                    PNBlockInfoContext* context,
                                    PNBitStream* bs,
@@ -1015,8 +998,10 @@ static void pn_function_block_read(PNModule* module,
             inst->binop_opcode = pn_record_read_int32(&reader, "opcode");
             inst->flags = 0;
 
-            pn_context_fix_value_ids(context, rel_id, 2, &inst->value0_id,
-                                     &inst->value1_id);
+            if (context->use_relative_ids) {
+              inst->value0_id = rel_id - inst->value0_id;
+              inst->value1_id = rel_id - inst->value1_id;
+            }
 
             /* optional */
             pn_record_try_read_int32(&reader, &inst->flags);
@@ -1040,7 +1025,9 @@ static void pn_function_block_read(PNModule* module,
 
             value->type_id = inst->type_id;
 
-            pn_context_fix_value_ids(context, rel_id, 1, &inst->value_id);
+            if (context->use_relative_ids) {
+              inst->value_id = rel_id - inst->value_id;
+            }
             break;
           }
 
@@ -1053,7 +1040,9 @@ static void pn_function_block_read(PNModule* module,
             uint32_t value_id;
             if (pn_record_try_read_uint32(&reader, &value_id)) {
               inst->value_id = value_id;
-              pn_context_fix_value_ids(context, rel_id, 1, &inst->value_id);
+              if (context->use_relative_ids) {
+                inst->value_id = rel_id - inst->value_id;
+              }
             }
 
             is_terminator = PN_TRUE;
@@ -1072,7 +1061,9 @@ static void pn_function_block_read(PNModule* module,
 
             if (pn_record_try_read_uint16(&reader, &inst->false_bb_id)) {
               inst->value_id = pn_record_read_uint32(&reader, "value");
-              pn_context_fix_value_ids(context, rel_id, 1, &inst->value_id);
+              if (context->use_relative_ids) {
+                inst->value_id = rel_id - inst->value_id;
+              }
 
               pn_basic_block_list_append(module, &cur_bb->succ_bb_ids,
                                          &cur_bb->num_succ_bbs,
@@ -1097,7 +1088,9 @@ static void pn_function_block_read(PNModule* module,
                                        &cur_bb->num_succ_bbs,
                                        inst->default_bb_id);
 
-            pn_context_fix_value_ids(context, rel_id, 1, &inst->value_id);
+              if (context->use_relative_ids) {
+                inst->value_id = rel_id - inst->value_id;
+              }
 
             inst->base.code = code;
             int32_t num_cases = pn_record_read_int32(&reader, "num cases");
@@ -1235,7 +1228,9 @@ static void pn_function_block_read(PNModule* module,
                 (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
             PN_CHECK(pn_is_power_of_two(inst->alignment));
 
-            pn_context_fix_value_ids(context, rel_id, 1, &inst->size_id);
+            if (context->use_relative_ids) {
+              inst->size_id = rel_id - inst->size_id;
+            }
             break;
           }
 
@@ -1258,7 +1253,9 @@ static void pn_function_block_read(PNModule* module,
 
             value->type_id = inst->type_id;
 
-            pn_context_fix_value_ids(context, rel_id, 1, &inst->src_id);
+            if (context->use_relative_ids) {
+              inst->src_id = rel_id - inst->src_id;
+            }
             break;
           }
 
@@ -1273,8 +1270,10 @@ static void pn_function_block_read(PNModule* module,
                 (1 << pn_record_read_int32(&reader, "alignment")) >> 1;
             PN_CHECK(pn_is_power_of_two(inst->alignment));
 
-            pn_context_fix_value_ids(context, rel_id, 2, &inst->dest_id,
-                                     &inst->value_id);
+            if (context->use_relative_ids) {
+              inst->dest_id = rel_id - inst->dest_id;
+              inst->value_id = rel_id - inst->value_id;
+            }
             break;
           }
 
@@ -1294,8 +1293,10 @@ static void pn_function_block_read(PNModule* module,
             inst->value1_id = pn_record_read_uint32(&reader, "value 1");
             inst->cmp2_opcode = pn_record_read_int32(&reader, "opcode");
 
-            pn_context_fix_value_ids(context, rel_id, 2, &inst->value0_id,
-                                     &inst->value1_id);
+            if (context->use_relative_ids) {
+              inst->value0_id = rel_id - inst->value0_id;
+              inst->value1_id = rel_id - inst->value1_id;
+            }
             break;
           }
 
@@ -1317,8 +1318,11 @@ static void pn_function_block_read(PNModule* module,
                 pn_record_read_uint32(&reader, "false_value");
             inst->cond_id = pn_record_read_uint32(&reader, "cond");
 
-            pn_context_fix_value_ids(context, rel_id, 3, &inst->true_value_id,
-                                     &inst->false_value_id, &inst->cond_id);
+            if (context->use_relative_ids) {
+              inst->true_value_id = rel_id - inst->true_value_id;
+              inst->false_value_id = rel_id - inst->false_value_id;
+              inst->cond_id = rel_id - inst->cond_id;
+            }
             break;
           }
 
@@ -1345,7 +1349,9 @@ static void pn_function_block_read(PNModule* module,
             inst->calling_convention = cc_info >> 1;
             inst->callee_id = pn_record_read_uint32(&reader, "callee");
 
-            pn_context_fix_value_ids(context, rel_id, 1, &inst->callee_id);
+            if (context->use_relative_ids) {
+              inst->callee_id = rel_id - inst->callee_id;
+            }
 
             PNTypeId type_id;
             if (inst->is_indirect) {
