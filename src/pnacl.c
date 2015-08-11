@@ -511,6 +511,10 @@ static void pn_options_parse(int argc, char** argv, char** env) {
   if (g_pn_trace_INSTRUCTIONS) {
     g_pn_trace_BASIC_BLOCKS = PN_TRUE;
   }
+  
+  if (g_pn_trace_BASIC_BLOCK_EXTRAS) {
+    g_pn_trace_BASIC_BLOCKS = PN_TRUE;
+  }
 
   if (g_pn_trace_BASIC_BLOCKS) {
     g_pn_trace_FUNCTION_BLOCK = PN_TRUE;

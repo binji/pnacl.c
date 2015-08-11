@@ -486,67 +486,61 @@ static void pn_basic_block_trace(PNModule* module,
 
   PN_TRACE_PRINT_INDENTX(-2);
   PN_PRINT("%%b%d:\n", bb_id);
-#if 0
-  uint32_t n;
+
+#define PN_PRINT_LINE_LIST(name, var_count, sep, ...) \
+  if (var_count) {                                    \
+    PN_TRACE_PRINT_INDENTX(-1);                       \
+    PN_PRINT(#name ": ");                             \
+    for (n = 0; n < var_count; ++n) {                 \
+      PN_PRINT(__VA_ARGS__);                          \
+      if (n != var_count - 1) {                       \
+        PN_PRINT(sep);                                \
+      }                                               \
+    }                                                 \
+    PN_PRINT(";\n");                                  \
+  }
+
+  if (PN_IS_TRACE(BASIC_BLOCK_EXTRAS)) {
+    uint32_t n;
+    PN_PRINT_LINE_LIST(
+        phi uses, bb->num_phi_uses, ", ", "[%s, %%b%d]",
+        pn_value_describe(module, function, bb->phi_uses[n].incoming.value_id),
+        bb->phi_uses[n].incoming.bb_id);
 #if PN_CALCULATE_LIVENESS
-  PN_PRINT("preds:");
-  for (n = 0; n < bb->num_pred_bbs; ++n) {
-    PN_PRINT(" %d", bb->pred_bb_ids[n]);
-  }
-  PN_PRINT(" ");
+    if (bb->first_def_id != PN_INVALID_VALUE_ID) {
+      PN_TRACE_PRINT_INDENTX(-1);
+      PN_PRINT("defs: [%s..%s];\n",
+               pn_value_describe(module, function, bb->first_def_id),
+               pn_value_describe(module, function, bb->last_def_id));
+    }
+    PN_PRINT_LINE_LIST(preds, bb->num_pred_bbs, ", ", "%%b%d",
+                       bb->pred_bb_ids[n]);
+    PN_PRINT_LINE_LIST(succs, bb->num_succ_bbs, ", ", "%%b%d",
+                       bb->succ_bb_ids[n]);
+    PN_PRINT_LINE_LIST(uses, bb->num_uses, ", ", "%s",
+                       pn_value_describe(module, function, bb->uses[n]));
+    PN_PRINT_LINE_LIST(livein, bb->num_livein, ", ", "%s",
+                       pn_value_describe(module, function, bb->livein[n]));
+    PN_PRINT_LINE_LIST(liveout, bb->num_liveout, ", ", "%s",
+                       pn_value_describe(module, function, bb->liveout[n]));
 #endif
-  PN_PRINT("succs:");
-  for (n = 0; n < bb->num_succ_bbs; ++n) {
-    PN_PRINT(" %d", bb->succ_bb_ids[n]);
   }
-  PN_PRINT(")\n");
-  if (bb->first_def_id != PN_INVALID_VALUE_ID) {
-    PN_PRINT(" defs: [%%%d,%%%d]\n", bb->first_def_id, bb->last_def_id);
-  }
-  if (bb->num_uses) {
-    PN_PRINT(" uses:");
-    for (n = 0; n < bb->num_uses; ++n) {
-      PN_PRINT(" %%%d", bb->uses[n]);
-    }
-    PN_PRINT("\n");
-  }
-  if (bb->num_phi_uses) {
-    PN_PRINT(" phi uses:");
-    for (n = 0; n < bb->num_phi_uses; ++n) {
-      PN_PRINT(" bb:%d=>%%%d", bb->phi_uses[n].incoming.bb_id,
-               bb->phi_uses[n].incoming.value_id);
-    }
-    PN_PRINT("\n");
-  }
-  if (bb->num_phi_assigns) {
-    PN_PRINT(" phi assigns:");
-    for (n = 0; n < bb->num_phi_assigns; ++n) {
-      PN_PRINT(" bb:%d,%%%d<=%%%d", bb->phi_assigns[n].bb_id,
-               bb->phi_assigns[n].dest_value_id,
-               bb->phi_assigns[n].source_value_id);
-    }
-    PN_PRINT("\n");
-  }
-  if (bb->num_livein) {
-    PN_PRINT(" livein:");
-    for (n = 0; n < bb->num_livein; ++n) {
-      PN_PRINT(" %%%d", bb->livein[n]);
-    }
-    PN_PRINT("\n");
-  }
-  if (bb->num_liveout) {
-    PN_PRINT(" liveout:");
-    for (n = 0; n < bb->num_liveout; ++n) {
-      PN_PRINT(" %%%d", bb->liveout[n]);
-    }
-    PN_PRINT("\n");
-  }
-#endif
 
   PNInstruction* inst;
   for (inst = bb->instructions; inst; inst = inst->next) {
     pn_instruction_trace(module, function, inst, force);
   }
+
+  if (PN_IS_TRACE(BASIC_BLOCK_EXTRAS)) {
+    uint32_t n;
+    PN_PRINT_LINE_LIST(
+        phi assigns, bb->num_phi_assigns, "; ", "%%b%d, %s = %s",
+        bb->phi_assigns[n].bb_id,
+        pn_value_describe(module, function, bb->phi_assigns[n].dest_value_id),
+        pn_value_describe(module, function,
+                          bb->phi_assigns[n].source_value_id));
+  }
+#undef PN_PRINT_LINE_LIST
 }
 
 static void pn_function_print_header(PNModule* module,

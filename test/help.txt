@@ -21,6 +21,7 @@ options:
       --trace-function-block          
       --trace-module-block            
       --trace-basic-blocks            
+      --trace-basic-block-extras      
       --trace-instructions            
       --trace-execute                 
       --trace-irt                     

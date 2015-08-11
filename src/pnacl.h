@@ -129,6 +129,7 @@ typedef double pn_f64;
   V(FUNCTION_BLOCK, "function-block")         \
   V(MODULE_BLOCK, "module-block")             \
   V(BASIC_BLOCKS, "basic-blocks")             \
+  V(BASIC_BLOCK_EXTRAS, "basic-block-extras") \
   V(INSTRUCTIONS, "instructions")             \
   V(EXECUTE, "execute")                       \
   V(IRT, "irt")                               \
