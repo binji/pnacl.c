@@ -5,6 +5,7 @@
 #ifndef PN_CALCULATE_PRED_BBS_H_
 #define PN_CALCULATE_PRED_BBS_H_
 
+#if PN_CALCULATE_LIVENESS
 static void pn_function_calculate_pred_bbs(PNModule* module,
                                            PNFunction* function) {
   PN_BEGIN_TIME(CALCULATE_PRED_BBS);
@@ -39,5 +40,6 @@ static void pn_function_calculate_pred_bbs(PNModule* module,
   }
   PN_END_TIME(CALCULATE_PRED_BBS);
 }
+#endif /* PN_CALCULATE_LIVENESS */
 
 #endif /* PN_CALCULATE_PRED_BBS_H_ */

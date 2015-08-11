@@ -976,22 +976,24 @@ typedef struct PNBasicBlock {
   uint32_t num_instructions;
   PNInstruction* instructions;
   PNInstruction* last_instruction;
-  uint32_t num_pred_bbs;
-  PNBasicBlockId* pred_bb_ids;
-  uint32_t num_succ_bbs;
-  PNBasicBlockId* succ_bb_ids;
-  uint32_t num_uses;
-  PNValueId* uses;
   uint32_t num_phi_uses;
   PNPhiUse* phi_uses;
   uint32_t num_phi_assigns;
   PNPhiAssign* phi_assigns;
+#if PN_CALCULATE_LIVENESS
+  uint32_t num_succ_bbs;
+  PNBasicBlockId* succ_bb_ids;
+  uint32_t num_uses;
+  PNValueId* uses;
+  uint32_t num_pred_bbs;
+  PNBasicBlockId* pred_bb_ids;
   PNValueId first_def_id; /* Or PN_INVALID_VALUE_ID */
   PNValueId last_def_id;  /* Or PN_INVALID_VALUE_ID */
   uint32_t num_livein;
   PNValueId* livein;
   uint32_t num_liveout;
   PNValueId* liveout;
+#endif /* PN_CALCULATE_LIVENESS */
 } PNBasicBlock;
 
 typedef union PNRuntimeValue {

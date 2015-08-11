@@ -856,6 +856,17 @@ static void pn_basic_block_list_append(PNModule* module,
   (*bb_list)[(*num_els)++] = bb_id;
 }
 
+#if PN_CALCULATE_LIVENESS
+
+#define PN_BASIC_BLOCK_LIST_APPEND(module, bb_list, num_els, bb_id) \
+  pn_basic_block_list_append(module, bb_list, num_els, bb_id)
+
+#else
+
+#define PN_BASIC_BLOCK_LIST_APPEND(module, bb_list, num_els, bb_id) (void)(0)
+
+#endif /* PN_CALCULATE_LIVENESS */
+
 static void pn_function_block_read(PNModule* module,
                                    PNBlockInfoContext* context,
                                    PNBitStream* bs,
@@ -902,11 +913,11 @@ static void pn_function_block_read(PNModule* module,
         PN_CHECK(num_bbs == function->num_bbs);
         pn_function_calculate_result_value_types(module, function);
         pn_function_calculate_uses(module, function);
-        pn_function_calculate_pred_bbs(module, function);
         pn_function_calculate_phi_assigns(module, function);
 #if PN_CALCULATE_LIVENESS
+        pn_function_calculate_pred_bbs(module, function);
         pn_function_calculate_liveness(module, function);
-#endif
+#endif /* PN_CALCULATE_LIVENESS */
         pn_function_calculate_opcodes(module, function);
         pn_function_trace(module, function, function_id);
 
@@ -967,8 +978,10 @@ static void pn_function_block_read(PNModule* module,
           PN_CHECK(cur_bb_id < function->num_bbs);
           prev_bb_id = cur_bb_id;
           cur_bb = &function->bbs[cur_bb_id];
+#if PN_CALCULATE_LIVENESS
           cur_bb->first_def_id = PN_INVALID_VALUE_ID;
           cur_bb->last_def_id = PN_INVALID_VALUE_ID;
+#endif /* PN_CALCULATE_LIVENESS */
 
           first_bb_value_id = pn_function_num_values(module, function);
           num_bbs++;
@@ -1056,7 +1069,7 @@ static void pn_function_block_read(PNModule* module,
             inst->true_bb_id = pn_record_read_uint32(&reader, "true_bb");
             inst->false_bb_id = PN_INVALID_BB_ID;
 
-            pn_basic_block_list_append(module, &cur_bb->succ_bb_ids,
+            PN_BASIC_BLOCK_LIST_APPEND(module, &cur_bb->succ_bb_ids,
                                        &cur_bb->num_succ_bbs, inst->true_bb_id);
 
             if (pn_record_try_read_uint16(&reader, &inst->false_bb_id)) {
@@ -1065,7 +1078,7 @@ static void pn_function_block_read(PNModule* module,
                 inst->value_id = rel_id - inst->value_id;
               }
 
-              pn_basic_block_list_append(module, &cur_bb->succ_bb_ids,
+              PN_BASIC_BLOCK_LIST_APPEND(module, &cur_bb->succ_bb_ids,
                                          &cur_bb->num_succ_bbs,
                                          inst->false_bb_id);
             } else {
@@ -1084,7 +1097,7 @@ static void pn_function_block_read(PNModule* module,
             inst->value_id = pn_record_read_uint32(&reader, "value");
             inst->default_bb_id = pn_record_read_uint32(&reader, "default bb");
 
-            pn_basic_block_list_append(module, &cur_bb->succ_bb_ids,
+            PN_BASIC_BLOCK_LIST_APPEND(module, &cur_bb->succ_bb_ids,
                                        &cur_bb->num_succ_bbs,
                                        inst->default_bb_id);
 
@@ -1131,7 +1144,7 @@ static void pn_function_block_read(PNModule* module,
 
               total_values += num_case_values;
 
-              pn_basic_block_list_append(module, &cur_bb->succ_bb_ids,
+              PN_BASIC_BLOCK_LIST_APPEND(module, &cur_bb->succ_bb_ids,
                                          &cur_bb->num_succ_bbs, bb_id);
             }
 
@@ -1412,8 +1425,10 @@ static void pn_function_block_read(PNModule* module,
         if (is_terminator) {
           PNValueId last_bb_value_id = pn_function_num_values(module, function);
           if (last_bb_value_id != first_bb_value_id) {
+#if PN_CALCULATE_LIVENESS
             cur_bb->first_def_id = first_bb_value_id;
             cur_bb->last_def_id = last_bb_value_id - 1;
+#endif /* PN_CALCULATE_LIVENESS */
           }
 
           cur_bb_id++;

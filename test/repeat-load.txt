@@ -32,6 +32,6 @@ total num_bbs: 1113
 total num_instructions: 6086
 global_var size : 4.2K
 startinfo size : 0
-      module allocator: used:   59.1K frag:       0
+      module allocator: used:   32.7K frag:       0
        value allocator: used:   55.2K frag:       0
  instruction allocator: used:   98.9K frag:   41.5K

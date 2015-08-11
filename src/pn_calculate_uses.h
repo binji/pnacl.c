@@ -8,10 +8,12 @@
 static void pn_basic_block_calculate_uses(PNModule* module,
                                           PNFunction* function,
                                           PNBasicBlock* bb) {
+#if PN_CALCULATE_LIVENESS
   PNValueId first_function_value_id =
       module->num_values + function->num_args + function->num_constants;
   PNBitSet uses;
   pn_bitset_init(&module->temp_allocator, &uses, function->num_values);
+#endif /* PN_CALCULATE_LIVENESS */
 
 #define PN_SET_VALUE_USE(value_id)                                \
   if (value_id >= first_function_value_id) {                      \
@@ -21,6 +23,20 @@ static void pn_basic_block_calculate_uses(PNModule* module,
   PNInstruction* inst;
   for (inst = bb->instructions; inst; inst = inst->next) {
     switch (inst->code) {
+      case PN_FUNCTION_CODE_INST_PHI: {
+        PNInstructionPhi* i = (PNInstructionPhi*)inst;
+        int32_t n;
+        for (n = 0; n < i->num_incoming; ++n) {
+          pn_allocator_realloc_add(&module->allocator, (void**)&bb->phi_uses,
+                                   sizeof(PNPhiUse), PN_DEFAULT_ALIGN);
+          PNPhiUse* use = &bb->phi_uses[bb->num_phi_uses++];
+          use->dest_value_id = i->result_value_id;
+          use->incoming = i->incoming[n];
+        }
+        break;
+      }
+
+#if PN_CALCULATE_LIVENESS
       case PN_FUNCTION_CODE_INST_BINOP: {
         PNInstructionBinop* i = (PNInstructionBinop*)inst;
         PN_SET_VALUE_USE(i->value0_id);
@@ -54,18 +70,6 @@ static void pn_basic_block_calculate_uses(PNModule* module,
         PNInstructionSwitch* i = (PNInstructionSwitch*)inst;
         PN_SET_VALUE_USE(i->value_id);
         break;
-      }
-
-      case PN_FUNCTION_CODE_INST_PHI: {
-        PNInstructionPhi* i = (PNInstructionPhi*)inst;
-        int32_t n;
-        for (n = 0; n < i->num_incoming; ++n) {
-          pn_allocator_realloc_add(&module->allocator, (void**)&bb->phi_uses,
-                                   sizeof(PNPhiUse), PN_DEFAULT_ALIGN);
-          PNPhiUse* use = &bb->phi_uses[bb->num_phi_uses++];
-          use->dest_value_id = i->result_value_id;
-          use->incoming = i->incoming[n];
-        }
       }
 
       case PN_FUNCTION_CODE_INST_ALLOCA: {
@@ -119,6 +123,23 @@ static void pn_basic_block_calculate_uses(PNModule* module,
       case PN_FUNCTION_CODE_INST_UNREACHABLE:
       case PN_FUNCTION_CODE_INST_FORWARDTYPEREF:
         break;
+#else
+      case PN_FUNCTION_CODE_INST_BINOP:
+      case PN_FUNCTION_CODE_INST_CAST:
+      case PN_FUNCTION_CODE_INST_RET:
+      case PN_FUNCTION_CODE_INST_BR:
+      case PN_FUNCTION_CODE_INST_SWITCH:
+      case PN_FUNCTION_CODE_INST_ALLOCA:
+      case PN_FUNCTION_CODE_INST_LOAD:
+      case PN_FUNCTION_CODE_INST_STORE:
+      case PN_FUNCTION_CODE_INST_CMP2:
+      case PN_FUNCTION_CODE_INST_VSELECT:
+      case PN_FUNCTION_CODE_INST_CALL:
+      case PN_FUNCTION_CODE_INST_CALL_INDIRECT:
+      case PN_FUNCTION_CODE_INST_UNREACHABLE:
+      case PN_FUNCTION_CODE_INST_FORWARDTYPEREF:
+        break;
+#endif /* PN_CALCULATE_LIVENESS */
 
       default:
         PN_FATAL("Invalid instruction code: %d\n", inst->code);
@@ -126,6 +147,7 @@ static void pn_basic_block_calculate_uses(PNModule* module,
     }
   }
 
+#if PN_CALCULATE_LIVENESS
   bb->uses = pn_allocator_alloc(
       &module->allocator, sizeof(PNValueId) * pn_bitset_num_bits_set(&uses),
       sizeof(PNValueId));
@@ -147,6 +169,7 @@ static void pn_basic_block_calculate_uses(PNModule* module,
       }
     }
   }
+#endif /* PN_CALCULATE_LIVENESS */
 
 #undef PN_SET_VALUE_USE
 }
