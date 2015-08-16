@@ -58,18 +58,20 @@ out/pnacl-32: src/pnacl.c | out
 
 #### TESTS ####
 
+TEST_EXES=$(shell python test/run-tests.py --list-exes)
+
 .PHONY: test
-test: out/pnacl-opt-assert
+test: $(TEST_EXES)
 	@make -C test
 	@python test/run-tests.py
 
 .PHONY: test-all
-test-all: out/pnacl-opt-assert
+test-all: $(TEST_EXES)
 	@make -C test
 	@python test/run-tests.py -s
 
 .PHONY: benchmark
-benchmark: out/pnacl-opt-assert
+benchmark: $(TEST_EXES)
 	@make -C test
 	@python test/run-benchmarks.py
 

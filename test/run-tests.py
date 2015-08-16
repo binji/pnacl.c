@@ -63,7 +63,7 @@ class TestInfo(object):
     self.stdout_file = None
     self.expected_stdout = ''
     self.expected_stderr = ''
-    self.exe = ''
+    self.exe = None
     self.pexe = ''
     self.flags = []
     self.args = []
@@ -212,12 +212,30 @@ def ClearStatus():
   sys.stderr.write('\r%s\r' % (' ' * PrintStatus.last_status_length))
 
 
+def GetAllTestInfo(test_names):
+  infos = []
+  failed = []
+  for test_name in test_names:
+    info = TestInfo()
+    try:
+      info.Parse(test_name)
+      infos.append(info)
+    except Error as e:
+      failed.append(info)
+      logger.error('- %s\n%s' % (info.name, Indent(str(e), 2)))
+
+  return infos, failed
+
+
 def main(args):
   parser = argparse.ArgumentParser()
   parser.add_argument('-e', '--executable', help='override executable.')
   parser.add_argument('-v', '--verbose', help='print more diagnotic messages. '
                       'Use more than once for more info.', action='count')
   parser.add_argument('-l', '--list', help='list all tests.',
+                      action='store_true')
+  parser.add_argument('--list-exes',
+                      help='list all executables needed for the tests.',
                       action='store_true')
   parser.add_argument('-r', '--rebase',
                       help='rebase a test to its current output.',
@@ -242,10 +260,10 @@ def main(args):
     level=logging.WARNING
   logging.basicConfig(level=level, format='%(message)s')
 
-  tests = FindTestFiles(SCRIPT_DIR, '.txt', pattern_re)
+  test_names = FindTestFiles(SCRIPT_DIR, '.txt', pattern_re)
   if options.list:
-    for test in tests:
-      print test
+    for test_name in test_names:
+      print test_name
     return 0
 
   if options.executable:
@@ -258,14 +276,21 @@ def main(args):
   isatty = os.isatty(1)
   short_display = not logger.isEnabledFor(logging.INFO)
 
-  passed = 0
-  failed = 0
-  failed_tests = []
   start_time = time.time()
-  for test in tests:
-    info = TestInfo()
+  passed = 0
+  infos, failed_tests = GetAllTestInfo(test_names)
+  failed = len(failed_tests)
+
+  if options.list_exes:
+    exes = set([info.exe for info in infos])
+    if None in exes:
+      exes.remove(None)
+      exes.add(os.path.relpath(DEFAULT_PNACL_EXE, run_cwd))
+    print '\n'.join(exes)
+    return 0
+
+  for info in infos:
     try:
-      info.Parse(test)
       if not options.slow and info.slow:
         logger.info('. %s (skipped)' % info.name)
         continue
@@ -292,12 +317,9 @@ def main(args):
     except Error as e:
       failed_tests.append(info)
       failed += 1
-      msg = ''
-      cmd = info.GetCommand(options.executable)
-      msg += Indent(str(e), 2)
       if short_display:
         ClearStatus()
-      logger.error('- %s\n%s' % (info.name, msg))
+      logger.error('- %s\n%s' % (info.name, Indent(str(e), 2)))
 
     if short_display:
       PrintStatus(passed, failed, start_time, True)
