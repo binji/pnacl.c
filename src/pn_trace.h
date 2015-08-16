@@ -266,6 +266,36 @@ static const char* pn_cmp2_get_name(uint32_t op) {
   return names[op];
 }
 
+#if PN_CALCULATE_LIVENESS
+static const char* pn_liveness_range_describe(PNModule* module,
+                                              PNFunction* function,
+                                              PNValueId value_id) {
+  if (PN_IS_TRACE(BASIC_BLOCK_EXTRAS)) {
+    const uint32_t BUFFER_SIZE = 30;
+    static char buffer[BUFFER_SIZE];
+    PNValueId rel_id = value_id - module->num_values;
+    PNLivenessRange* range = &function->value_liveness_range[rel_id];
+    if (range->first_bb_id != PN_INVALID_BB_ID &&
+        range->last_bb_id != PN_INVALID_BB_ID) {
+      if (range->first_bb_id == range->last_bb_id) {
+        snprintf(buffer, BUFFER_SIZE, "  live: [%%b%d]", range->first_bb_id);
+      } else {
+        snprintf(buffer, BUFFER_SIZE, "  live: [%%b%d..%%b%d]",
+                 range->first_bb_id, range->last_bb_id);
+      }
+      return buffer;
+    }
+  }
+  return "";
+}
+#else
+static const char* pn_liveness_range_describe(PNModule* module,
+                                              PNFunction* function,
+                                              PNValueId value_id) {
+  return "";
+}
+#endif /* PN_CALCULATE_LIVENESS */
+
 static void pn_instruction_trace(PNModule* module,
                                  PNFunction* function,
                                  PNInstruction* inst,
@@ -282,25 +312,29 @@ static void pn_instruction_trace(PNModule* module,
           pn_function_get_value(module, function, i->result_value_id);
       PNType* result_type = pn_module_get_type(module, result_value->type_id);
       PNBasicType result_basic_type = result_type->basic_type;
-      PN_PRINT("%s = %s %s %s, %s;\n",
-               pn_value_describe(module, function, i->result_value_id),
-               result_basic_type < PN_BASIC_TYPE_FLOAT
-                   ? pn_binop_get_name(i->binop_opcode)
-                   : pn_binop_get_name_float(i->binop_opcode),
-               pn_value_describe_type(module, function, i->result_value_id),
-               pn_value_describe(module, function, i->value0_id),
-               pn_value_describe(module, function, i->value1_id));
+      PN_PRINT(
+          "%s = %s %s %s, %s;%s\n",
+          pn_value_describe(module, function, i->result_value_id),
+          result_basic_type < PN_BASIC_TYPE_FLOAT
+              ? pn_binop_get_name(i->binop_opcode)
+              : pn_binop_get_name_float(i->binop_opcode),
+          pn_value_describe_type(module, function, i->result_value_id),
+          pn_value_describe(module, function, i->value0_id),
+          pn_value_describe(module, function, i->value1_id),
+          pn_liveness_range_describe(module, function, i->result_value_id));
       break;
     }
 
     case PN_FUNCTION_CODE_INST_CAST: {
       PNInstructionCast* i = (PNInstructionCast*)inst;
-      PN_PRINT("%s = %s %s %s to %s;\n",
-               pn_value_describe(module, function, i->result_value_id),
-               pn_cast_get_name(i->cast_opcode),
-               pn_value_describe_type(module, function, i->value_id),
-               pn_value_describe(module, function, i->value_id),
-               pn_value_describe_type(module, function, i->result_value_id));
+      PN_PRINT(
+          "%s = %s %s %s to %s;%s\n",
+          pn_value_describe(module, function, i->result_value_id),
+          pn_cast_get_name(i->cast_opcode),
+          pn_value_describe_type(module, function, i->value_id),
+          pn_value_describe(module, function, i->value_id),
+          pn_value_describe_type(module, function, i->result_value_id),
+          pn_liveness_range_describe(module, function, i->result_value_id));
       break;
     }
 
@@ -378,25 +412,30 @@ static void pn_instruction_trace(PNModule* module,
         }
         col += PN_PRINT("%s", buffer);
       }
-      PN_PRINT(";\n");
+      PN_PRINT(";%s\n", pn_liveness_range_describe(module, function,
+                                                   i->result_value_id));
       break;
     }
 
     case PN_FUNCTION_CODE_INST_ALLOCA: {
       PNInstructionAlloca* i = (PNInstructionAlloca*)inst;
-      PN_PRINT("%s = alloca i8, %s %s, align %d;\n",
-               pn_value_describe(module, function, i->result_value_id),
-               pn_value_describe_type(module, function, i->size_id),
-               pn_value_describe(module, function, i->size_id), i->alignment);
+      PN_PRINT(
+          "%s = alloca i8, %s %s, align %d;%s\n",
+          pn_value_describe(module, function, i->result_value_id),
+          pn_value_describe_type(module, function, i->size_id),
+          pn_value_describe(module, function, i->size_id), i->alignment,
+          pn_liveness_range_describe(module, function, i->result_value_id));
       break;
     }
 
     case PN_FUNCTION_CODE_INST_LOAD: {
       PNInstructionLoad* i = (PNInstructionLoad*)inst;
-      PN_PRINT("%s = load %s* %s, align %d;\n",
-               pn_value_describe(module, function, i->result_value_id),
-               pn_value_describe_type(module, function, i->result_value_id),
-               pn_value_describe(module, function, i->src_id), i->alignment);
+      PN_PRINT(
+          "%s = load %s* %s, align %d;%s\n",
+          pn_value_describe(module, function, i->result_value_id),
+          pn_value_describe_type(module, function, i->result_value_id),
+          pn_value_describe(module, function, i->src_id), i->alignment,
+          pn_liveness_range_describe(module, function, i->result_value_id));
       break;
     }
 
@@ -412,25 +451,29 @@ static void pn_instruction_trace(PNModule* module,
 
     case PN_FUNCTION_CODE_INST_CMP2: {
       PNInstructionCmp2* i = (PNInstructionCmp2*)inst;
-      PN_PRINT("%s = %s %s %s, %s;\n",
-               pn_value_describe(module, function, i->result_value_id),
-               pn_cmp2_get_name(i->cmp2_opcode),
-               pn_value_describe_type(module, function, i->value0_id),
-               pn_value_describe(module, function, i->value0_id),
-               pn_value_describe(module, function, i->value1_id));
+      PN_PRINT(
+          "%s = %s %s %s, %s;%s\n",
+          pn_value_describe(module, function, i->result_value_id),
+          pn_cmp2_get_name(i->cmp2_opcode),
+          pn_value_describe_type(module, function, i->value0_id),
+          pn_value_describe(module, function, i->value0_id),
+          pn_value_describe(module, function, i->value1_id),
+          pn_liveness_range_describe(module, function, i->result_value_id));
       break;
     }
 
     case PN_FUNCTION_CODE_INST_VSELECT: {
       PNInstructionVselect* i = (PNInstructionVselect*)inst;
-      PN_PRINT("%s = select %s %s, %s %s, %s %s;\n",
-               pn_value_describe(module, function, i->result_value_id),
-               pn_value_describe_type(module, function, i->cond_id),
-               pn_value_describe(module, function, i->cond_id),
-               pn_value_describe_type(module, function, i->true_value_id),
-               pn_value_describe(module, function, i->true_value_id),
-               pn_value_describe_type(module, function, i->false_value_id),
-               pn_value_describe(module, function, i->false_value_id));
+      PN_PRINT(
+          "%s = select %s %s, %s %s, %s %s;%s\n",
+          pn_value_describe(module, function, i->result_value_id),
+          pn_value_describe_type(module, function, i->cond_id),
+          pn_value_describe(module, function, i->cond_id),
+          pn_value_describe_type(module, function, i->true_value_id),
+          pn_value_describe(module, function, i->true_value_id),
+          pn_value_describe_type(module, function, i->false_value_id),
+          pn_value_describe(module, function, i->false_value_id),
+          pn_liveness_range_describe(module, function, i->result_value_id));
       break;
     }
 
@@ -465,7 +508,12 @@ static void pn_instruction_trace(PNModule* module,
                  pn_value_describe_type(module, function, i->arg_ids[n]),
                  pn_value_describe(module, function, i->arg_ids[n]));
       }
-      PN_PRINT(");\n");
+      PN_PRINT(");");
+      if (!is_return_type_void) {
+        PN_PRINT("%s", pn_liveness_range_describe(module, function,
+                                                  i->result_value_id));
+      }
+      PN_PRINT("\n");
       break;
     }
 
@@ -505,8 +553,6 @@ static void pn_basic_block_trace(PNModule* module,
 #if PN_CALCULATE_LIVENESS
     PN_PRINT_LINE_LIST(preds, bb->num_pred_bbs, ", ", "%%b%d",
                        bb->pred_bb_ids[n]);
-    PN_PRINT_LINE_LIST(livein, bb->num_livein, ", ", "%s",
-                       pn_value_describe(module, function, bb->livein[n]));
     if (bb->first_def_id != PN_INVALID_VALUE_ID) {
       PN_TRACE_PRINT_INDENTX(-1);
       PN_PRINT("defs: [%s..%s];\n",
@@ -521,8 +567,6 @@ static void pn_basic_block_trace(PNModule* module,
         pn_value_describe(module, function, bb->phi_uses[n].incoming.value_id),
         bb->phi_uses[n].incoming.bb_id);
 #if PN_CALCULATE_LIVENESS
-    PN_PRINT_LINE_LIST(liveout, bb->num_liveout, ", ", "%s",
-                       pn_value_describe(module, function, bb->liveout[n]));
     PN_PRINT_LINE_LIST(succs, bb->num_succ_bbs, ", ", "%%b%d",
                        bb->succ_bb_ids[n]);
 #endif /* PN_CALCULATE_LIVENESS */

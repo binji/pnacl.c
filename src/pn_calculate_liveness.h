@@ -14,41 +14,52 @@ static void pn_basic_block_calculate_liveness_per_value(
     PNValueId rel_id) {
   PNValueId value_id = module->num_values + rel_id;
 
+  if (pn_bitset_is_set(&state->seen_values, rel_id)) {
+    return;
+  }
+  pn_bitset_set(&state->seen_values, rel_id, PN_TRUE);
+
+  pn_bitset_clear(&state->livein);
+  pn_bitset_clear(&state->seen_bbs);
+  pn_bitset_set(&state->seen_bbs, initial_bb_id, PN_TRUE);
+
   /* Allocate enough space for any predecessor chain. num_bbs is always an
    * upper bound */
-  PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
-  PNBasicBlockId* bb_id_stack = pn_allocator_alloc(
-      &module->temp_allocator, sizeof(PNBasicBlockId) * function->num_bbs,
-      sizeof(PNBasicBlockId));
-  bb_id_stack[0] = initial_bb_id;
+  state->bb_id_stack[0] = initial_bb_id;
   uint32_t stack_top = 1;
+  PNLivenessRange* range = &function->value_liveness_range[rel_id];
 
   while (stack_top > 0) {
-    PNBasicBlockId bb_id = bb_id_stack[--stack_top];
+    PNBasicBlockId bb_id = state->bb_id_stack[--stack_top];
     PNBasicBlock* bb = &function->bbs[bb_id];
     if (value_id >= bb->first_def_id && value_id <= bb->last_def_id) {
       /* Value killed at definition. */
       continue;
     }
 
-    if (pn_bitset_is_set(&state->livein[bb_id], rel_id)) {
+    if (pn_bitset_is_set(&state->livein, bb_id)) {
       /* Already processed. */
       continue;
     }
 
-    pn_bitset_set(&state->livein[bb_id], rel_id, PN_TRUE);
+    pn_bitset_set(&state->livein, bb_id, PN_TRUE);
+
+    if (bb_id < range->first_bb_id) {
+      range->first_bb_id = bb_id;
+    } else if (bb_id > range->last_bb_id) {
+      range->last_bb_id = bb_id;
+    }
 
     uint32_t n;
     for (n = 0; n < bb->num_pred_bbs; ++n) {
       PNBasicBlockId pred_bb_id = bb->pred_bb_ids[n];
-      pn_bitset_set(&state->liveout[pred_bb_id], rel_id, PN_TRUE);
-
-      assert(stack_top < function->num_bbs);
-      bb_id_stack[stack_top++] = pred_bb_id;
+      if (!pn_bitset_is_set(&state->seen_bbs, pred_bb_id)) {
+        assert(stack_top < function->num_bbs);
+        state->bb_id_stack[stack_top++] = pred_bb_id;
+        pn_bitset_set(&state->seen_bbs, pred_bb_id, PN_TRUE);
+      }
     }
   }
-
-  pn_allocator_reset_to_mark(&module->temp_allocator, mark);
 }
 
 static void pn_basic_block_calculate_liveness(PNModule* module,
@@ -66,7 +77,6 @@ static void pn_basic_block_calculate_liveness(PNModule* module,
 
     PNValueId rel_id = incoming->value_id - module->num_values;
     PNBasicBlockId pred_bb_id = incoming->bb_id;
-    //    pn_bitset_set(&state->liveout[pred_bb_id], rel_id, PN_TRUE);
     pn_basic_block_calculate_liveness_per_value(module, function, state,
                                                 pred_bb_id, rel_id);
   }
@@ -85,57 +95,40 @@ static void pn_function_calculate_liveness(PNModule* module,
   PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
 
   PNLivenessState state;
-  state.livein = pn_allocator_alloc(&module->temp_allocator,
-                                    sizeof(PNBitSet) * function->num_bbs,
-                                    PN_DEFAULT_ALIGN);
-  state.liveout = pn_allocator_alloc(&module->temp_allocator,
-                                     sizeof(PNBitSet) * function->num_bbs,
-                                     PN_DEFAULT_ALIGN);
+  pn_bitset_init(&module->temp_allocator, &state.seen_values,
+                 function->num_values);
+  pn_bitset_init(&module->temp_allocator, &state.seen_bbs, function->num_bbs);
+  pn_bitset_init(&module->temp_allocator, &state.livein, function->num_bbs);
+  state.bb_id_stack = pn_allocator_alloc(
+      &module->temp_allocator, sizeof(PNBasicBlockId) * function->num_bbs,
+      sizeof(PNBasicBlockId));
+
+  function->value_liveness_range = pn_allocator_alloc(
+      &module->allocator, sizeof(PNLivenessRange) * function->num_values,
+      PN_DEFAULT_ALIGN);
 
   uint32_t n;
+  for (n = 0; n < function->num_values; ++n) {
+    function->value_liveness_range[n].first_bb_id = PN_INVALID_BB_ID;
+    function->value_liveness_range[n].last_bb_id = PN_INVALID_BB_ID;
+  }
+
   for (n = 0; n < function->num_bbs; ++n) {
-    pn_bitset_init(&module->temp_allocator, &state.livein[n],
-                   function->num_values);
-    pn_bitset_init(&module->temp_allocator, &state.liveout[n],
-                   function->num_values);
+    PNBasicBlock* bb = &function->bbs[n];
+    if (bb->first_def_id != PN_INVALID_VALUE_ID &&
+        bb->last_def_id != PN_INVALID_VALUE_ID) {
+      uint32_t m;
+      for (m = bb->first_def_id; m <= bb->last_def_id; ++m) {
+        PNValueId rel_id = m - module->num_values;
+        function->value_liveness_range[rel_id].first_bb_id = n;
+        function->value_liveness_range[rel_id].last_bb_id = n;
+      }
+    }
   }
 
   for (n = function->num_bbs; n > 0; --n) {
     PNBasicBlockId bb_id = n - 1;
     pn_basic_block_calculate_liveness(module, function, &state, bb_id);
-  }
-
-  for (n = 0; n < function->num_bbs; ++n) {
-    PNBasicBlock* bb = &function->bbs[n];
-    uint32_t m;
-
-    uint32_t livein_bits_set = pn_bitset_num_bits_set(&state.livein[n]);
-    if (livein_bits_set) {
-      bb->num_livein = 0;
-      bb->livein = pn_allocator_alloc(&module->allocator,
-                                      sizeof(PNValueId) * livein_bits_set,
-                                      sizeof(PNValueId));
-
-      for (m = 0; m < function->num_values; ++m) {
-        if (pn_bitset_is_set(&state.livein[n], m)) {
-          bb->livein[bb->num_livein++] = module->num_values + m;
-        }
-      }
-    }
-
-    uint32_t liveout_bits_set = pn_bitset_num_bits_set(&state.liveout[n]);
-    if (liveout_bits_set) {
-      bb->num_liveout = 0;
-      bb->liveout = pn_allocator_alloc(&module->allocator,
-                                       sizeof(PNValueId) * liveout_bits_set,
-                                       sizeof(PNValueId));
-
-      for (m = 0; m < function->num_values; ++m) {
-        if (pn_bitset_is_set(&state.liveout[n], m)) {
-          bb->liveout[bb->num_liveout++] = module->num_values + m;
-        }
-      }
-    }
   }
 
   pn_allocator_reset_to_mark(&module->temp_allocator, mark);

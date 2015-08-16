@@ -1539,6 +1539,9 @@ static void pn_module_block_read(PNModule* module,
             function->num_values = 0;
             function->values = NULL;
             function->num_instructions = 0;
+#if PN_CALCULATE_LIVENESS
+            function->value_liveness_range = NULL;
+#endif /* PN_CALCULATE_LIVENESS */
 
             /* Cache number of arguments to function */
             PNType* function_type =

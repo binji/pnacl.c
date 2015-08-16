@@ -13,6 +13,10 @@ static void pn_bitset_init(PNAllocator* allocator,
       allocator, sizeof(uint32_t) * bitset->num_words, sizeof(uint32_t));
 }
 
+static void pn_bitset_clear(PNBitSet* bitset) {
+  memset(bitset->words, 0, sizeof(uint32_t) * bitset->num_words);
+}
+
 static void pn_bitset_set(PNBitSet* bitset, uint32_t bit, PNBool set) {
   uint32_t word = bit >> 5;
   uint32_t mask = 1U << (bit & 31);

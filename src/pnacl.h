@@ -990,10 +990,6 @@ typedef struct PNBasicBlock {
   PNBasicBlockId* pred_bb_ids;
   PNValueId first_def_id; /* Or PN_INVALID_VALUE_ID */
   PNValueId last_def_id;  /* Or PN_INVALID_VALUE_ID */
-  uint32_t num_livein;
-  PNValueId* livein;
-  uint32_t num_liveout;
-  PNValueId* liveout;
 #endif /* PN_CALCULATE_LIVENESS */
 } PNBasicBlock;
 
@@ -1038,6 +1034,13 @@ typedef struct PNValue {
   PNTypeId type_id;
 } PNValue;
 
+#if PN_CALCULATE_LIVENESS
+typedef struct PNLivenessRange {
+  PNBasicBlockId first_bb_id;
+  PNBasicBlockId last_bb_id;
+} PNLivenessRange;
+#endif /* PN_CALCULATE_LIVENESS */
+
 typedef struct PNFunction {
   char* name;
   PNTypeId type_id;
@@ -1054,6 +1057,9 @@ typedef struct PNFunction {
   PNValue* values;
   uint32_t num_instructions;
   void* instructions;
+#if PN_CALCULATE_LIVENESS
+  PNLivenessRange* value_liveness_range;
+#endif /* PN_CALCULATE_LIVENESS */
 } PNFunction;
 
 typedef struct PNType {
@@ -1113,8 +1119,10 @@ typedef struct PNModule {
 
 #if PN_CALCULATE_LIVENESS
 typedef struct PNLivenessState {
-  PNBitSet* livein;
-  PNBitSet* liveout;
+  PNBitSet seen_values;
+  PNBitSet livein;
+  PNBitSet seen_bbs;
+  PNBasicBlockId* bb_id_stack;
 } PNLivenessState;
 #endif /* PN_CALCULATE_LIVENESS */
 
