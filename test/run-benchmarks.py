@@ -26,12 +26,12 @@ DEFAULT_PNACL_EXE = os.path.join(REPO_ROOT_DIR, 'out', 'pnacl-opt-assert')
 logger = logging.getLogger(__name__)
 
 
-def RunNexe(test_info, override, suffix):
-  no_ext = os.path.splitext(test_info.GetWithOverride('pexe', override))[0]
+def RunNexe(test_info, suffix):
+  no_ext = os.path.splitext(test_info.pexe)[0]
   nexe = no_ext + suffix + '.nexe'
 
   cmd = [sys.executable, SEL_LDR_PY, nexe]
-  cmd += ['--'] + AsList(test_info.GetWithOverride('args', override))
+  cmd += ['--'] + AsList(test_info.args)
 
   try:
     start_time = time.time()
@@ -47,8 +47,7 @@ def RunNexe(test_info, override, suffix):
 
 def main(args):
   parser = argparse.ArgumentParser()
-  parser.add_argument('-e', '--executable', help='override executable.',
-                      default=DEFAULT_PNACL_EXE)
+  parser.add_argument('-e', '--executable', help='override executable.')
   parser.add_argument('-v', '--verbose', help='print more diagnotic messages. '
                       'Use more than once for more info.', action='count')
   parser.add_argument('-l', '--list', help='list all tests.',
@@ -78,14 +77,9 @@ def main(args):
       print test
     return 0
 
-  override = {}
   if options.executable:
     if not os.path.exists(options.executable):
       parser.error('executable %s does not exist' % options.executable)
-    # We always run from SCRIPT_DIR, but allow the user to pass in executables
-    # with a relative path from where they ran run-tests.py
-    override['exe'] = os.path.relpath(
-        os.path.join(os.getcwd(), options.executable), SCRIPT_DIR)
 
   os.chdir(SCRIPT_DIR)
 
@@ -96,13 +90,13 @@ def main(args):
     info = TestInfo()
     try:
       info.Parse(test)
-      stdout, _, returncode, duration = info.Run(override)
+      stdout, _, returncode, duration = info.Run(options.executable)
       if returncode != info.expected_error:
         raise Error('expected error code %d, got %d.' % (info.expected_error,
                                                          returncode))
       for opt_level in (0, 2):
         suffix = '.O%d.' % opt_level + options.arch
-        nexe_stdout, _, nexe_duration = RunNexe(info, override, suffix)
+        nexe_stdout, _, nexe_duration = RunNexe(info, suffix)
         if nexe_stdout != stdout:
           if info.stdout_file:
             raise Error('stdout binary mismatch')

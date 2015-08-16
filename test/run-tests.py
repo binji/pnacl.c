@@ -138,30 +138,27 @@ class TestInfo(object):
       self.expected_stdout = ''.join(stdout_lines)
     self.expected_stderr = ''.join(stderr_lines)
 
-  def GetWithOverride(self, name, override, default=None):
-    value = default
-    if name in override:
-      value = override[name]
-    elif getattr(self, name):
-      value = getattr(self, name)
-    return value
+  def GetExecutable(self, override_exe):
+    if override_exe:
+      exe = override_exe
+    elif self.exe:
+      exe = os.path.join(REPO_ROOT_DIR, self.exe)
+    else:
+      exe = DEFAULT_PNACL_EXE
 
-  def GetExecutable(self, override):
-    return self.GetWithOverride('exe', override, self.exe)
+    return os.path.relpath(exe, SCRIPT_DIR)
 
-  def GetCommand(self, override, exe=None):
-    if exe is None:
-      exe = self.GetExecutable(override)
-    cmd = [exe]
-    cmd += self.GetWithOverride('flags', override)
-    cmd += AsList(self.GetWithOverride('pexe', override))
-    cmd += ['--'] + AsList(self.GetWithOverride('args', override))
+  def GetCommand(self, override_exe=None):
+    cmd = [self.GetExecutable(override_exe)]
+    cmd += self.flags
+    cmd += AsList(self.pexe)
+    cmd += ['--'] + AsList(self.args)
     return cmd
 
-  def Run(self, override):
+  def Run(self, override_exe=None):
     # Pass 'pnacl' as the executable name so the output is consistent
-    cmd = self.GetCommand(override, 'pnacl')
-    exe = self.GetExecutable(override)
+    cmd = ['pnacl'] + self.GetCommand(override_exe)[1:]
+    exe = self.GetExecutable(override_exe)
     try:
       start_time = time.time()
       process = subprocess.Popen(cmd, executable=exe, stdout=subprocess.PIPE,
@@ -217,8 +214,7 @@ def ClearStatus():
 
 def main(args):
   parser = argparse.ArgumentParser()
-  parser.add_argument('-e', '--executable', help='override executable.',
-                      default=DEFAULT_PNACL_EXE)
+  parser.add_argument('-e', '--executable', help='override executable.')
   parser.add_argument('-v', '--verbose', help='print more diagnotic messages. '
                       'Use more than once for more info.', action='count')
   parser.add_argument('-l', '--list', help='list all tests.',
@@ -252,13 +248,9 @@ def main(args):
       print test
     return 0
 
-  override = {}
   if options.executable:
     if not os.path.exists(options.executable):
       parser.error('executable %s does not exist' % options.executable)
-    # We  allow the user to pass in executables with a relative path from where
-    # they ran run-tests.py
-    override['exe'] = os.path.relpath(options.executable, SCRIPT_DIR)
 
   run_cwd = os.getcwd()
   os.chdir(SCRIPT_DIR)
@@ -278,7 +270,7 @@ def main(args):
         logger.info('. %s (skipped)' % info.name)
         continue
 
-      stdout, stderr, returncode, duration = info.Run(override)
+      stdout, stderr, returncode, duration = info.Run(options.executable)
       if returncode != info.expected_error:
         # This test has already failed, but diff it anyway.
         msg = 'expected error code %d, got %d.' % (info.expected_error,
@@ -298,10 +290,10 @@ def main(args):
       passed += 1
       logger.info('+ %s (%.3fs)' % (info.name, duration))
     except Error as e:
-      failed_tests.append(test)
+      failed_tests.append(info)
       failed += 1
       msg = ''
-      cmd = info.GetCommand(override)
+      cmd = info.GetCommand(options.executable)
       msg += Indent(str(e), 2)
       if short_display:
         ClearStatus()
@@ -317,12 +309,15 @@ def main(args):
 
   if failed:
     logging.error('**** FAILED %s' % ('*' * (80 - 14)))
-    for test in failed_tests:
+    for info in failed_tests:
+      name = info.name
+      cmd = info.GetCommand(options.executable)
+      exe = os.path.relpath(info.GetExecutable(options.executable), run_cwd)
       msg = Indent('cmd = (cd %s && %s)\n' % (
           os.path.relpath(SCRIPT_DIR, run_cwd), ' '.join(cmd)), 2)
       msg += Indent('rerun = %s\n' % ' '.join(
-          [sys.executable, sys.argv[0], '-e', options.executable, test]), 2)
-      logger.error('- %s\n%s' % (test, msg))
+          [sys.executable, sys.argv[0], '-e', exe, name]), 2)
+      logger.error('- %s\n%s' % (name, msg))
     ret = 1
 
   PrintStatus(passed, failed, start_time, False)
