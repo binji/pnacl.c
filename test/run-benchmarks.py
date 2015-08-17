@@ -80,6 +80,7 @@ def main(args):
   if options.executable:
     if not os.path.exists(options.executable):
       parser.error('executable %s does not exist' % options.executable)
+    options.executable = os.path.abspath(options.executable)
 
   os.chdir(SCRIPT_DIR)
 
