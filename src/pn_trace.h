@@ -278,10 +278,11 @@ static const char* pn_liveness_range_describe(PNModule* module,
     if (range->first_bb_id != PN_INVALID_BB_ID &&
         range->last_bb_id != PN_INVALID_BB_ID) {
       if (range->first_bb_id == range->last_bb_id) {
-        snprintf(buffer, BUFFER_SIZE, "  live: [%%b%d]", range->first_bb_id);
+        snprintf(buffer, BUFFER_SIZE, "  live: [%%b%d], %%v%d",
+                 range->first_bb_id, range->slot_id);
       } else {
-        snprintf(buffer, BUFFER_SIZE, "  live: [%%b%d..%%b%d]",
-                 range->first_bb_id, range->last_bb_id);
+        snprintf(buffer, BUFFER_SIZE, "  live: [%%b%d..%%b%d], %%v%d",
+                 range->first_bb_id, range->last_bb_id, range->slot_id);
       }
       return buffer;
     }

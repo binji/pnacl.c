@@ -89,6 +89,81 @@ static void pn_basic_block_calculate_liveness(PNModule* module,
   }
 }
 
+static void pn_function_make_slot_map(PNModule* module, PNFunction* function) {
+  PNBasicBlockId bb_id = 0;
+
+  uint32_t num_avail_slots = function->num_values;
+  PNValueId* avail_slots = pn_allocator_alloc(
+      &module->temp_allocator, sizeof(PNValueId) * function->num_values,
+      sizeof(PNValueId));
+  uint32_t n;
+  for (n = 0; n < function->num_values; ++n) {
+    avail_slots[n] = n;
+  }
+
+  uint32_t num_active = 0;
+  PNLivenessRange* active = pn_allocator_alloc(
+      &module->temp_allocator, sizeof(PNLivenessRange) * function->num_values,
+      PN_DEFAULT_ALIGN);
+
+  for (n = function->num_args + function->num_constants;
+       n < function->num_values; ++n) {
+    PNLivenessRange* range = &function->value_liveness_range[n];
+    if (range->first_bb_id > bb_id) {
+      /* Evict active intervals that are now finished */
+      bb_id = range->first_bb_id;
+      uint32_t m = 0;
+      while (m < num_active) {
+        if (active[m].last_bb_id < bb_id) {
+          PNValueId slot_id = active[m].slot_id;
+          /* Reheap avail */
+          assert(num_avail_slots < function->num_values);
+          uint32_t insert_at = num_avail_slots;
+          uint32_t parent = (insert_at - 1) / 2;
+          while (insert_at != 0 && avail_slots[parent] > slot_id) {
+            avail_slots[insert_at] = avail_slots[parent];
+            insert_at = parent;
+            parent = (parent - 1) / 2;
+          }
+          avail_slots[insert_at] = slot_id;
+          num_avail_slots++;
+
+          /* Remove from active list */
+          active[m] = active[--num_active];
+        } else {
+          ++m;
+        }
+      }
+    }
+
+    /* Pop minimum slot id from heap */
+    uint32_t slot_index = 0;
+    PNValueId slot_id = avail_slots[slot_index];
+    while (slot_index * 2 + 2 < num_avail_slots) {
+      PNValueId left_slot_id = avail_slots[slot_index * 2 + 1];
+      PNValueId right_slot_id = avail_slots[slot_index * 2 + 2];
+      if (left_slot_id < right_slot_id) {
+        avail_slots[slot_index] = left_slot_id;
+        slot_index = slot_index * 2 + 1;
+      } else {
+        avail_slots[slot_index] = right_slot_id;
+        slot_index = slot_index * 2 + 2;
+      }
+    }
+
+    if (slot_index * 2 + 1 < num_avail_slots) {
+      avail_slots[slot_index] = avail_slots[slot_index * 2 + 1];
+    }
+
+    num_avail_slots--;
+
+    /* Append the new active range */
+    assert(num_active < function->num_values);
+    range->slot_id = slot_id;
+    active[num_active++] = *range;
+  }
+}
+
 static void pn_function_calculate_liveness(PNModule* module,
                                            PNFunction* function) {
   PN_BEGIN_TIME(CALCULATE_LIVENESS);
@@ -109,8 +184,10 @@ static void pn_function_calculate_liveness(PNModule* module,
 
   uint32_t n;
   for (n = 0; n < function->num_values; ++n) {
-    function->value_liveness_range[n].first_bb_id = PN_INVALID_BB_ID;
-    function->value_liveness_range[n].last_bb_id = PN_INVALID_BB_ID;
+    PNLivenessRange* range = &function->value_liveness_range[n];
+    range->first_bb_id = PN_INVALID_BB_ID;
+    range->last_bb_id = PN_INVALID_BB_ID;
+    range->slot_id = PN_INVALID_VALUE_ID;
   }
 
   for (n = 0; n < function->num_bbs; ++n) {
@@ -130,6 +207,8 @@ static void pn_function_calculate_liveness(PNModule* module,
     PNBasicBlockId bb_id = n - 1;
     pn_basic_block_calculate_liveness(module, function, &state, bb_id);
   }
+
+  pn_function_make_slot_map(module, function);
 
   pn_allocator_reset_to_mark(&module->temp_allocator, mark);
   PN_END_TIME(CALCULATE_LIVENESS);

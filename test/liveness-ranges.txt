@@ -38,22 +38,22 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v0..%v14];
    uses: %v2, %v4, %v5, %v6, %v7, %v8, %v9, %v10, %v11, %v12, %v13;
    succs: %b1;
-    %v0 = alloca i8, i32 %c1, align 4;  live: [%b0..%b32]
-    %v1 = alloca i8, i32 %c6, align 4;  live: [%b0..%b17]
-    %v2 = alloca i8, i32 %c1, align 4;  live: [%b0]
+    %v0 = alloca i8, i32 %c1, align 4;  live: [%b0..%b32], %v0
+    %v1 = alloca i8, i32 %c6, align 4;  live: [%b0..%b17], %v1
+    %v2 = alloca i8, i32 %c1, align 4;  live: [%b0], %v2
     store i32 %p0, i32* %v2, align 1;
-    %v3 = load i32* %p0, align 1;  live: [%b0..%b22]
-    %v4 = add i32 %p0, %c2;  live: [%b0]
-    %v5 = load i32* %v4, align 1;  live: [%b0]
-    %v6 = add i32 %v5, %c1;  live: [%b0]
-    %v7 = mul i32 %v6, %c1;  live: [%b0]
-    %v8 = add i32 %p0, %v7;  live: [%b0]
-    %v9 = add i32 %p0, %c1;  live: [%b0]
-    %v10 = load i32* %v9, align 1;  live: [%b0]
-    %v11 = add i32 %v5, %c15;  live: [%b0]
-    %v12 = add i32 %v11, %v10;  live: [%b0]
-    %v13 = mul i32 %v12, %c1;  live: [%b0]
-    %v14 = add i32 %p0, %v13;  live: [%b0]
+    %v3 = load i32* %p0, align 1;  live: [%b0..%b22], %v3
+    %v4 = add i32 %p0, %c2;  live: [%b0], %v4
+    %v5 = load i32* %v4, align 1;  live: [%b0], %v5
+    %v6 = add i32 %v5, %c1;  live: [%b0], %v6
+    %v7 = mul i32 %v6, %c1;  live: [%b0], %v7
+    %v8 = add i32 %p0, %v7;  live: [%b0], %v8
+    %v9 = add i32 %p0, %c1;  live: [%b0], %v9
+    %v10 = load i32* %v9, align 1;  live: [%b0], %v10
+    %v11 = add i32 %v5, %c15;  live: [%b0], %v11
+    %v12 = add i32 %v11, %v10;  live: [%b0], %v12
+    %v13 = mul i32 %v12, %c1;  live: [%b0], %v13
+    %v14 = add i32 %p0, %v13;  live: [%b0], %v14
     store i32 %v8, i32* @g15, align 1;
     store i32 %v2, i32* @g7, align 1;
     br label %b1;
@@ -65,8 +65,8 @@ function void @f12(i32 %p0) {  // BlockID = 12
    phi uses: [%v14, %b0], [%v19, %b3];
    succs: %b3, %b4, %b2;
     declare i32 %v19;
-    %v15 = phi i32 [%v14, %b0], [%v19, %b3];  live: [%b1..%b3]
-    %v16 = load i32* %v15, align 1;  live: [%b1]
+    %v15 = phi i32 [%v14, %b0], [%v19, %b3];  live: [%b1..%b3], %v2
+    %v16 = load i32* %v15, align 1;  live: [%b1], %v4
     switch i32 %v16 {
       default: br label %b3;
       i32 0: br label %b4;
@@ -77,8 +77,8 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v17..%v18];
    uses: %v15, %v17, %v18;
    succs: %b3;
-    %v17 = add i32 %v15, %c1;  live: [%b2]
-    %v18 = load i32* %v17, align 1;  live: [%b2]
+    %v17 = add i32 %v15, %c1;  live: [%b2], %v4
+    %v18 = load i32* %v17, align 1;  live: [%b2], %v5
     store i32 %v18, i32* @g1, align 1;
     br label %b3;
   %b3:
@@ -86,7 +86,7 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v19..%v19];
    uses: %v15;
    succs: %b1;
-    %v19 = add i32 %v15, %c2;  live: [%b3]
+    %v19 = add i32 %v15, %c2;  live: [%b3], %v4
     br label %b1;
    phi assigns: %b1, %v15 = %v19;
   %b4:
@@ -94,8 +94,8 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v20..%v21];
    uses: %v20, %v21;
    succs: %b5, %b6;
-    %v20 = load i32* @g1, align 1;  live: [%b4..%b6]
-    %v21 = icmp eq i32 %v20, %c0;  live: [%b4]
+    %v20 = load i32* @g1, align 1;  live: [%b4..%b6], %v2
+    %v21 = icmp eq i32 %v20, %c0;  live: [%b4], %v4
     br i1 %v21, label %b5, label %b6;
   %b5:
    preds: %b4;
@@ -106,16 +106,16 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v22..%v23];
    uses: %v20, %v22, %v23;
    succs: %b10, %b7;
-    %v22 = call i32 %v20(i32 @g8, i32 @g0, i32 %c7);  live: [%b6]
-    %v23 = icmp eq i32 %v22, %c7;  live: [%b6]
+    %v22 = call i32 %v20(i32 @g8, i32 @g0, i32 %c7);  live: [%b6], %v4
+    %v23 = icmp eq i32 %v22, %c7;  live: [%b6], %v5
     br i1 %v23, label %b10, label %b7;
   %b7:
    preds: %b6;
    defs: [%v24..%v25];
    uses: %v24, %v25;
    succs: %b8, %b9;
-    %v24 = load i32* @g1, align 1;  live: [%b7..%b9]
-    %v25 = icmp eq i32 %v24, %c0;  live: [%b7]
+    %v24 = load i32* @g1, align 1;  live: [%b7..%b9], %v2
+    %v25 = icmp eq i32 %v24, %c0;  live: [%b7], %v4
     br i1 %v25, label %b8, label %b9;
   %b8:
    preds: %b7;
@@ -126,7 +126,7 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v26..%v26];
    uses: %v24;
    succs: %b10;
-    %v26 = call i32 %v24(i32 @g9, i32 @g0, i32 %c7);  live: [%b9]
+    %v26 = call i32 %v24(i32 @g9, i32 @g0, i32 %c7);  live: [%b9], %v4
     br label %b10;
   %b10:
    preds: %b6, %b9;
@@ -134,8 +134,8 @@ function void @f12(i32 %p0) {  // BlockID = 12
    uses: %v27, %v28;
    succs: %b11, %b12;
     call void @f2(i32 @g10, i32 @g2, i32 %c16);
-    %v27 = load i32* @g1, align 1;  live: [%b10..%b12]
-    %v28 = icmp eq i32 %v27, %c0;  live: [%b10]
+    %v27 = load i32* @g1, align 1;  live: [%b10..%b12], %v2
+    %v28 = icmp eq i32 %v27, %c0;  live: [%b10], %v4
     br i1 %v28, label %b11, label %b12;
   %b11:
    preds: %b10;
@@ -146,16 +146,16 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v29..%v30];
    uses: %v27, %v29, %v30;
    succs: %b18, %b13;
-    %v29 = call i32 %v27(i32 @g11, i32 @g3, i32 %c8);  live: [%b12]
-    %v30 = icmp eq i32 %v29, %c8;  live: [%b12]
+    %v29 = call i32 %v27(i32 @g11, i32 @g3, i32 %c8);  live: [%b12], %v4
+    %v30 = icmp eq i32 %v29, %c8;  live: [%b12], %v5
     br i1 %v30, label %b18, label %b13;
   %b13:
    preds: %b12;
    defs: [%v31..%v32];
    uses: %v31, %v32;
    succs: %b14, %b15;
-    %v31 = load i32* @g1, align 1;  live: [%b13..%b15]
-    %v32 = icmp eq i32 %v31, %c0;  live: [%b13]
+    %v31 = load i32* @g1, align 1;  live: [%b13..%b15], %v2
+    %v32 = icmp eq i32 %v31, %c0;  live: [%b13], %v4
     br i1 %v32, label %b14, label %b15;
   %b14:
    preds: %b13;
@@ -166,8 +166,8 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v33..%v34];
    uses: %v1, %v31, %v33, %v34;
    succs: %b17, %b16;
-    %v33 = call i32 %v31(i32 @g12, i32 %v1, i32 %c6);  live: [%b15]
-    %v34 = icmp eq i32 %v33, %c6;  live: [%b15]
+    %v33 = call i32 %v31(i32 @g12, i32 %v1, i32 %c6);  live: [%b15], %v4
+    %v34 = icmp eq i32 %v33, %c6;  live: [%b15], %v5
     br i1 %v34, label %b17, label %b16;
   %b16:
    preds: %b15;
@@ -175,7 +175,7 @@ function void @f12(i32 %p0) {  // BlockID = 12
    uses: %v1, %v35;
    succs: %b17;
     call void @f2(i32 @g13, i32 %v1, i32 %c8);
-    %v35 = add i32 @g3, %c2;  live: [%b16]
+    %v35 = add i32 @g3, %c2;  live: [%b16], %v2
     store i32 @f13, i32* %v35, align 1;
     br label %b17;
   %b17:
@@ -183,12 +183,12 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v36..%v40];
    uses: %v1, %v36, %v37, %v38, %v39, %v40;
    succs: %b18;
-    %v36 = add i32 %v1, %c1;  live: [%b17]
-    %v37 = load i32* %v36, align 1;  live: [%b17]
+    %v36 = add i32 %v1, %c1;  live: [%b17], %v2
+    %v37 = load i32* %v36, align 1;  live: [%b17], %v4
     store i32 %v37, i32* @g3, align 1;
-    %v38 = add i32 %v1, %c2;  live: [%b17]
-    %v39 = load i32* %v38, align 1;  live: [%b17]
-    %v40 = add i32 @g3, %c1;  live: [%b17]
+    %v38 = add i32 %v1, %c2;  live: [%b17], %v5
+    %v39 = load i32* %v38, align 1;  live: [%b17], %v6
+    %v40 = add i32 @g3, %c1;  live: [%b17], %v7
     store i32 %v39, i32* %v40, align 1;
     br label %b18;
   %b18:
@@ -197,16 +197,16 @@ function void @f12(i32 %p0) {  // BlockID = 12
    uses: %v3, %v41;
    succs: %b23, %b19;
     call void @f2(i32 @g14, i32 @g4, i32 %c2);
-    %v41 = icmp eq i32 %v3, %c0;  live: [%b18]
+    %v41 = icmp eq i32 %v3, %c0;  live: [%b18], %v1
     br i1 %v41, label %b23, label %b19;
   %b19:
    preds: %b18;
    defs: [%v42..%v44];
    uses: %v42, %v43, %v44;
    succs: %b20, %b21;
-    %v42 = add i32 @g20, %c3;  live: [%b19]
-    %v43 = load i32* %v42, align 1;  live: [%b19]
-    %v44 = icmp eq i32 %v43, %c0;  live: [%b19]
+    %v42 = add i32 @g20, %c3;  live: [%b19], %v1
+    %v43 = load i32* %v42, align 1;  live: [%b19], %v2
+    %v44 = icmp eq i32 %v43, %c0;  live: [%b19], %v4
     br i1 %v44, label %b20, label %b21;
    phi assigns: %b21, %v48 = %v43;
   %b20:
@@ -214,10 +214,10 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v45..%v47];
    uses: %v45, %v46;
    succs: %b21;
-    %v45 = add i32 @g20, %c5;  live: [%b20]
-    %v46 = add i32 @g20, %c3;  live: [%b20]
+    %v45 = add i32 @g20, %c5;  live: [%b20], %v1
+    %v46 = add i32 @g20, %c3;  live: [%b20], %v2
     store i32 %v45, i32* %v46, align 1;
-    %v47 = add i32 @g20, %c5;  live: [%b20]
+    %v47 = add i32 @g20, %c5;  live: [%b20], %v4
     br label %b21;
    phi assigns: %b21, %v48 = %v47;
   %b21:
@@ -226,21 +226,21 @@ function void @f12(i32 %p0) {  // BlockID = 12
    uses: %v48, %v49, %v50, %v51;
    phi uses: [%v47, %b20], [%v43, %b19];
    succs: %b23, %b22;
-    %v48 = phi i32 [%v47, %b20], [%v43, %b19];  live: [%b21..%b22]
-    %v49 = add i32 %v48, %c1;  live: [%b21..%b22]
-    %v50 = load i32* %v49, align 1;  live: [%b21..%b22]
-    %v51 = icmp sgt i32 %v50, %c10;  live: [%b21]
+    %v48 = phi i32 [%v47, %b20], [%v43, %b19];  live: [%b21..%b22], %v1
+    %v49 = add i32 %v48, %c1;  live: [%b21..%b22], %v2
+    %v50 = load i32* %v49, align 1;  live: [%b21..%b22], %v4
+    %v51 = icmp sgt i32 %v50, %c10;  live: [%b21], %v5
     br i1 %v51, label %b23, label %b22;
   %b22:
    preds: %b21;
    defs: [%v52..%v55];
    uses: %v3, %v48, %v49, %v50, %v52, %v53, %v54, %v55;
    succs: %b23;
-    %v52 = add i32 %v50, %c4;  live: [%b22]
+    %v52 = add i32 %v50, %c4;  live: [%b22], %v5
     store i32 %v52, i32* %v49, align 1;
-    %v53 = add i32 %v48, %c2;  live: [%b22]
-    %v54 = mul i32 %v50, %c1;  live: [%b22]
-    %v55 = add i32 %v53, %v54;  live: [%b22]
+    %v53 = add i32 %v48, %c2;  live: [%b22], %v6
+    %v54 = mul i32 %v50, %c1;  live: [%b22], %v7
+    %v55 = add i32 %v53, %v54;  live: [%b22], %v8
     store i32 %v3, i32* %v55, align 1;
     br label %b23;
   %b23:
@@ -248,9 +248,9 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v56..%v58];
    uses: %v56, %v57, %v58;
    succs: %b24, %b25;
-    %v56 = add i32 @g20, %c3;  live: [%b23]
-    %v57 = load i32* %v56, align 1;  live: [%b23]
-    %v58 = icmp eq i32 %v57, %c0;  live: [%b23]
+    %v56 = add i32 @g20, %c3;  live: [%b23], %v1
+    %v57 = load i32* %v56, align 1;  live: [%b23], %v2
+    %v58 = icmp eq i32 %v57, %c0;  live: [%b23], %v3
     br i1 %v58, label %b24, label %b25;
    phi assigns: %b25, %v62 = %v57;
   %b24:
@@ -258,10 +258,10 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v59..%v61];
    uses: %v59, %v60;
    succs: %b25;
-    %v59 = add i32 @g20, %c5;  live: [%b24]
-    %v60 = add i32 @g20, %c3;  live: [%b24]
+    %v59 = add i32 @g20, %c5;  live: [%b24], %v1
+    %v60 = add i32 @g20, %c3;  live: [%b24], %v2
     store i32 %v59, i32* %v60, align 1;
-    %v61 = add i32 @g20, %c5;  live: [%b24]
+    %v61 = add i32 @g20, %c5;  live: [%b24], %v3
     br label %b25;
    phi assigns: %b25, %v62 = %v61;
   %b25:
@@ -270,21 +270,21 @@ function void @f12(i32 %p0) {  // BlockID = 12
    uses: %v62, %v63, %v64, %v65;
    phi uses: [%v61, %b24], [%v57, %b23];
    succs: %b27, %b26;
-    %v62 = phi i32 [%v61, %b24], [%v57, %b23];  live: [%b25..%b26]
-    %v63 = add i32 %v62, %c1;  live: [%b25..%b26]
-    %v64 = load i32* %v63, align 1;  live: [%b25..%b26]
-    %v65 = icmp sgt i32 %v64, %c10;  live: [%b25]
+    %v62 = phi i32 [%v61, %b24], [%v57, %b23];  live: [%b25..%b26], %v1
+    %v63 = add i32 %v62, %c1;  live: [%b25..%b26], %v2
+    %v64 = load i32* %v63, align 1;  live: [%b25..%b26], %v3
+    %v65 = icmp sgt i32 %v64, %c10;  live: [%b25], %v4
     br i1 %v65, label %b27, label %b26;
   %b26:
    preds: %b25;
    defs: [%v66..%v69];
    uses: %v62, %v63, %v64, %v66, %v67, %v68, %v69;
    succs: %b27;
-    %v66 = add i32 %v64, %c4;  live: [%b26]
+    %v66 = add i32 %v64, %c4;  live: [%b26], %v4
     store i32 %v66, i32* %v63, align 1;
-    %v67 = add i32 %v62, %c2;  live: [%b26]
-    %v68 = mul i32 %v64, %c1;  live: [%b26]
-    %v69 = add i32 %v67, %v68;  live: [%b26]
+    %v67 = add i32 %v62, %c2;  live: [%b26], %v5
+    %v68 = mul i32 %v64, %c1;  live: [%b26], %v6
+    %v69 = add i32 %v67, %v68;  live: [%b26], %v7
     store i32 @f14, i32* %v69, align 1;
     br label %b27;
   %b27:
@@ -292,16 +292,16 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v70..%v71];
    uses: %v70, %v71;
    succs: %b28, %b29;
-    %v70 = load i8* @g19, align 1;  live: [%b27]
-    %v71 = trunc i8 %v70 to i1;  live: [%b27]
+    %v70 = load i8* @g19, align 1;  live: [%b27], %v1
+    %v71 = trunc i8 %v70 to i1;  live: [%b27], %v2
     br i1 %v71, label %b28, label %b29;
   %b28:
    preds: %b27;
    defs: [%v72..%v73];
    uses: %v72;
    succs: %b30;
-    %v72 = load i8* @g18, align 1;  live: [%b28]
-    %v73 = trunc i8 %v72 to i1;  live: [%b28]
+    %v72 = load i8* @g18, align 1;  live: [%b28], %v1
+    %v73 = trunc i8 %v72 to i1;  live: [%b28], %v2
     br label %b30;
    phi assigns: %b30, %v76 = %v73;
   %b29:
@@ -309,10 +309,10 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v74..%v75];
    uses: %v74, %v75;
    succs: %b30;
-    %v74 = zext i1 %c26 to i8;  live: [%b29]
+    %v74 = zext i1 %c26 to i8;  live: [%b29], %v1
     store i8 %v74, i8* @g19, align 1;
     store i32 @g22, i32* @g17, align 1;
-    %v75 = zext i1 %c26 to i8;  live: [%b29]
+    %v75 = zext i1 %c26 to i8;  live: [%b29], %v2
     store i8 %v75, i8* @g18, align 1;
     br label %b30;
    phi assigns: %b30, %v76 = %c26;
@@ -322,21 +322,21 @@ function void @f12(i32 %p0) {  // BlockID = 12
    uses: %v0, %v76, %v77, %v78, %v79, %v80;
    phi uses: [%v73, %b28], [%c26, %b29];
    succs: %b32, %b31;
-    %v76 = phi i1 [%v73, %b28], [%c26, %b29];  live: [%b30]
-    %v77 = select i1 %v76, i32 %c11, i32 %c12;  live: [%b30]
+    %v76 = phi i1 [%v73, %b28], [%c26, %b29];  live: [%b30], %v1
+    %v77 = select i1 %v76, i32 %c11, i32 %c12;  live: [%b30], %v2
     store i32 %c0, i32* %v0, align 1;
-    %v78 = load i32* @g3, align 1;  live: [%b30]
-    %v79 = call i32 %v78(i32 %v0, i32 %v77, i32 %c17, i32 %c18, i32 %c9, i64 %c28);  live: [%b30..%b31]
-    %v80 = icmp eq i32 %v79, %c0;  live: [%b30]
+    %v78 = load i32* @g3, align 1;  live: [%b30], %v3
+    %v79 = call i32 %v78(i32 %v0, i32 %v77, i32 %c17, i32 %c18, i32 %c9, i64 %c28);  live: [%b30..%b31], %v4
+    %v80 = icmp eq i32 %v79, %c0;  live: [%b30], %v5
     br i1 %v80, label %b32, label %b31;
   %b31:
    preds: %b30;
    defs: [%v81..%v83];
    uses: %v79, %v81, %v82, %v83;
    succs: %b33;
-    %v81 = call i32 @f15();  live: [%b31]
-    %v82 = add i32 %v81, %c13;  live: [%b31]
-    %v83 = load i32* %v82, align 1;  live: [%b31]
+    %v81 = call i32 @f15();  live: [%b31], %v1
+    %v82 = add i32 %v81, %c13;  live: [%b31], %v2
+    %v83 = load i32* %v82, align 1;  live: [%b31], %v3
     store i32 %v79, i32* %v83, align 1;
     br label %b33;
    phi assigns: %b33, %v85 = %c9;
@@ -345,7 +345,7 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v84..%v84];
    uses: %v0;
    succs: %b33;
-    %v84 = load i32* %v0, align 1;  live: [%b32]
+    %v84 = load i32* %v0, align 1;  live: [%b32], %v1
     br label %b33;
    phi assigns: %b33, %v85 = %v84;
   %b33:
@@ -354,17 +354,17 @@ function void @f12(i32 %p0) {  // BlockID = 12
    uses: %v86, %v87;
    phi uses: [%c9, %b31], [%v84, %b32];
    succs: %b34, %b35;
-    %v85 = phi i32 [%c9, %b31], [%v84, %b32];  live: [%b33..%b36]
-    %v86 = load i8* @g19, align 1;  live: [%b33]
-    %v87 = trunc i8 %v86 to i1;  live: [%b33]
+    %v85 = phi i32 [%c9, %b31], [%v84, %b32];  live: [%b33..%b36], %v0
+    %v86 = load i8* @g19, align 1;  live: [%b33], %v1
+    %v87 = trunc i8 %v86 to i1;  live: [%b33], %v2
     br i1 %v87, label %b34, label %b35;
   %b34:
    preds: %b33;
    defs: [%v88..%v89];
    uses: %v88;
    succs: %b36;
-    %v88 = load i8* @g18, align 1;  live: [%b34]
-    %v89 = trunc i8 %v88 to i1;  live: [%b34]
+    %v88 = load i8* @g18, align 1;  live: [%b34], %v1
+    %v89 = trunc i8 %v88 to i1;  live: [%b34], %v2
     br label %b36;
    phi assigns: %b36, %v92 = %v89;
   %b35:
@@ -372,10 +372,10 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v90..%v91];
    uses: %v90, %v91;
    succs: %b36;
-    %v90 = zext i1 %c26 to i8;  live: [%b35]
+    %v90 = zext i1 %c26 to i8;  live: [%b35], %v1
     store i8 %v90, i8* @g19, align 1;
     store i32 @g22, i32* @g17, align 1;
-    %v91 = zext i1 %c26 to i8;  live: [%b35]
+    %v91 = zext i1 %c26 to i8;  live: [%b35], %v2
     store i8 %v91, i8* @g18, align 1;
     br label %b36;
    phi assigns: %b36, %v92 = %c26;
@@ -385,16 +385,16 @@ function void @f12(i32 %p0) {  // BlockID = 12
    uses: %v85, %v92, %v93, %v94, %v95, %v96, %v97, %v99, %v100, %v101;
    phi uses: [%v89, %b34], [%c26, %b35];
    succs: %b37, %b38;
-    %v92 = phi i1 [%v89, %b34], [%c26, %b35];  live: [%b36]
-    %v93 = select i1 %v92, i32 %c11, i32 %c12;  live: [%b36]
-    %v94 = add i32 %v85, %v93;  live: [%b36]
-    %v95 = select i1 %v92, i32 %c14, i32 %c0;  live: [%b36]
-    %v96 = add i32 %v85, %c19;  live: [%b36]
-    %v97 = and i32 %v96, %c20;  live: [%b36..%b38]
-    %v98 = add i32 %v97, %v95;  live: [%b36..%b38]
-    %v99 = select i1 %v92, i32 %c14, i32 %c0;  live: [%b36..%b38]
-    %v100 = add i32 %v97, %v99;  live: [%b36]
-    %v101 = icmp ugt i32 %v100, %v94;  live: [%b36]
+    %v92 = phi i1 [%v89, %b34], [%c26, %b35];  live: [%b36], %v1
+    %v93 = select i1 %v92, i32 %c11, i32 %c12;  live: [%b36], %v2
+    %v94 = add i32 %v85, %v93;  live: [%b36], %v3
+    %v95 = select i1 %v92, i32 %c14, i32 %c0;  live: [%b36], %v4
+    %v96 = add i32 %v85, %c19;  live: [%b36], %v5
+    %v97 = and i32 %v96, %c20;  live: [%b36..%b38], %v6
+    %v98 = add i32 %v97, %v95;  live: [%b36..%b38], %v7
+    %v99 = select i1 %v92, i32 %c14, i32 %c0;  live: [%b36..%b38], %v8
+    %v100 = add i32 %v97, %v99;  live: [%b36], %v9
+    %v101 = icmp ugt i32 %v100, %v94;  live: [%b36], %v10
     br i1 %v101, label %b37, label %b38;
   %b37:
    preds: %b36;
@@ -405,18 +405,18 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v102..%v110];
    uses: %v97, %v98, %v99, %v102, %v103, %v105, %v106, %v107, %v108, %v109, %v110;
    succs: %b54, %b40;
-    %v102 = load i32* @g17, align 1;  live: [%b38]
+    %v102 = load i32* @g17, align 1;  live: [%b38], %v0
     call void @f0(i32 %v97, i32 %v102, i32 %v99, i32 %c4, i1 %c27);
     store i32 %v98, i32* %v98, align 1;
-    %v103 = load i32* @g4, align 1;  live: [%b38]
-    %v104 = call i32 %v103(i32 %v98);  live: [%b38]
-    %v105 = call i32 @f15();  live: [%b38]
-    %v106 = add i32 %v105, %c13;  live: [%b38]
-    %v107 = add i32 %v105, %c21;  live: [%b38]
+    %v103 = load i32* @g4, align 1;  live: [%b38], %v1
+    %v104 = call i32 %v103(i32 %v98);  live: [%b38], %v2
+    %v105 = call i32 @f15();  live: [%b38], %v3
+    %v106 = add i32 %v105, %c13;  live: [%b38], %v4
+    %v107 = add i32 %v105, %c21;  live: [%b38], %v5
     store i32 %v107, i32* %v106, align 1;
-    %v108 = add i32 @g20, %c3;  live: [%b38]
-    %v109 = load i32* %v108, align 1;  live: [%b38]
-    %v110 = icmp eq i32 %v109, %c0;  live: [%b38]
+    %v108 = add i32 @g20, %c3;  live: [%b38], %v9
+    %v109 = load i32* %v108, align 1;  live: [%b38], %v10
+    %v110 = icmp eq i32 %v109, %c0;  live: [%b38], %v11
     br i1 %v110, label %b54, label %b40;
    phi assigns: %b40, %v112 = %v109;
   %b39:
@@ -425,7 +425,7 @@ function void @f12(i32 %p0) {  // BlockID = 12
    uses: %v111, %v144;
    succs: %b54, %b40;
     declare i32 %v144;
-    %v111 = icmp eq i32 %v144, %c0;  live: [%b39]
+    %v111 = icmp eq i32 %v144, %c0;  live: [%b39], %v0
     br i1 %v111, label %b54, label %b40;
    phi assigns: %b40, %v112 = %v144;
   %b40:
@@ -434,18 +434,18 @@ function void @f12(i32 %p0) {  // BlockID = 12
    uses: %v112, %v113, %v114, %v115;
    phi uses: [%v144, %b39], [%v109, %b38];
    succs: %b41, %b54;
-    %v112 = phi i32 [%v144, %b39], [%v109, %b38];  live: [%b40..%b53]
-    %v113 = add i32 %v112, %c1;  live: [%b40..%b53]
-    %v114 = load i32* %v113, align 1;  live: [%b40..%b41]
-    %v115 = icmp sgt i32 %v114, %c0;  live: [%b40]
+    %v112 = phi i32 [%v144, %b39], [%v109, %b38];  live: [%b40..%b53], %v0
+    %v113 = add i32 %v112, %c1;  live: [%b40..%b53], %v1
+    %v114 = load i32* %v113, align 1;  live: [%b40..%b41], %v2
+    %v115 = icmp sgt i32 %v114, %c0;  live: [%b40], %v3
     br i1 %v115, label %b41, label %b54;
   %b41:
    preds: %b40;
    defs: [%v116..%v117];
    uses: %v112;
    succs: %b42;
-    %v116 = add i32 %v112, %c22;  live: [%b41..%b53]
-    %v117 = add i32 %v112, %c23;  live: [%b41..%b53]
+    %v116 = add i32 %v112, %c22;  live: [%b41..%b53], %v3
+    %v117 = add i32 %v112, %c23;  live: [%b41..%b53], %v4
     br label %b42;
    phi assigns: %b42, %v118 = %v114; %b42, %v119 = %v114;
   %b42:
@@ -455,30 +455,30 @@ function void @f12(i32 %p0) {  // BlockID = 12
    phi uses: [%v114, %b41], [%v128, %b44], [%v114, %b41], [%v120, %b44];
    succs: %b45, %b46;
     declare i32 %v128;
-    %v118 = phi i32 [%v114, %b41], [%v128, %b44];  live: [%b42]
+    %v118 = phi i32 [%v114, %b41], [%v128, %b44];  live: [%b42], %v2
     declare i32 %v120;
-    %v119 = phi i32 [%v114, %b41], [%v120, %b44];  live: [%b42..%b53]
-    %v120 = add i32 %v119, %c9;  live: [%b42..%b50]
-    %v121 = shl i32 %c4, %v120;  live: [%b42..%b50]
-    %v122 = add i32 %v112, %c2;  live: [%b42]
-    %v123 = mul i32 %v120, %c1;  live: [%b42]
-    %v124 = add i32 %v122, %v123;  live: [%b42..%b46]
-    %v125 = load i32* %v124, align 1;  live: [%b42..%b52]
-    %v126 = icmp eq i32 %v119, %v118;  live: [%b42]
+    %v119 = phi i32 [%v114, %b41], [%v120, %b44];  live: [%b42..%b53], %v5
+    %v120 = add i32 %v119, %c9;  live: [%b42..%b50], %v6
+    %v121 = shl i32 %c4, %v120;  live: [%b42..%b50], %v7
+    %v122 = add i32 %v112, %c2;  live: [%b42], %v8
+    %v123 = mul i32 %v120, %c1;  live: [%b42], %v9
+    %v124 = add i32 %v122, %v123;  live: [%b42..%b46], %v10
+    %v125 = load i32* %v124, align 1;  live: [%b42..%b52], %v11
+    %v126 = icmp eq i32 %v119, %v118;  live: [%b42], %v12
     br i1 %v126, label %b45, label %b46;
   %b43:
    preds: %b47, %b53;
    defs: [%v127..%v127];
    uses: %v119, %v127;
    succs: %b44, %b54;
-    %v127 = icmp sgt i32 %v119, %c4;  live: [%b43]
+    %v127 = icmp sgt i32 %v119, %c4;  live: [%b43], %v2
     br i1 %v127, label %b44, label %b54;
   %b44:
    preds: %b43;
    defs: [%v128..%v128];
    uses: %v113;
    succs: %b42;
-    %v128 = load i32* %v113, align 1;  live: [%b44]
+    %v128 = load i32* %v113, align 1;  live: [%b44], %v2
     br label %b42;
    phi assigns: %b42, %v118 = %v128; %b42, %v119 = %v120;
   %b45:
@@ -498,17 +498,17 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v129..%v129];
    uses: %v125, %v129;
    succs: %b43, %b48;
-    %v129 = icmp eq i32 %v125, %c0;  live: [%b47]
+    %v129 = icmp eq i32 %v125, %c0;  live: [%b47], %v2
     br i1 %v129, label %b43, label %b48;
   %b48:
    preds: %b47;
    defs: [%v130..%v133];
    uses: %v113, %v116, %v121, %v131, %v132, %v133;
    succs: %b49, %b50;
-    %v130 = load i32* %v113, align 1;  live: [%b48..%b53]
-    %v131 = load i32* %v116, align 1;  live: [%b48]
-    %v132 = and i32 %v131, %v121;  live: [%b48]
-    %v133 = icmp eq i32 %v132, %c0;  live: [%b48]
+    %v130 = load i32* %v113, align 1;  live: [%b48..%b53], %v2
+    %v131 = load i32* %v116, align 1;  live: [%b48], %v8
+    %v132 = and i32 %v131, %v121;  live: [%b48], %v9
+    %v133 = icmp eq i32 %v132, %c0;  live: [%b48], %v10
     br i1 %v133, label %b49, label %b50;
   %b49:
    preds: %b48;
@@ -521,13 +521,13 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v134..%v140];
    uses: %v112, %v117, %v120, %v121, %v134, %v135, %v136, %v137, %v138, %v139;
    succs: %b51, %b52;
-    %v134 = load i32* %v117, align 1;  live: [%b50]
-    %v135 = and i32 %v134, %v121;  live: [%b50]
-    %v136 = icmp eq i32 %v135, %c0;  live: [%b50]
-    %v137 = add i32 %v112, %c24;  live: [%b50]
-    %v138 = mul i32 %v120, %c1;  live: [%b50]
-    %v139 = add i32 %v137, %v138;  live: [%b50]
-    %v140 = load i32* %v139, align 1;  live: [%b50..%b52]
+    %v134 = load i32* %v117, align 1;  live: [%b50], %v8
+    %v135 = and i32 %v134, %v121;  live: [%b50], %v9
+    %v136 = icmp eq i32 %v135, %c0;  live: [%b50], %v10
+    %v137 = add i32 %v112, %c24;  live: [%b50], %v12
+    %v138 = mul i32 %v120, %c1;  live: [%b50], %v13
+    %v139 = add i32 %v137, %v138;  live: [%b50], %v14
+    %v140 = load i32* %v139, align 1;  live: [%b50..%b52], %v15
     br i1 %v136, label %b51, label %b52;
   %b51:
    preds: %b50;
@@ -546,21 +546,21 @@ function void @f12(i32 %p0) {  // BlockID = 12
    defs: [%v141..%v146];
    uses: %v112, %v113, %v130, %v141, %v142, %v143, %v144, %v145, %v146;
    succs: %b43, %b39;
-    %v141 = load i32* %v113, align 1;  live: [%b53]
-    %v142 = icmp eq i32 %v130, %v141;  live: [%b53]
-    %v143 = add i32 @g20, %c3;  live: [%b53]
-    %v144 = load i32* %v143, align 1;  live: [%b53]
-    %v145 = icmp eq i32 %v144, %v112;  live: [%b53]
-    %v146 = and i1 %v142, %v145;  live: [%b53]
+    %v141 = load i32* %v113, align 1;  live: [%b53], %v6
+    %v142 = icmp eq i32 %v130, %v141;  live: [%b53], %v7
+    %v143 = add i32 @g20, %c3;  live: [%b53], %v8
+    %v144 = load i32* %v143, align 1;  live: [%b53], %v9
+    %v145 = icmp eq i32 %v144, %v112;  live: [%b53], %v10
+    %v146 = and i1 %v142, %v145;  live: [%b53], %v11
     br i1 %v146, label %b43, label %b39;
   %b54:
    preds: %b38, %b39, %b40, %b43;
    defs: [%v147..%v149];
    uses: %v147, %v148, %v149;
    succs: %b56, %b55;
-    %v147 = add i32 @g20, %c25;  live: [%b54]
-    %v148 = load i32* %v147, align 1;  live: [%b54..%b55]
-    %v149 = icmp eq i32 %v148, %c0;  live: [%b54]
+    %v147 = add i32 @g20, %c25;  live: [%b54], %v0
+    %v148 = load i32* %v147, align 1;  live: [%b54..%b55], %v1
+    %v149 = icmp eq i32 %v148, %c0;  live: [%b54], %v2
     br i1 %v149, label %b56, label %b55;
   %b55:
    preds: %b54;
@@ -572,7 +572,7 @@ function void @f12(i32 %p0) {  // BlockID = 12
    preds: %b54, %b55;
    defs: [%v150..%v150];
    uses: %v150;
-    %v150 = load i32* @g2, align 1;  live: [%b56]
+    %v150 = load i32* @g2, align 1;  live: [%b56], %v0
     call void %v150(i32 %c0);
     call void @f1();
     unreachable;

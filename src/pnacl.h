@@ -1038,6 +1038,7 @@ typedef struct PNValue {
 typedef struct PNLivenessRange {
   PNBasicBlockId first_bb_id;
   PNBasicBlockId last_bb_id;
+  PNValueId slot_id;
 } PNLivenessRange;
 #endif /* PN_CALCULATE_LIVENESS */
 
