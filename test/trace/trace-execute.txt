@@ -46,54 +46,54 @@ auxv = 3664
     @g15 = 1332  %v8 = 3660
   store i32 %v2, i32* @g7, align 1;
     @g7 = 1192  %v2 = 1048552
-  br label %78;
+  br label %324;
     %v15 <= %v14
-pc = %312
+pc = %324
   %v16 = load i32* %v15, align 1;
     %v16 = 32  %v15 = 3664
   switch i32 %v16 {
-    default: br label %110;
-    i32 0: br label %120;
-    i32 32: br label %95;
+    default: br label %468;
+    i32 0: br label %520;
+    i32 32: br label %400;
   }
     %v16 = 32
-pc = %380
+pc = %400
   %v17 = add i32 %v15, %c1;
     %v17 = 3668  %v15 = 3664  %c1 = 4
   %v18 = load i32* %v17, align 1;
     %v18 = 4  %v17 = 3668
   store i32 %v18, i32* @g1, align 1;
     @g1 = 1056  %v18 = 4
-  br label %110;
-pc = %440
+  br label %468;
+pc = %468
   %v19 = add i32 %v15, %c2;
     %v19 = 3672  %v15 = 3664  %c2 = 8
-  br label %78;
+  br label %324;
     %v15 <= %v19
-pc = %312
+pc = %324
   %v16 = load i32* %v15, align 1;
     %v16 = 0  %v15 = 3672
   switch i32 %v16 {
-    default: br label %110;
-    i32 0: br label %120;
-    i32 32: br label %95;
+    default: br label %468;
+    i32 0: br label %520;
+    i32 32: br label %400;
   }
     %v16 = 0
-pc = %480
+pc = %520
   %v20 = load i32* @g1, align 1;
     %v20 = 4  @g1 = 1056
   %v21 = icmp eq i32 %v20, %c0;
     %v21 = 0  %v20 = 4  %c0 = 0
-  br i1 %v21, label %133, label %139;
+  br i1 %v21, label %580, label %604;
     %v21 = 0
-pc = %556
+pc = %604
   %v22 = call i32 %v20(i32 @g8, i32 @g0, i32 %c7);
     NACL_IRT_QUERY(1196 (nacl-irt-fdio-0.1), 1024, 32)
   %v23 = icmp eq i32 %v22, %c7;
     %v23 = 1  %v22 = 32  %c7 = 32
-  br i1 %v23, label %184, label %155;
+  br i1 %v23, label %808, label %676;
     %v23 = 1
-pc = %736
+pc = %808
   call void @f2(i32 @g10, i32 @g2, i32 %c16);
     @g10 = 1236  @g2 = 1060  %c16 = 24  
 function = %f2  pc = %0
@@ -101,32 +101,32 @@ function = %f2  pc = %0
     %v0 = 4  @g1 = 1056
   %v1 = icmp eq i32 %v0, %c0;
     %v1 = 0  %v0 = 4  %c0 = 0
-  br i1 %v1, label %13, label %19;
+  br i1 %v1, label %60, label %84;
     %v1 = 0
-pc = %76
+pc = %84
   %v2 = tail call i32 %v0(i32 %p0, i32 %p1, i32 %p2);
     NACL_IRT_QUERY(1236 (nacl-irt-basic-0.1), 1060, 24)
   %v3 = icmp eq i32 %v2, %p2;
     %v3 = 1  %v2 = 24  %p2 = 24
-  br i1 %v3, label %41, label %35;
+  br i1 %v3, label %180, label %156;
     %v3 = 1
-pc = %164
+pc = %180
   ret void;
-function = %f12  pc = %736
+function = %f12  pc = %1472
   %v27 = load i32* @g1, align 1;
     %v27 = 4  @g1 = 1056
   %v28 = icmp eq i32 %v27, %c0;
     %v28 = 0  %v27 = 4  %c0 = 0
-  br i1 %v28, label %204, label %210;
+  br i1 %v28, label %896, label %920;
     %v28 = 0
-pc = %840
+pc = %920
   %v29 = call i32 %v27(i32 @g11, i32 @g3, i32 %c8);
     NACL_IRT_QUERY(1255 (nacl-irt-memory-0.3), 1084, 12)
   %v30 = icmp eq i32 %v29, %c8;
     %v30 = 1  %v29 = 12  %c8 = 12
-  br i1 %v30, label %310, label %226;
+  br i1 %v30, label %1360, label %992;
     %v30 = 1
-pc = %1240
+pc = %1360
   call void @f2(i32 @g14, i32 @g4, i32 %c2);
     @g14 = 1315  @g4 = 1096  %c2 = 8  
 function = %f2  pc = %0
@@ -134,32 +134,32 @@ function = %f2  pc = %0
     %v0 = 4  @g1 = 1056
   %v1 = icmp eq i32 %v0, %c0;
     %v1 = 0  %v0 = 4  %c0 = 0
-  br i1 %v1, label %13, label %19;
+  br i1 %v1, label %60, label %84;
     %v1 = 0
-pc = %76
+pc = %84
   %v2 = tail call i32 %v0(i32 %p0, i32 %p1, i32 %p2);
     NACL_IRT_QUERY(1315 (nacl-irt-tls-0.1), 1096, 8)
   %v3 = icmp eq i32 %v2, %p2;
     %v3 = 1  %v2 = 8  %p2 = 8
-  br i1 %v3, label %41, label %35;
+  br i1 %v3, label %180, label %156;
     %v3 = 1
-pc = %164
+pc = %180
   ret void;
-function = %f12  pc = %1240
+function = %f12  pc = %2024
   %v41 = icmp eq i32 %v3, %c0;
     %v41 = 1  %v3 = 0  %c0 = 0
-  br i1 %v41, label %412, label %326;
+  br i1 %v41, label %1816, label %1432;
     %v41 = 1
-pc = %1648
+pc = %1816
   %v56 = add i32 @g20, %c3;
     %v56 = 1680  @g20 = 1352  %c3 = 328
   %v57 = load i32* %v56, align 1;
     %v57 = 0  %v56 = 1680
   %v58 = icmp eq i32 %v57, %c0;
     %v58 = 1  %v57 = 0  %c0 = 0
-  br i1 %v58, label %432, label %454;
+  br i1 %v58, label %1908, label %2008;
     %v58 = 1
-pc = %1728
+pc = %1908
   %v59 = add i32 @g20, %c5;
     %v59 = 1684  @g20 = 1352  %c5 = 332
   %v60 = add i32 @g20, %c3;
@@ -168,18 +168,18 @@ pc = %1728
     %v60 = 1680  %v59 = 1684
   %v61 = add i32 @g20, %c5;
     %v61 = 1684  @g20 = 1352  %c5 = 332
-  br label %454;
+  br label %2008;
     %v62 <= %v61
-pc = %1816
+pc = %2008
   %v63 = add i32 %v62, %c1;
     %v63 = 1688  %v62 = 1684  %c1 = 4
   %v64 = load i32* %v63, align 1;
     %v64 = 0  %v63 = 1688
   %v65 = icmp sgt i32 %v64, %c10;
     %v65 = 0  %v64 = 0  %c10 = 31
-  br i1 %v65, label %498, label %471;
+  br i1 %v65, label %2200, label %2084;
     %v65 = 0
-pc = %1884
+pc = %2084
   %v66 = add i32 %v64, %c4;
     %v66 = 1  %v64 = 0  %c4 = 1
   store i32 %v66, i32* %v63, align 1;
@@ -192,15 +192,15 @@ pc = %1884
     %v69 = 1692  %v67 = 1692  %v68 = 0
   store i32 @f14, i32* %v69, align 1;
     %v69 = 1692  @f14 = 248
-  br label %498;
-pc = %1992
+  br label %2200;
+pc = %2200
   %v70 = load i8* @g19, align 1;
     %v70 = 0  @g19 = 1345
   %v71 = trunc i8 %v70 to i1;
     %v71 = 0  %v70 = 0
-  br i1 %v71, label %510, label %523;
+  br i1 %v71, label %2256, label %2320;
     %v71 = 0
-pc = %2092
+pc = %2320
   %v74 = zext i1 %c26 to i8;
     %v74 = 1  %c26 = 1
   store i8 %v74, i8* @g19, align 1;
@@ -211,9 +211,9 @@ pc = %2092
     %v75 = 1  %c26 = 1
   store i8 %v75, i8* @g18, align 1;
     @g18 = 1344  %v75 = 1
-  br label %547;
+  br label %2428;
     %v76 <= %c26
-pc = %2188
+pc = %2428
   %v77 = select i1 %v76, i32 %c11, i32 %c12;
     %v77 = 1155  %v76 = 1  %c11 = 1155
   store i32 %c0, i32* %v0, align 1;
@@ -226,28 +226,28 @@ pc = %2188
       returning 4096, errno = 0
   %v80 = icmp eq i32 %v79, %c0;
     %v80 = 1  %v79 = 0  %c0 = 0
-  br i1 %v80, label %601, label %579;
+  br i1 %v80, label %2664, label %2564;
     %v80 = 1
-pc = %2404
+pc = %2664
   %v84 = load i32* %v0, align 1;
     %v84 = 4096  %v0 = 1048572
-  br label %611;
+  br label %2716;
     %v85 <= %v84
-pc = %2444
+pc = %2716
   %v86 = load i8* @g19, align 1;
     %v86 = 1  @g19 = 1345
   %v87 = trunc i8 %v86 to i1;
     %v87 = 1  %v86 = 1
-  br i1 %v87, label %623, label %636;
+  br i1 %v87, label %2772, label %2836;
     %v87 = 1
-pc = %2492
+pc = %2772
   %v88 = load i8* @g18, align 1;
     %v88 = 1  @g18 = 1344
   %v89 = trunc i8 %v88 to i1;
     %v89 = 1  %v88 = 1
-  br label %660;
+  br label %2944;
     %v92 <= %v89
-pc = %2640
+pc = %2944
   %v93 = select i1 %v92, i32 %c11, i32 %c12;
     %v93 = 1155  %v92 = 1  %c11 = 1155
   %v94 = add i32 %v85, %v93;
@@ -266,9 +266,9 @@ pc = %2640
     %v100 = 5240  %v97 = 4096  %v99 = 1144
   %v101 = icmp ugt i32 %v100, %v94;
     %v101 = 0  %v100 = 5240  %v94 = 5251
-  br i1 %v101, label %704, label %709;
+  br i1 %v101, label %3128, label %3148;
     %v101 = 0
-pc = %2836
+pc = %3148
   %v102 = load i32* @g17, align 1;
     %v102 = 2496  @g17 = 1340
   call void @f0(i32 %v97, i32 %v102, i32 %v99, i32 %c4, i1 %c27);
@@ -295,27 +295,27 @@ pc = %2836
     %v109 = 1684  %v108 = 1680
   %v110 = icmp eq i32 %v109, %c0;
     %v110 = 0  %v109 = 1684  %c0 = 0
-  br i1 %v110, label %1002, label %783;
+  br i1 %v110, label %4472, label %3468;
     %v112 <= %v109
     %v110 = 0
-pc = %3132
+pc = %3468
   %v113 = add i32 %v112, %c1;
     %v113 = 1688  %v112 = 1684  %c1 = 4
   %v114 = load i32* %v113, align 1;
     %v114 = 1  %v113 = 1688
   %v115 = icmp sgt i32 %v114, %c0;
     %v115 = 1  %v114 = 1  %c0 = 0
-  br i1 %v115, label %800, label %1002;
+  br i1 %v115, label %3544, label %4472;
     %v115 = 1
-pc = %3200
+pc = %3544
   %v116 = add i32 %v112, %c22;
     %v116 = 2076  %v112 = 1684  %c22 = 392
   %v117 = add i32 %v112, %c23;
     %v117 = 2080  %v112 = 1684  %c23 = 396
-  br label %817;
+  br label %3628;
     %v118 <= %v114
     %v119 <= %v114
-pc = %3268
+pc = %3628
   %v120 = add i32 %v119, %c9;
     %v120 = 0  %v119 = 1  %c9 = 4294967295
   %v121 = shl i32 %c4, %v120;
@@ -330,18 +330,18 @@ pc = %3268
     %v125 = 248  %v124 = 1692
   %v126 = icmp eq i32 %v119, %v118;
     %v126 = 1  %v119 = 1  %v118 = 1
-  br i1 %v126, label %872, label %879;
+  br i1 %v126, label %3880, label %3916;
     %v126 = 1
-pc = %3488
+pc = %3880
   store i32 %v120, i32* %v113, align 1;
     %v113 = 1688  %v120 = 0
-  br label %886;
-pc = %3544
+  br label %3952;
+pc = %3952
   %v129 = icmp eq i32 %v125, %c0;
     %v129 = 0  %v125 = 248  %c0 = 0
-  br i1 %v129, label %850, label %895;
+  br i1 %v129, label %3768, label %3996;
     %v129 = 0
-pc = %3580
+pc = %3996
   %v130 = load i32* %v113, align 1;
     %v130 = 0  %v113 = 1688
   %v131 = load i32* %v116, align 1;
@@ -350,16 +350,16 @@ pc = %3580
     %v132 = 0  %v131 = 0  %v121 = 1
   %v133 = icmp eq i32 %v132, %c0;
     %v133 = 1  %v132 = 0  %c0 = 0
-  br i1 %v133, label %916, label %923;
+  br i1 %v133, label %4088, label %4124;
     %v133 = 1
-pc = %3664
+pc = %4088
   call void %v125();
     %v125 = 248 
 function = %f14  pc = %0
   ret void;
-function = %f12  pc = %3664
-  br label %973;
-pc = %3892
+function = %f12  pc = %-568
+  br label %4348;
+pc = %4348
   %v141 = load i32* %v113, align 1;
     %v141 = 0  %v113 = 1688
   %v142 = icmp eq i32 %v130, %v141;
@@ -372,23 +372,23 @@ pc = %3892
     %v145 = 1  %v144 = 1684  %v112 = 1684
   %v146 = and i1 %v142, %v145;
     %v146 = 1  %v142 = 1  %v145 = 1
-  br i1 %v146, label %850, label %771;
+  br i1 %v146, label %3768, label %3408;
     %v146 = 1
-pc = %3400
+pc = %3768
   %v127 = icmp sgt i32 %v119, %c4;
     %v127 = 0  %v119 = 1  %c4 = 1
-  br i1 %v127, label %859, label %1002;
+  br i1 %v127, label %3812, label %4472;
     %v127 = 0
-pc = %4008
+pc = %4472
   %v147 = add i32 @g20, %c25;
     %v147 = 1412  @g20 = 1352  %c25 = 60
   %v148 = load i32* %v147, align 1;
     %v148 = 0  %v147 = 1412
   %v149 = icmp eq i32 %v148, %c0;
     %v149 = 1  %v148 = 0  %c0 = 0
-  br i1 %v149, label %1027, label %1019;
+  br i1 %v149, label %4588, label %4548;
     %v149 = 1
-pc = %4108
+pc = %4588
   %v150 = load i32* @g2, align 1;
     %v150 = 8  @g2 = 1060
   call void %v150(i32 %c0);

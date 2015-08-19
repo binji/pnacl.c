@@ -505,7 +505,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNThread* thread,
   pn_memory_check(memory, result, len);
   new_heap_end = executor->heap_end + len;
   if (new_heap_end >
-      executor->main_thread.current_call_frame->memory_stack_top) {
+      executor->main_thread.current_frame->memory_stack_top) {
     PN_FATAL("Out of heap\n");
   }
   executor->heap_end = new_heap_end;
@@ -691,13 +691,14 @@ static PNRuntimeValue pn_builtin_NACL_IRT_THREAD_CREATE(PNThread* thread,
 
   pn_allocator_init(&new_thread->allocator, PN_MIN_CHUNKSIZE, "thread");
   new_thread->executor = executor;
-  new_thread->current_call_frame = &executor->sentinel_frame;
+  new_thread->current_frame = &executor->sentinel_frame;
   new_thread->tls = thread_p;
   new_thread->id = executor->next_thread_id++;
   new_thread->state = PN_THREAD_RUNNING;
   new_thread->futex_state = PN_FUTEX_NONE;
   new_thread->next = main_thread;
   new_thread->prev = main_thread->prev;
+  new_thread->module = thread->executor->module;
   main_thread->prev->next = new_thread;
   main_thread->prev = new_thread;
 
@@ -708,7 +709,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_THREAD_CREATE(PNThread* thread,
   PNFunction* new_function =
       pn_module_get_function(executor->module, new_function_id);
   pn_thread_push_function(new_thread, new_function_id, new_function);
-  new_thread->current_call_frame->memory_stack_top = stack_p;
+  new_thread->current_frame->memory_stack_top = stack_p;
 
   PN_TRACE(IRT, "      created thread %d\n", new_thread->id);
 

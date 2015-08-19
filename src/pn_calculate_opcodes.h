@@ -8,7 +8,7 @@
 static void* pn_basic_block_write_instruction_stream(PNModule* module,
                                                      PNFunction* function,
                                                      PNBasicBlock* bb,
-                                                     PNBasicBlockId* bb_offsets,
+                                                     void** bb_offsets,
                                                      void* offset,
                                                      PNBool write) {
 #define PN_BEGIN_CASE_OPCODE(name) case PN_##name:
@@ -332,15 +332,15 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
             PN_END_IF_TYPE(BR)
 
             o->value_id = i->value_id;
-            o->true_instruction_id = bb_offsets[i->true_bb_id];
-            o->false_instruction_id = bb_offsets[i->false_bb_id];
+            o->true_inst = bb_offsets[i->true_bb_id];
+            o->false_inst = bb_offsets[i->false_bb_id];
           }
           offset += sizeof(PNRuntimeInstructionBrInt1);
         } else {
           if (write) {
             PNRuntimeInstructionBr* o = (PNRuntimeInstructionBr*)offset;
             o->base.opcode = PN_OPCODE_BR;
-            o->instruction_id = bb_offsets[i->true_bb_id];
+            o->inst = bb_offsets[i->true_bb_id];
           }
           offset += sizeof(PNRuntimeInstructionBr);
         }
@@ -365,7 +365,7 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
           PN_END_IF_TYPE(SWITCH)
 
           o->value_id = i->value_id;
-          o->default_instruction_id = bb_offsets[i->default_bb_id];
+          o->default_inst = bb_offsets[i->default_bb_id];
           o->num_cases = i->num_cases;
         }
         offset += sizeof(PNRuntimeInstructionSwitch);
@@ -374,7 +374,7 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
           if (write) {
             PNRuntimeSwitchCase* switch_case =(PNRuntimeSwitchCase*)offset;
             switch_case->value = i->cases[c].value;
-            switch_case->instruction_id = bb_offsets[i->cases[c].bb_id];
+            switch_case->inst = bb_offsets[i->cases[c].bb_id];
           }
           offset += sizeof(PNRuntimeSwitchCase);
         }
@@ -829,7 +829,7 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
     for (n = 0; n < bb->num_phi_assigns; ++n) {
       if (write) {
         PNRuntimePhiAssign* o = (PNRuntimePhiAssign*)offset;
-        o->instruction_id = bb_offsets[bb->phi_assigns[n].bb_id];
+        o->inst = bb_offsets[bb->phi_assigns[n].bb_id];
         o->source_value_id = bb->phi_assigns[n].source_value_id;
         o->dest_value_id = bb->phi_assigns[n].dest_value_id;
       }
@@ -850,16 +850,16 @@ static void pn_function_calculate_opcodes(PNModule* module,
   PN_BEGIN_TIME(CALCULATE_OPCODES);
   PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
 
-  PNBasicBlockId* bb_offsets = pn_allocator_alloc(
-      &module->temp_allocator, function->num_bbs * sizeof(PNBasicBlockId),
-      sizeof(PNBasicBlockId));
+  void** bb_offsets = pn_allocator_alloc(&module->temp_allocator,
+                                         function->num_bbs * sizeof(void*),
+                                         sizeof(PNBasicBlockId));
 
   void* offset = 0;
   uint32_t n;
   for (n = 0; n < function->num_bbs; ++n) {
     /* Always align basic blocks to 4 bytes. */
     offset = pn_align_up_pointer(offset, 4);
-    bb_offsets[n] = (uint32_t)offset >> 2;
+    bb_offsets[n] = offset;
     offset = pn_basic_block_write_instruction_stream(
         module, function, &function->bbs[n], NULL, offset, PN_FALSE);
   }
@@ -867,10 +867,14 @@ static void pn_function_calculate_opcodes(PNModule* module,
   function->instructions = pn_allocator_alloc(&module->instruction_allocator,
                                               istream_size, PN_DEFAULT_ALIGN);
 
+  for (n = 0; n < function->num_bbs; ++n) {
+    bb_offsets[n] = function->instructions + (size_t)bb_offsets[n];
+  }
+
   offset = function->instructions;
   for (n = 0; n < function->num_bbs; ++n) {
     offset = pn_align_up_pointer(offset, 4);
-    PN_CHECK((offset - function->instructions) == (bb_offsets[n] << 2));
+    PN_CHECK(offset == bb_offsets[n]);
     offset = pn_basic_block_write_instruction_stream(
         module, function, &function->bbs[n], bb_offsets, offset, PN_TRUE);
   }

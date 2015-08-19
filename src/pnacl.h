@@ -1135,7 +1135,7 @@ typedef struct PNBlockInfoContext {
 
 typedef struct PNLocation {
   PNFunctionId function_id;
-  PNInstructionId instruction_id;
+  void* inst;
 } PNLocation;
 
 typedef struct PNCallFrame {
@@ -1156,7 +1156,7 @@ typedef struct PNJmpBuf {
 typedef struct PNThread {
   PNAllocator allocator;
   struct PNExecutor* executor;
-  PNCallFrame* current_call_frame;
+  PNCallFrame* current_frame;
   struct PNThread* next;
   struct PNThread* prev;
   PNThreadState state;
@@ -1168,6 +1168,11 @@ typedef struct PNThread {
   PNBool has_timeout;
   uint64_t timeout_sec;
   uint32_t timeout_usec;
+
+  /* Cached values */
+  PNModule* module;
+  PNFunction* function;
+  void* inst;
 } PNThread;
 
 typedef struct PNExecutor {
@@ -1206,14 +1211,14 @@ typedef struct PNRuntimeInstructionBinop {
 
 typedef struct PNRuntimeInstructionBr {
   PNRuntimeInstruction base;
-  PNInstructionId instruction_id;
+  void* inst;
 } PNRuntimeInstructionBr;
 
 typedef struct PNRuntimeInstructionBrInt1 {
   PNRuntimeInstruction base;
   PNValueId value_id;
-  PNInstructionId true_instruction_id;
-  PNInstructionId false_instruction_id;
+  void* true_inst;
+  void* false_inst;
 } PNRuntimeInstructionBrInt1;
 
 #define PN_CALL_FLAGS_INDIRECT 1
@@ -1266,13 +1271,13 @@ typedef struct PNRuntimeInstructionStore {
 
 typedef struct PNRuntimeSwitchCase {
   int64_t value;
-  PNInstructionId instruction_id;
+  void* inst;
 } PNRuntimeSwitchCase;
 
 typedef struct PNRuntimeInstructionSwitch {
   PNRuntimeInstruction base;
   PNValueId value_id;
-  PNInstructionId default_instruction_id;
+  void* default_inst;
   uint32_t num_cases;
 } PNRuntimeInstructionSwitch;
 
@@ -1289,7 +1294,7 @@ typedef struct PNRuntimeInstructionVselect {
 } PNRuntimeInstructionVselect;
 
 typedef struct PNRuntimePhiAssign {
-  PNInstructionId instruction_id;
+  void* inst;
   PNValueId source_value_id;
   PNValueId dest_value_id;
 } PNRuntimePhiAssign;

@@ -729,16 +729,17 @@ static void pn_runtime_instruction_trace(PNModule* module,
 
     case PN_OPCODE_BR: {
       PNRuntimeInstructionBr* i = (PNRuntimeInstructionBr*)inst;
-      PN_PRINT("br label %%%d;\n", i->instruction_id);
+      PN_PRINT("br label %%%zd;\n", i->inst - function->instructions);
       break;
     }
 
     case PN_OPCODE_BR_INT1: {
       PNRuntimeInstructionBrInt1* i = (PNRuntimeInstructionBrInt1*)inst;
-      PN_PRINT("br %s %s, label %%%d, label %%%d;\n",
+      PN_PRINT("br %s %s, label %%%zd, label %%%zd;\n",
                pn_value_describe_type(module, function, i->value_id),
                pn_value_describe(module, function, i->value_id),
-               i->true_instruction_id, i->false_instruction_id);
+               i->true_inst - function->instructions,
+               i->false_inst - function->instructions);
       break;
     }
 
@@ -1044,14 +1045,16 @@ static void pn_runtime_instruction_trace(PNModule* module,
       PN_PRINT("switch %s %s {\n", type_str,
                pn_value_describe(module, function, i->value_id));
       PN_TRACE_PRINT_INDENTX(2);
-      PN_PRINT("default: br label %%%d;\n", i->default_instruction_id);
+      PN_PRINT("default: br label %%%zd;\n",
+               i->default_inst - function->instructions);
 
       uint32_t c;
       for (c = 0; c < i->num_cases; ++c) {
         PNRuntimeSwitchCase* switch_case = &cases[c];
         PN_TRACE_PRINT_INDENTX(2);
-        PN_PRINT("%s %" PRId64 ": br label %%%d;\n", type_str,
-                 switch_case->value, switch_case->instruction_id);
+        PN_PRINT("%s %" PRId64 ": br label %%%zd;\n", type_str,
+                 switch_case->value,
+                 switch_case->inst - function->instructions);
       }
       PN_TRACE_PRINT_INDENT();
       PN_PRINT("}\n");
