@@ -59,6 +59,9 @@ static PNBool g_pn_print_opcode_counts;
 static PNBool g_pn_run;
 static uint32_t g_pn_opcode_count[PN_MAX_OPCODE];
 static PNBool g_pn_repeat_load_times = 1;
+#if PN_PPAPI
+static PNBool g_pn_ppapi = PN_FALSE;
+#endif /* PN_PAPPI */
 
 #if PN_TRACING
 static const char* g_pn_trace_function_filter;
@@ -115,6 +118,9 @@ enum {
   PN_FLAG_HELP,
   PN_FLAG_MEMORY_SIZE,
   PN_FLAG_RUN,
+#if PN_PPAPI
+  PN_FLAG_PPAPI,
+#endif /* PN_PPAPI */
   PN_FLAG_ENV,
   PN_FLAG_USE_HOST_ENV,
   PN_FLAG_NO_DEDUPE_PHI_NODES,
@@ -144,6 +150,9 @@ static struct option g_pn_long_options[] = {
     {"help", no_argument, NULL, 'h'},
     {"memory-size", required_argument, NULL, 'm'},
     {"run", no_argument, NULL, 'r'},
+#if PN_PPAPI
+    {"ppapi", no_argument, NULL, 0},
+#endif /* PN_PPAPI */
     {"env", required_argument, NULL, 'e'},
     {"use-host-env", no_argument, NULL, 'E'},
     {"no-dedupe-phi-nodes", no_argument, NULL, 0},
@@ -334,6 +343,12 @@ static void pn_options_parse(int argc, char** argv, char** env) {
           case PN_FLAG_PRINT_ALL:
             /* Handled above by goto */
             PN_UNREACHABLE();
+
+#if PN_PPAPI
+          case PN_FLAG_PPAPI:
+            g_pn_ppapi = PN_TRUE;
+            break;
+#endif /* PN_PPAPI */
 
           case PN_FLAG_NO_DEDUPE_PHI_NODES:
             g_pn_dedupe_phi_nodes = PN_FALSE;

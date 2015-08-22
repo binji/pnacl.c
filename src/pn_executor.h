@@ -170,6 +170,10 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
   executor->exiting = PN_FALSE;
   executor->next_thread_id = 0;
   executor->dead_threads = NULL;
+#if PN_PPAPI
+  executor->ppapi_shutdown_module_func = 0;
+  executor->ppapi_get_interface_func = 0;
+#endif /* PN_PPAPI */
 
   PN_CHECK(pn_is_aligned(executor->memory->size, PN_PAGESIZE));
   PN_CHECK(pn_is_aligned(executor->memory->heap_start, PN_PAGESIZE));
@@ -459,8 +463,15 @@ static void pn_thread_execute_instruction(PNThread* thread) {
           }
           /* If the builtin was PN_BUILTIN_NACL_IRT_FUTEX_WAIT_ABS, then this
            * thread may have been blocked. If so, do not increment the
-           * instruction counter */
-          if (thread->state == PN_THREAD_RUNNING) {
+           * instruction counter.
+           */
+#if PN_PPAPI
+          /* Also don't increment the instruction counter when calling ppapi
+          * start; this will actually push a new function.*/
+          if (callee_function_id == PN_BUILTIN_NACL_IRT_PPAPIHOOK_PPAPI_START) {
+          } else
+#endif /* PN_PPAPI */
+              if (thread->state == PN_THREAD_RUNNING) {
             thread->inst += sizeof(PNRuntimeInstructionCall) +
                             i->num_args * sizeof(PNValueId);
           }

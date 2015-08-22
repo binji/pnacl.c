@@ -22,6 +22,10 @@
 #define PN_CALCULATE_LIVENESS 0
 #endif
 
+#ifndef PN_PPAPI
+#define PN_PPAPI 0
+#endif
+
 #define PN_DEFAULT_ALIGN 8
 
 #define PN_MIN_CHUNKSIZE (64 * 1024)
@@ -118,7 +122,7 @@ typedef double pn_f64;
   else                           \
   (void)0
 
-#define PN_FOREACH_TRACE(V)                   \
+#define PN_FOREACH_TRACE_BASE(V)              \
   V(FLAGS, "flags")                           \
   V(ABBREV, "abbrev")                         \
   V(BLOCKINFO_BLOCK, "blockinfo-block")       \
@@ -135,6 +139,16 @@ typedef double pn_f64;
   V(IRT, "irt")                               \
   V(INTRINSICS, "intrinsics")                 \
   V(MEMORY, "memory")
+
+#if PN_PPAPI
+#define PN_FOREACH_TRACE_EXTRA(V) V(PPAPI, "ppapi")
+#else
+#define PN_FOREACH_TRACE_EXTRA(V)
+#endif /* PN_PPAPI */
+
+#define PN_FOREACH_TRACE(V) \
+  PN_FOREACH_TRACE_BASE(V)  \
+  PN_FOREACH_TRACE_EXTRA(V)
 
 #define PN_TRACE_ENUM(name, flag) PN_TRACE_##name,
 enum { PN_FOREACH_TRACE(PN_TRACE_ENUM) PN_NUM_TRACE };
@@ -661,54 +675,67 @@ typedef enum PNOpcode {
   PN_MAX_OPCODE,
 } PNOpcode;
 
-#define PN_FOREACH_BUILTIN(V)   \
-  V(NACL_IRT_QUERY)             \
-  V(NACL_IRT_BASIC_EXIT)        \
-  V(NACL_IRT_BASIC_GETTOD)      \
-  V(NACL_IRT_BASIC_CLOCK)       \
-  V(NACL_IRT_BASIC_NANOSLEEP)   \
-  V(NACL_IRT_BASIC_SCHED_YIELD) \
-  V(NACL_IRT_BASIC_SYSCONF)     \
-  V(NACL_IRT_FDIO_CLOSE)        \
-  V(NACL_IRT_FDIO_DUP)          \
-  V(NACL_IRT_FDIO_DUP2)         \
-  V(NACL_IRT_FDIO_READ)         \
-  V(NACL_IRT_FDIO_WRITE)        \
-  V(NACL_IRT_FDIO_SEEK)         \
-  V(NACL_IRT_FDIO_FSTAT)        \
-  V(NACL_IRT_FDIO_GETDENTS)     \
-  V(NACL_IRT_FDIO_FCHDIR)       \
-  V(NACL_IRT_FDIO_FCHMOD)       \
-  V(NACL_IRT_FDIO_FSYNC)        \
-  V(NACL_IRT_FDIO_FDATASYNC)    \
-  V(NACL_IRT_FDIO_FTRUNCATE)    \
-  V(NACL_IRT_FDIO_ISATTY)       \
-  V(NACL_IRT_FILENAME_OPEN)     \
-  V(NACL_IRT_FILENAME_STAT)     \
-  V(NACL_IRT_FILENAME_MKDIR)    \
-  V(NACL_IRT_FILENAME_RMDIR)    \
-  V(NACL_IRT_FILENAME_CHDIR)    \
-  V(NACL_IRT_FILENAME_GETCWD)   \
-  V(NACL_IRT_FILENAME_UNLINK)   \
-  V(NACL_IRT_FILENAME_TRUNCATE) \
-  V(NACL_IRT_FILENAME_LSTAT)    \
-  V(NACL_IRT_FILENAME_LINK)     \
-  V(NACL_IRT_FILENAME_RENAME)   \
-  V(NACL_IRT_FILENAME_SYMLINK)  \
-  V(NACL_IRT_FILENAME_CHMOD)    \
-  V(NACL_IRT_FILENAME_ACCESS)   \
-  V(NACL_IRT_FILENAME_READLINK) \
-  V(NACL_IRT_FILENAME_UTIMES)   \
-  V(NACL_IRT_MEMORY_MMAP)       \
-  V(NACL_IRT_MEMORY_MUNMAP)     \
-  V(NACL_IRT_MEMORY_MPROTECT)   \
-  V(NACL_IRT_TLS_INIT)          \
-  V(NACL_IRT_TLS_GET)           \
-  V(NACL_IRT_THREAD_CREATE)     \
-  V(NACL_IRT_THREAD_EXIT)       \
-  V(NACL_IRT_THREAD_NICE)       \
-  V(NACL_IRT_FUTEX_WAIT_ABS)    \
-  V(NACL_IRT_FUTEX_WAKE)
+#define PN_FOREACH_BUILTIN_BASE(V)                    \
+  V(NACL_IRT_QUERY)                                   \
+  V(NACL_IRT_BASIC_EXIT)                              \
+  V(NACL_IRT_BASIC_GETTOD)                            \
+  V(NACL_IRT_BASIC_CLOCK)                             \
+  V(NACL_IRT_BASIC_NANOSLEEP)                         \
+  V(NACL_IRT_BASIC_SCHED_YIELD)                       \
+  V(NACL_IRT_BASIC_SYSCONF)                           \
+  V(NACL_IRT_FDIO_CLOSE)                              \
+  V(NACL_IRT_FDIO_DUP)                                \
+  V(NACL_IRT_FDIO_DUP2)                               \
+  V(NACL_IRT_FDIO_READ)                               \
+  V(NACL_IRT_FDIO_WRITE)                              \
+  V(NACL_IRT_FDIO_SEEK)                               \
+  V(NACL_IRT_FDIO_FSTAT)                              \
+  V(NACL_IRT_FDIO_GETDENTS)                           \
+  V(NACL_IRT_FDIO_FCHDIR)                             \
+  V(NACL_IRT_FDIO_FCHMOD)                             \
+  V(NACL_IRT_FDIO_FSYNC)                              \
+  V(NACL_IRT_FDIO_FDATASYNC)                          \
+  V(NACL_IRT_FDIO_FTRUNCATE)                          \
+  V(NACL_IRT_FDIO_ISATTY)                             \
+  V(NACL_IRT_FILENAME_OPEN)                           \
+  V(NACL_IRT_FILENAME_STAT)                           \
+  V(NACL_IRT_FILENAME_MKDIR)                          \
+  V(NACL_IRT_FILENAME_RMDIR)                          \
+  V(NACL_IRT_FILENAME_CHDIR)                          \
+  V(NACL_IRT_FILENAME_GETCWD)                         \
+  V(NACL_IRT_FILENAME_UNLINK)                         \
+  V(NACL_IRT_FILENAME_TRUNCATE)                       \
+  V(NACL_IRT_FILENAME_LSTAT)                          \
+  V(NACL_IRT_FILENAME_LINK)                           \
+  V(NACL_IRT_FILENAME_RENAME)                         \
+  V(NACL_IRT_FILENAME_SYMLINK)                        \
+  V(NACL_IRT_FILENAME_CHMOD)                          \
+  V(NACL_IRT_FILENAME_ACCESS)                         \
+  V(NACL_IRT_FILENAME_READLINK)                       \
+  V(NACL_IRT_FILENAME_UTIMES)                         \
+  V(NACL_IRT_MEMORY_MMAP)                             \
+  V(NACL_IRT_MEMORY_MUNMAP)                           \
+  V(NACL_IRT_MEMORY_MPROTECT)                         \
+  V(NACL_IRT_TLS_INIT)                                \
+  V(NACL_IRT_TLS_GET)                                 \
+  V(NACL_IRT_THREAD_CREATE)                           \
+  V(NACL_IRT_THREAD_EXIT)                             \
+  V(NACL_IRT_THREAD_NICE)                             \
+  V(NACL_IRT_FUTEX_WAIT_ABS)                          \
+  V(NACL_IRT_FUTEX_WAKE)                              \
+
+#if PN_PPAPI
+#define PN_FOREACH_BUILTIN_EXTRA(V)                   \
+  V(NACL_IRT_PPAPIHOOK_PPAPI_START)                   \
+  V(NACL_IRT_PPAPIHOOK_PPAPI_REGISTER_THREAD_CREATOR) \
+  V(PPB_GET_INTERFACE)
+#else
+#define PN_FOREACH_BUILTIN_EXTRA(V)
+#endif /* PN_PPAPI */
+
+#define PN_FOREACH_BUILTIN(V) \
+  PN_FOREACH_BUILTIN_BASE(V)  \
+  PN_FOREACH_BUILTIN_EXTRA(V)
 
 typedef enum PNBuiltinId {
   PN_BUILTIN_NULL,
@@ -1187,6 +1214,10 @@ typedef struct PNExecutor {
   PNJmpBufId next_jmpbuf_id;
   uint32_t next_thread_id;
   uint32_t heap_end; /* Grows up */
+#if PN_PPAPI
+  uint32_t ppapi_shutdown_module_func;
+  uint32_t ppapi_get_interface_func;
+#endif /* PN_PPAPI */
   int32_t exit_code;
   PNBool exiting;
 } PNExecutor;

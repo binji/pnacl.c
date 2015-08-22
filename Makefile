@@ -6,7 +6,7 @@ CC = clang
 ALL = pnacl pnacl-opt-assert
 EVERYTHING = pnacl pnacl-liveness pnacl-notrace pnacl-notimers \
 	pnacl-notrace-notimers pnacl-opt pnacl-opt-assert pnacl-msan pnacl-asan \
-	pnacl-ubsan pnacl-32
+	pnacl-ubsan pnacl-32 pnacl-ppapi
 
 
 .PHONY: all
@@ -43,6 +43,9 @@ out/pnacl-opt: src/pnacl.c | out
 
 out/pnacl-opt-assert: src/pnacl.c | out
 	$(CC) -O3 $(CFLAGS) -o $@ $<
+
+out/pnacl-ppapi: src/pnacl.c | out
+	$(CC) -DPN_PPAPI=1 -O3 $(CFLAGS) -o $@ $<
 
 out/pnacl-msan: src/pnacl.c | out
 	clang $(CFLAGS) -fsanitize=memory -fno-omit-frame-pointer -o $@ $<
