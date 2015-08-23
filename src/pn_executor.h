@@ -1363,7 +1363,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
                                    thread->current_frame->mark);
         PN_TRACE(EXECUTE, "function = %%f%d  pc = %%%zd\n",
                  location->function_id,
-                 location->inst - function->instructions);
+                 location->inst - new_function->instructions);
         thread->inst = location->inst + sizeof(PNRuntimeInstructionCall) +
                        c->num_args * sizeof(PNValueId);
         thread->function = new_function;
@@ -1371,9 +1371,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
         /* Returning nothing from _start; let's use 0 as the exit code */
         thread->executor->exit_code = 0;
         thread->executor->exiting = PN_TRUE;
-        PN_TRACE(EXECUTE, "function = %%f%d  pc = %%%zd\n",
-                 location->function_id,
-                 location->inst - function->instructions);
+        PN_TRACE(EXECUTE, "exiting\n");
       }
       break;
     }
@@ -1395,7 +1393,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
                                    thread->current_frame->mark);
         PN_TRACE(EXECUTE, "function = %%f%d  pc = %%%zd\n",
                  location->function_id,
-                 location->inst - function->instructions);
+                 location->inst - new_function->instructions);
         pn_executor_value_trace(thread->executor, new_function,
                                 c->result_value_id, value, "    ", "\n");
         thread->inst = location->inst + sizeof(PNRuntimeInstructionCall) +
@@ -1407,8 +1405,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
         thread->executor->exiting = PN_TRUE;
         pn_executor_value_trace(thread->executor, function, i->value_id, value,
                                 "    ", "\n");
-        PN_TRACE(EXECUTE, "function = %%f%d  pc = %%%zd\n",
-                 location->function_id, location->inst);
+        PN_TRACE(EXECUTE, "exiting\n");
       }
 
       break;

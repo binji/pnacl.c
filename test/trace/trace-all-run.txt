@@ -1071,7 +1071,7 @@ pc = %84
     %v3 = 1
 pc = %180
   ret void;
-function = %f12  pc = %1472
+function = %f12  pc = %808
   %v27 = load i32* @g1, align 1;
      read.u32 [    1056] >= 4
     %v27 = 4  @g1 = 1056
@@ -1148,7 +1148,7 @@ pc = %84
     %v3 = 1
 pc = %180
   ret void;
-function = %f12  pc = %2024
+function = %f12  pc = %1360
   %v41 = icmp eq i32 %v3, %c0;
     %v41 = 1  %v3 = 0  %c0 = 0
   br i1 %v41, label %1816, label %1432;
@@ -1385,7 +1385,7 @@ pc = %4088
     %v125 = 248 
 function = %f14  pc = %0
   ret void;
-function = %f12  pc = %-568
+function = %f12  pc = %4088
   br label %4348;
 pc = %4348
   %v141 = load i32* %v113, align 1;
