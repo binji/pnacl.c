@@ -151,6 +151,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_BASIC_EXIT(PNThread* thread,
   PN_TRACE(IRT, "    NACL_IRT_BASIC_EXIT(%d)\n", exit_code);
   executor->exit_code = exit_code;
   executor->exiting = PN_TRUE;
+  thread->state = PN_THREAD_DEAD;
   return pn_executor_value_u32(0);
 }
 

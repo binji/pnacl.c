@@ -1313,6 +1313,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PN_TRACE(INTRINSICS, "    llvm.trap()\n");
       thread->executor->exit_code = -1;
       thread->executor->exiting = PN_TRUE;
+      thread->state = PN_THREAD_DEAD;
       break;
     }
 
@@ -1379,10 +1380,17 @@ static void pn_thread_execute_instruction(PNThread* thread) {
                        c->num_args * sizeof(PNValueId);
         thread->function = new_function;
       } else {
-        /* Returning nothing from _start; let's use 0 as the exit code */
-        thread->executor->exit_code = 0;
-        thread->executor->exiting = PN_TRUE;
-        PN_TRACE(EXECUTE, "exiting\n");
+        /* Returning from the top frame of a thread. This shouldn't happen in
+         * most cases; the main thread should be exited by calling
+         * NACL_IRT_BASIC_EXIT, and a thread should be exited by calling
+         * NACL_IRT_THREAD_EXIT. In either case, there is nothing left to run
+         * on this thread, so it should finish. */
+        thread->state = PN_THREAD_DEAD;
+        if (thread == &thread->executor->main_thread) {
+          thread->executor->exit_code = 0;
+          thread->executor->exiting = PN_TRUE;
+          PN_TRACE(EXECUTE, "exiting\n");
+        }
       }
       break;
     }
@@ -1411,12 +1419,15 @@ static void pn_thread_execute_instruction(PNThread* thread) {
                        c->num_args * sizeof(PNValueId);
         thread->function = new_function;
       } else {
-        /* Returning a value from _start; let's consider that the exit code */
-        thread->executor->exit_code = value.i32;
-        thread->executor->exiting = PN_TRUE;
-        pn_executor_value_trace(thread->executor, function, i->value_id, value,
-                                "    ", "\n");
-        PN_TRACE(EXECUTE, "exiting\n");
+        /* See comment in PN_OPCODE_RET. */
+        thread->state = PN_THREAD_DEAD;
+        if (thread == &thread->executor->main_thread) {
+          thread->executor->exit_code = value.i32;
+          thread->executor->exiting = PN_TRUE;
+          pn_executor_value_trace(thread->executor, function, i->value_id,
+                                  value, "    ", "\n");
+          PN_TRACE(EXECUTE, "exiting\n");
+        }
       }
 
       break;
@@ -1507,19 +1518,16 @@ static void pn_thread_execute_instruction(PNThread* thread) {
 
 void pn_executor_run(PNExecutor* executor) {
   PNThread* thread = &executor->main_thread;
-  PNBool running = PN_TRUE;
   uint32_t last_thread_id = thread->id;
-  while (running) {
+  while (PN_TRUE) {
     uint32_t i;
-    for (i = 0; i < PN_INSTRUCTIONS_QUANTUM && running &&
-                thread->state == PN_THREAD_RUNNING;
+    for (i = 0;
+         i < PN_INSTRUCTIONS_QUANTUM && thread->state == PN_THREAD_RUNNING;
          ++i) {
       pn_thread_execute_instruction(thread);
-      running = thread->current_frame != &executor->sentinel_frame &&
-                !executor->exiting;
     }
 
-    if (!running) {
+    if (executor->exiting) {
       break;
     }
 
