@@ -64,11 +64,15 @@ typedef double pn_f64;
 #define PN_FALSE 0
 #define PN_TRUE 1
 
+#define PN_MODULE_ID 0xcabba6e
+#define PN_INSTANCE_ID 0xc0de5
+
 #define PN_INVALID_VALUE_ID ((PNValueId)~0)
 #define PN_INVALID_BB_ID ((PNBasicBlockId)~0)
 #define PN_INVALID_FUNCTION_ID ((PNFunctionId)~0)
 #define PN_INVALID_TYPE_ID ((PNTypeId)~0)
 #define PN_INVALID_FUNCTION_ID ((PNFunctionId)~0)
+#define PN_INVALID_INTERFACE_TABLE ((uint32_t)~0)
 
 #define PN_NANOSECONDS_IN_A_MICROSECOND 1000
 #define PN_NANOSECONDS_IN_A_SECOND 1000000000
@@ -728,7 +732,13 @@ typedef enum PNOpcode {
 #define PN_FOREACH_BUILTIN_EXTRA(V)                   \
   V(NACL_IRT_PPAPIHOOK_PPAPI_START)                   \
   V(NACL_IRT_PPAPIHOOK_PPAPI_REGISTER_THREAD_CREATOR) \
-  V(PPB_GET_INTERFACE)
+  V(PPB_GET_INTERFACE)                                \
+  V(PPB_CORE_ADD_REF_RESOURCE)                        \
+  V(PPB_CORE_RELEASE_RESOURCE)                        \
+  V(PPB_CORE_GET_TIME)                                \
+  V(PPB_CORE_GET_TIME_TICKS)                          \
+  V(PPB_CORE_CALL_ON_MAIN_THREAD)                     \
+  V(PPB_CORE_IS_MAIN_THREAD)
 #else
 #define PN_FOREACH_BUILTIN_EXTRA(V)
 #endif /* PN_PPAPI */
@@ -744,6 +754,31 @@ typedef enum PNBuiltinId {
 #undef PN_BUILTIN
   PN_MAX_BUILTINS
 } PNBuiltinId;
+
+#if PN_PPAPI
+#define PN_FOREACH_PPB_INTERFACES(V) \
+  V(CORE_1_0, "PPB_Core;1.0")
+
+typedef enum PNPpbInterfaceId {
+#define PN_PPB_INTERFACE(e, s) PN_PPB_INTERFACE_##e,
+  PN_FOREACH_PPB_INTERFACES(PN_PPB_INTERFACE)
+#undef PN_PPB_INTERFACE
+  PN_MAX_PPB_INTERFACES
+} PNPpbInterfaceId;
+
+#define PN_FOREACH_PPP_INTERFACES(V)    \
+  V(INSTANCE_1_0, "PPP_Instance;1.0")   \
+  V(INSTANCE_1_1, "PPP_Instance;1.1")   \
+  V(MESSAGING_1_0, "PPP_Messaging;1.0") \
+  V(INPUT_EVENT_0_1, "PPP_Inputevent;0.1")
+
+typedef enum PNPppInterfaceId {
+#define PN_PPP_INTERFACE(e, s) PN_PPP_INTERFACE_##e,
+  PN_FOREACH_PPP_INTERFACES(PN_PPP_INTERFACE)
+#undef PN_PPP_INTERFACE
+  PN_MAX_PPP_INTERFACES
+} PNPppInterfaceId;
+#endif /* PN_PPAPI */
 
 #define PN_FOREACH_ERRNO(V)                 \
   V(EPERM, 1, "Operation not permitted")    \
@@ -791,6 +826,12 @@ typedef enum PNThreadState {
   PN_THREAD_RUNNING,
   PN_THREAD_BLOCKED,
   PN_THREAD_DEAD,
+#if PN_PPAPI
+  /* The start thread is set to this when the ppapi event loop is running */
+  PN_THREAD_EVENT_LOOP,
+  /* Set if the event thread is inactive */
+  PN_THREAD_IDLE,
+#endif /* PN_PPAPI */
 } PNThreadState;
 
 typedef enum PNFutexState {
@@ -798,6 +839,15 @@ typedef enum PNFutexState {
   PN_FUTEX_WOKEN,
   PN_FUTEX_TIMEDOUT,
 } PNFutexState;
+
+#if PN_PPAPI
+typedef enum PNEventType {
+  PN_EVENT_TYPE_NONE,
+  PN_EVENT_TYPE_GET_INTERFACE,
+  PN_EVENT_TYPE_DID_CREATE,
+  PN_EVENT_TYPE_DID_CHANGE_VIEW,
+} PNEventType;
+#endif /* PN_PPAPI */
 
 /**** STRUCTS *****************************************************************/
 
@@ -1120,8 +1170,17 @@ typedef struct PNMemory {
   uint32_t globalvar_end;
   uint32_t startinfo_start;
   uint32_t startinfo_end;
+  uint32_t ppapi_start;
+  uint32_t ppapi_end;
   uint32_t heap_start;
   uint32_t stack_end;
+#if PN_PPAPI
+  uint32_t ppapi_ppb_interfaces[PN_MAX_PPB_INTERFACES];
+  uint32_t ppapi_ppp_interface_names[PN_MAX_PPP_INTERFACES];
+  /* Pointers to plugin interface structs. These will be filled in by
+   * GET_INTERFACE events */
+  uint32_t ppapi_ppp_interfaces[PN_MAX_PPP_INTERFACES];
+#endif /* PN_PPAPI */
 } PNMemory;
 
 typedef struct PNModule {
@@ -1196,28 +1255,60 @@ typedef struct PNThread {
   uint64_t timeout_sec;
   uint32_t timeout_usec;
 
+#if PN_PPAPI
+  /* Value that was returned from the topmost frame of this thread. Only used
+   * when this "thread" is an event in the event loop of a PPAPI application.
+   * In that case, the exit_value is the returned value from the event. */
+  PNRuntimeValue exit_value;
+#endif /* PN_PPAPI */
+
   /* Cached values */
   PNModule* module;
   PNFunction* function;
   void* inst;
 } PNThread;
 
+#if PN_PPAPI
+typedef struct PNEvent {
+  struct PNEvent* next;
+  struct PNEvent* prev;
+  PNEventType type;
+  union {
+    /* PN_EVENT_TYPE_GET_INTERFACE */
+    struct {
+      PNPppInterfaceId interface;
+      uint32_t* out_iface_p;
+    };
+  };
+} PNEvent;
+
+typedef struct PNPpapi {
+  PNAllocator allocator;
+  PNThread event_thread;
+  PNEvent sentinel_event;
+  PNEvent* current_event;
+  PNEvent* free_events;
+  uint32_t shutdown_func;
+  uint32_t get_interface_func;
+} PNPpapi;
+#endif /* PN_PPAPI */
+
 typedef struct PNExecutor {
   PNModule* module;
   PNMemory* memory;
   PNRuntimeValue* module_values;
-  PNThread main_thread;
+  PNThread start_thread;
+  PNThread* main_thread;
   PNThread* dead_threads;
   PNCallFrame sentinel_frame;
   PNBitSet mapped_pages;
   PNAllocator allocator;
   PNJmpBufId next_jmpbuf_id;
+#if PN_PPAPI
+  PNPpapi ppapi;
+#endif
   uint32_t next_thread_id;
   uint32_t heap_end; /* Grows up */
-#if PN_PPAPI
-  uint32_t ppapi_shutdown_module_func;
-  uint32_t ppapi_get_interface_func;
-#endif /* PN_PPAPI */
   int32_t exit_code;
   PNBool exiting;
 } PNExecutor;

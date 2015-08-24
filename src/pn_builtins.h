@@ -515,8 +515,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNThread* thread,
   assert(pn_is_aligned(result, PN_PAGESIZE));
   pn_memory_check(memory, result, len);
   new_heap_end = executor->heap_end + len;
-  if (new_heap_end >
-      executor->main_thread.current_frame->memory_stack_top) {
+  if (new_heap_end > executor->main_thread->current_frame->memory_stack_top) {
     PN_FATAL("Out of heap\n");
   }
   executor->heap_end = new_heap_end;
@@ -689,7 +688,6 @@ static PNRuntimeValue pn_builtin_NACL_IRT_THREAD_CREATE(PNThread* thread,
   PN_BUILTIN_ARG(thread_p, 2, u32);
   PN_TRACE(IRT, "    NACL_IRT_THREAD_CREATE(%u, %u, %u)\n", start_func_p,
            stack_p, thread_p);
-  PNThread* main_thread = &executor->main_thread;
   PNThread* new_thread;
   if (executor->dead_threads) {
     /* Dead thread list is singly-linked */
@@ -707,11 +705,11 @@ static PNRuntimeValue pn_builtin_NACL_IRT_THREAD_CREATE(PNThread* thread,
   new_thread->id = executor->next_thread_id++;
   new_thread->state = PN_THREAD_RUNNING;
   new_thread->futex_state = PN_FUTEX_NONE;
-  new_thread->next = main_thread;
-  new_thread->prev = main_thread->prev;
   new_thread->module = thread->executor->module;
-  main_thread->prev->next = new_thread;
-  main_thread->prev = new_thread;
+  new_thread->next = thread->next;
+  new_thread->prev = thread;
+  thread->next->prev = new_thread;
+  thread->next = new_thread;
 
   PNFunctionId new_function_id = pn_function_pointer_to_index(start_func_p);
   assert(new_function_id >= PN_MAX_BUILTINS);
@@ -735,7 +733,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_THREAD_EXIT(PNThread* thread,
   PN_CHECK(num_args == 1);
   PN_BUILTIN_ARG(stack_flag_p, 0, u32);
   PN_TRACE(IRT, "    NACL_IRT_THREAD_EXIT(%u)\n", stack_flag_p);
-  PN_CHECK(thread != &executor->main_thread);
+  PN_CHECK(thread != executor->main_thread);
   thread->state = PN_THREAD_DEAD;
 
   if (stack_flag_p) {
@@ -746,6 +744,9 @@ static PNRuntimeValue pn_builtin_NACL_IRT_THREAD_EXIT(PNThread* thread,
 }
 
 #if PN_PPAPI
+static PNEvent* pn_event_allocate(PNPpapi* ppapi);
+static void pn_event_enqueue(PNPpapi* ppapi, PNEvent* event);
+
 static PNRuntimeValue pn_builtin_NACL_IRT_PPAPIHOOK_PPAPI_START(
     PNThread* thread,
     PNFunction* function,
@@ -758,26 +759,55 @@ static PNRuntimeValue pn_builtin_NACL_IRT_PPAPIHOOK_PPAPI_START(
 
   uint32_t initialize_func =
       pn_memory_read_u32(executor->memory, start_functions_p);
-  executor->ppapi_shutdown_module_func =
+  executor->ppapi.shutdown_func =
       pn_memory_read_u32(executor->memory, start_functions_p + 4);
-  executor->ppapi_get_interface_func =
+  executor->ppapi.get_interface_func =
       pn_memory_read_u32(executor->memory, start_functions_p + 8);
 
-  PNFunctionId new_function_id = pn_function_pointer_to_index(initialize_func);
-  new_function_id = new_function_id - PN_MAX_BUILTINS;
-  assert(new_function_id < thread->module->num_functions);
+  /* Replace the main thread (which should be this thread) with the event loop
+   * thread */
+  PN_CHECK(thread == &executor->start_thread);
+  PN_CHECK(thread == executor->main_thread);
+
+  PNThread* new_thread = &executor->ppapi.event_thread;
+  new_thread->executor = executor;
+  new_thread->current_frame = &executor->sentinel_frame;
+  new_thread->tls = thread->tls;
+  new_thread->id = thread->id;
+  new_thread->state = PN_THREAD_RUNNING;
+  new_thread->futex_state = PN_FUTEX_NONE;
+  new_thread->module = thread->executor->module;
+  new_thread->next = thread->next;
+  new_thread->prev = thread->prev;
+  thread->next->prev = new_thread;
+  thread->prev->next = new_thread;
+
+  /* Disconnect the start thread, and mark it as being in the event loop so it
+   * doesn't keep running. Set next to new_thread so the event thread will be
+   * scheduled next. */
+  thread->next = new_thread;
+  thread->prev = NULL;
+  thread->state = PN_THREAD_EVENT_LOOP;
+
+  executor->main_thread = new_thread;
+
   PNFunction* new_function =
-      pn_module_get_function(thread->module, new_function_id);
-  pn_thread_push_function(thread, new_function_id, new_function);
-
+      pn_thread_push_function_pointer(new_thread, initialize_func);
   PN_CHECK(new_function->num_args == 2);
+  pn_thread_set_param_value(new_thread, 0, pn_executor_value_u32(PN_MODULE_ID));
+  pn_thread_set_param_value(
+      new_thread, 1, pn_executor_value_u32(
+                         pn_builtin_to_pointer(PN_BUILTIN_PPB_GET_INTERFACE)));
 
-  uint32_t module_id = 1; /* Arbitrary value to identify a module */
-  pn_thread_set_value(thread, thread->module->num_values + 0,
-                      pn_executor_value_u32(module_id));
-  pn_thread_set_value(thread, thread->module->num_values + 1,
-                      pn_executor_value_u32(
-                          pn_builtin_to_pointer(PN_BUILTIN_PPB_GET_INTERFACE)));
+  /* Use the same stack top as the main thread. This must be set after the new
+   * function is pushed */
+  new_thread->current_frame->memory_stack_top =
+      thread->current_frame->memory_stack_top;
+
+  /* Enqueue a did_change event to execute after initialization */
+  PNEvent* event = pn_event_allocate(&executor->ppapi);
+  event->type = PN_EVENT_TYPE_DID_CREATE;
+  pn_event_enqueue(&executor->ppapi, event);
 
   return pn_executor_value_u32(0);
 }
@@ -796,27 +826,6 @@ pn_builtin_NACL_IRT_PPAPIHOOK_PPAPI_REGISTER_THREAD_CREATOR(
 
   /* TODO(binji): use to create audio thread...? */
   (void)executor;
-
-  return pn_executor_value_u32(0);
-}
-
-static PNRuntimeValue pn_builtin_PPB_GET_INTERFACE(PNThread* thread,
-                                                   PNFunction* function,
-                                                   uint32_t num_args,
-                                                   PNValueId* arg_ids) {
-  PNExecutor* executor = thread->executor;
-  PN_CHECK(num_args == 1);
-  PN_BUILTIN_ARG(interface_name_p, 0, u32);
-
-  PNMemory* memory = executor->memory;
-  pn_memory_check(memory, interface_name_p, 1);
-
-  uint32_t name_len = pn_memory_check_cstr(executor->memory, interface_name_p);
-  PN_CHECK(name_len > 0);
-
-  const char* iface_name = memory->data + interface_name_p;
-  PN_TRACE(PPAPI, "    PPB_GET_INTERFACE(%u (%s))\n", interface_name_p,
-           iface_name);
 
   return pn_executor_value_u32(0);
 }

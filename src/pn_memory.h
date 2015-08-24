@@ -106,6 +106,14 @@ static uint32_t pn_memory_check_cstr(PNMemory* memory, uint32_t p) {
   return end - p;
 }
 
+static void pn_memory_write_cstr(PNMemory* memory,
+                                 uint32_t offset,
+                                 const char* s) {
+  size_t len = strlen(s);
+  pn_memory_check(memory, offset, len + 1);
+  memcpy(memory->data + offset, s, len + 1);
+}
+
 static void pn_memory_zerofill(PNMemory* memory,
                                uint32_t offset,
                                uint32_t num_bytes) {
@@ -228,6 +236,7 @@ static void pn_memory_init_startinfo(PNMemory* memory,
   memory_auxv[2] = 0; /* AT_NULL */
 
   memory->startinfo_end = data_offset - memory->data;
+  memory->ppapi_start = memory->ppapi_end = memory->startinfo_end;
   memory->heap_start = pn_align_up(memory->startinfo_end, PN_PAGESIZE);
   memory->stack_end = memory->size;
 }

@@ -61,7 +61,7 @@ static uint32_t g_pn_opcode_count[PN_MAX_OPCODE];
 static PNBool g_pn_repeat_load_times = 1;
 #if PN_PPAPI
 static PNBool g_pn_ppapi = PN_FALSE;
-#endif /* PN_PAPPI */
+#endif /* PN_PPAPI */
 
 #if PN_TRACING
 static const char* g_pn_trace_function_filter;
@@ -110,6 +110,7 @@ static const char* g_pn_opcode_names[] = {
 #include "pn_read.h"
 #include "pn_executor.h"
 #include "pn_builtins.h"
+#include "pn_ppapi.h"
 
 /* Option parsing, environment variables */
 
@@ -685,9 +686,15 @@ int main(int argc, char** argv, char** envp) {
 
   if (g_pn_run) {
     PN_BEGIN_TIME(EXECUTE);
-    pn_memory_init_startinfo(&memory, g_pn_argv, g_pn_environ);
-
     PNExecutor executor = {};
+
+    pn_memory_init_startinfo(&memory, g_pn_argv, g_pn_environ);
+#if PN_PPAPI
+    if (g_pn_ppapi) {
+      pn_memory_init_ppapi(&memory);
+    }
+#endif /* PN_PPAPI */
+
     pn_executor_init(&executor, &module);
     pn_executor_run(&executor);
     PN_END_TIME(EXECUTE);

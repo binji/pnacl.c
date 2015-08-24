@@ -56,6 +56,12 @@ static void pn_thread_set_value(PNThread* thread,
   thread->current_frame->function_values[value_id] = value;
 }
 
+static void pn_thread_set_param_value(PNThread* thread,
+                                      uint32_t index,
+                                      PNRuntimeValue value) {
+  thread->current_frame->function_values[index] = value;
+}
+
 static void pn_executor_init_module_values(PNExecutor* executor) {
   PNModule* module = executor->module;
   executor->module_values = pn_allocator_alloc(
@@ -120,6 +126,16 @@ static void pn_thread_push_function(PNThread* thread,
   }
 }
 
+static PNFunction* pn_thread_push_function_pointer(PNThread* thread,
+                                                   uint32_t func) {
+  PNFunctionId function_id = pn_function_pointer_to_index(func);
+  function_id -= PN_MAX_BUILTINS;
+  assert(function_id < thread->module->num_functions);
+  PNFunction* function = pn_module_get_function(thread->module, function_id);
+  pn_thread_push_function(thread, function_id, function);
+  return function;
+}
+
 static void pn_thread_do_phi_assigns(PNThread* thread,
                                      PNFunction* function,
                                      void* dest_inst) {
@@ -156,24 +172,15 @@ static void pn_thread_do_phi_assigns(PNThread* thread,
 }
 
 static void pn_executor_init(PNExecutor* executor, PNModule* module) {
+  memset(executor, 0, sizeof(PNExecutor));
   pn_allocator_init(&executor->allocator, PN_MIN_CHUNKSIZE, "executor");
   executor->module = module;
   executor->memory = module->memory;
   executor->heap_end = executor->memory->heap_start;
   executor->sentinel_frame.location.function_id = PN_INVALID_FUNCTION_ID;
-  executor->sentinel_frame.location.inst = NULL;
-  executor->sentinel_frame.function_values = NULL;
   executor->sentinel_frame.memory_stack_top = executor->memory->stack_end;
-  executor->sentinel_frame.parent = NULL;
   executor->sentinel_frame.mark = pn_allocator_mark(&executor->allocator);
-  executor->exit_code = 0;
-  executor->exiting = PN_FALSE;
-  executor->next_thread_id = 0;
-  executor->dead_threads = NULL;
-#if PN_PPAPI
-  executor->ppapi_shutdown_module_func = 0;
-  executor->ppapi_get_interface_func = 0;
-#endif /* PN_PPAPI */
+  executor->main_thread = &executor->start_thread;
 
   PN_CHECK(pn_is_aligned(executor->memory->size, PN_PAGESIZE));
   PN_CHECK(pn_is_aligned(executor->memory->heap_start, PN_PAGESIZE));
@@ -185,9 +192,19 @@ static void pn_executor_init(PNExecutor* executor, PNModule* module) {
     pn_bitset_set(&executor->mapped_pages, i, PN_TRUE);
   }
 
+#if PN_PPAPI
+  pn_allocator_init(&executor->ppapi.allocator, PN_MIN_CHUNKSIZE, "ppapi");
+  executor->ppapi.sentinel_event.next = &executor->ppapi.sentinel_event;
+  executor->ppapi.sentinel_event.prev = &executor->ppapi.sentinel_event;
+  /* Initialize to 0xffffffff, this value signifies that the interface must be
+   * queried first. After the query, the value will */
+  memset(executor->memory->ppapi_ppp_interfaces, 0xff,
+         sizeof(executor->memory->ppapi_ppp_interfaces));
+#endif /* PN_PPAPI */
+
   pn_executor_init_module_values(executor);
 
-  PNThread* thread = &executor->main_thread;
+  PNThread* thread = &executor->start_thread;
   pn_allocator_init(&thread->allocator, PN_MIN_CHUNKSIZE, "main thread");
   thread->current_frame = &executor->sentinel_frame;
   thread->tls = 0;
@@ -313,7 +330,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PNRuntimeValue size = pn_thread_get_value(thread, i->size_id);
       thread->current_frame->memory_stack_top = pn_align_down(
           thread->current_frame->memory_stack_top - size.i32, i->alignment);
-      if (thread == &thread->executor->main_thread &&
+      if (thread == thread->executor->main_thread &&
           thread->current_frame->memory_stack_top <
               thread->executor->heap_end) {
         PN_FATAL("Out of stack\n");
@@ -467,8 +484,10 @@ static void pn_thread_execute_instruction(PNThread* thread) {
            */
 #if PN_PPAPI
           /* Also don't increment the instruction counter when calling ppapi
-          * start; this will actually push a new function.*/
+           * start; this will actually push a new function.*/
           if (callee_function_id == PN_BUILTIN_NACL_IRT_PPAPIHOOK_PPAPI_START) {
+            PN_TRACE(EXECUTE, "function = %%f%d  pc = %%0\n",
+                     thread->current_frame->location.function_id);
           } else
 #endif /* PN_PPAPI */
               if (thread->state == PN_THREAD_RUNNING) {
@@ -1386,7 +1405,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
          * NACL_IRT_THREAD_EXIT. In either case, there is nothing left to run
          * on this thread, so it should finish. */
         thread->state = PN_THREAD_DEAD;
-        if (thread == &thread->executor->main_thread) {
+        if (thread == &thread->executor->start_thread) {
           thread->executor->exit_code = 0;
           thread->executor->exiting = PN_TRUE;
           PN_TRACE(EXECUTE, "exiting\n");
@@ -1421,13 +1440,19 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       } else {
         /* See comment in PN_OPCODE_RET. */
         thread->state = PN_THREAD_DEAD;
-        if (thread == &thread->executor->main_thread) {
+        if (thread == &thread->executor->start_thread) {
           thread->executor->exit_code = value.i32;
           thread->executor->exiting = PN_TRUE;
           pn_executor_value_trace(thread->executor, function, i->value_id,
                                   value, "    ", "\n");
           PN_TRACE(EXECUTE, "exiting\n");
         }
+#if PN_PPAPI
+        else {
+          /* Return value from an event being processed in a PPAPI app */
+          thread->exit_value = value;
+        }
+#endif /* PN_PPAPI */
       }
 
       break;
@@ -1516,8 +1541,13 @@ static void pn_thread_execute_instruction(PNThread* thread) {
   }
 }
 
+#if PN_PPAPI
+static void pn_event_finish(PNThread* thread);
+static void pn_event_handle_next(PNThread* thread);
+#endif /* PN_PPAPI */
+
 void pn_executor_run(PNExecutor* executor) {
-  PNThread* thread = &executor->main_thread;
+  PNThread* thread = executor->main_thread;
   uint32_t last_thread_id = thread->id;
   while (PN_TRUE) {
     uint32_t i;
@@ -1534,16 +1564,38 @@ void pn_executor_run(PNExecutor* executor) {
     /* Remove the dead thread from the executing linked-list. Only the
      * currently executing thread should be in this state. */
     PNThread* next_thread = thread->next;
-    if (thread->state == PN_THREAD_DEAD) {
-      assert(thread != &executor->main_thread);
-      /* Unlink from executing linked list */
-      thread->prev->next = thread->next;
-      thread->next->prev = thread->prev;
+    if (thread->state == PN_THREAD_DEAD
+#if PN_PPAPI
+        || thread->state == PN_THREAD_IDLE
+#endif /* PN_PPAPI */
+        ) {
+      assert(thread != &executor->start_thread);
 
-      /* Link into dead list, singly-linked */
-      thread->next = executor->dead_threads;
-      thread->prev = NULL;
-      executor->dead_threads = thread;
+#if PN_PPAPI
+      /* The start thread should never be dead (the program should have exited
+       * above in that case). The main thread can be dead, though. This will
+       * happen if the ppapi event loop has started and the currently running
+       * event has been handled. At this point the next event should be
+       * handled. */
+      if (thread == executor->main_thread) {
+        assert(executor->start_thread.state == PN_THREAD_EVENT_LOOP);
+        pn_event_finish(thread);
+        pn_event_handle_next(thread);
+        if (thread->state == PN_THREAD_DEAD) {
+          thread->state = PN_THREAD_IDLE;
+        }
+      } else
+#endif /* PN_PPAPI */
+      {
+        /* Unlink from executing linked list */
+        thread->prev->next = thread->next;
+        thread->next->prev = thread->prev;
+
+        /* Link into dead list, singly-linked */
+        thread->next = executor->dead_threads;
+        thread->prev = NULL;
+        executor->dead_threads = thread;
+      }
     }
 
     thread = next_thread;
@@ -1575,6 +1627,10 @@ void pn_executor_run(PNExecutor* executor) {
         }
 
         /* TODO(binji): detect deadlock */
+#if PN_PPAPI
+      } else if (thread->state == PN_THREAD_IDLE) {
+        break;
+#endif /* PN_PPAPI */
       } else {
         PN_UNREACHABLE();
       }
