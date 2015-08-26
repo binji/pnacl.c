@@ -57,6 +57,7 @@ static void pn_blockinfo_block_read(PNModule* module,
             PN_TRACE_DEDENT(BLOCKINFO_BLOCK, 2);
             block_id = pn_record_read_int32(&reader, "block id");
             const char* name = NULL;
+            (void)name;
             switch (block_id) {
               // clang-format off
               case PN_BLOCKID_BLOCKINFO: name = "abbreviations"; break;

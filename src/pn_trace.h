@@ -192,12 +192,14 @@ static void pn_value_print_to_string(PNModule* module,
 static const char* pn_value_describe(PNModule* module,
                                      PNFunction* function,
                                      PNValueId value_id) {
-  const uint32_t MAX_BUFFER_INDEX = 16;
-  const uint32_t BUFFER_SIZE = 13;
+#define PN_MAX_BUFFER_INDEX 16
+#define PN_BUFFER_SIZE 13
   static uint32_t buffer_index = 0;
-  static char buffers[MAX_BUFFER_INDEX][BUFFER_SIZE];
-  char* buffer = &buffers[buffer_index++ & (MAX_BUFFER_INDEX - 1)][0];
-  pn_value_print_to_string(module, function, value_id, buffer, BUFFER_SIZE);
+  static char buffers[PN_MAX_BUFFER_INDEX][PN_BUFFER_SIZE];
+  char* buffer = &buffers[buffer_index++ & (PN_MAX_BUFFER_INDEX - 1)][0];
+  pn_value_print_to_string(module, function, value_id, buffer, PN_BUFFER_SIZE);
+#undef PN_MAX_BUFFER_INDEX
+#undef PN_BUFFER_SIZE
   return buffer;
 }
 

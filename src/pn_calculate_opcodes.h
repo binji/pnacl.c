@@ -863,7 +863,7 @@ static void pn_function_calculate_opcodes(PNModule* module,
     offset = pn_basic_block_write_instruction_stream(
         module, function, &function->bbs[n], NULL, offset, PN_FALSE);
   }
-  uint32_t istream_size = (uint32_t)offset;
+  uint32_t istream_size = (uint32_t)(uintptr_t)offset;
   function->instructions = pn_allocator_alloc(&module->instruction_allocator,
                                               istream_size, PN_DEFAULT_ALIGN);
 

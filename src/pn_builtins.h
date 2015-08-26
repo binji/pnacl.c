@@ -362,7 +362,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_GETCWD(PNThread* thread,
   void* pathname = executor->memory->data + pathname_p;
   void* result = getcwd(pathname, len);
   PNErrno err = result ? 0 : pn_from_errno(errno);
-  PN_TRACE(IRT, "      returning %s, errno = %d\n", pathname, err);
+  PN_TRACE(IRT, "      returning %s, errno = %d\n", (char*)pathname, err);
   return pn_executor_value_u32(err);
 }
 
@@ -485,7 +485,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNThread* thread,
   uint32_t last_page = executor->heap_end >> PN_PAGESHIFT;
   uint32_t consecutive = 0;
   uint32_t result;
-  uint32_t page_start;
+  uint32_t page_start = 0;
   uint32_t new_heap_end;
   uint32_t i;
   PN_TRACE(IRT, "      Searching from [%d, %d)\n", first_page, last_page);
