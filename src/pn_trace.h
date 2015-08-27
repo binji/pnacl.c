@@ -1744,54 +1744,41 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
 
 #undef PN_OPCODE_STORE
 
-#if 0
+#define PN_OPCODE_SWITCH(ty)                                                  \
+  do {                                                                        \
+    PNRuntimeInstructionSwitch* i = (PNRuntimeInstructionSwitch*)inst;        \
+    PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_##ty "\n",                        \
+             PN_VALUE(i->value_id, ty));                                      \
+    PN_TRACE(EXECUTE, "pc = %%%zd\n", thread->inst - function->instructions); \
+  } while (0) /* no semicolon */
 
+    // clang-format off
     case PN_OPCODE_SWITCH_INT1:
-    case PN_OPCODE_SWITCH_INT8:
-    case PN_OPCODE_SWITCH_INT16:
-    case PN_OPCODE_SWITCH_INT32:
-    case PN_OPCODE_SWITCH_INT64: {
-      PNRuntimeInstructionSwitch* i = (PNRuntimeInstructionSwitch*)inst;
-      PNRuntimeSwitchCase* cases =
-          (void*)inst + sizeof(PNRuntimeInstructionSwitch);
-      const char* type_str =
-          pn_value_describe_type(module, function, i->value_id);
-      PN_PRINT("switch %s %s {\n", type_str,
-               pn_value_describe(module, function, i->value_id));
-      PN_TRACE_PRINT_INDENTX(2);
-      PN_PRINT("default: br label %%%zd;\n",
-               i->default_inst - function->instructions);
-
-      uint32_t c;
-      for (c = 0; c < i->num_cases; ++c) {
-        PNRuntimeSwitchCase* switch_case = &cases[c];
-        PN_TRACE_PRINT_INDENTX(2);
-        PN_PRINT("%s %" PRId64 ": br label %%%zd;\n", type_str,
-                 switch_case->value,
-                 switch_case->inst - function->instructions);
-      }
-      PN_TRACE_PRINT_INDENT();
-      PN_PRINT("}\n");
-      break;
-    }
+    case PN_OPCODE_SWITCH_INT8:  PN_OPCODE_SWITCH(i8); break;
+    case PN_OPCODE_SWITCH_INT16: PN_OPCODE_SWITCH(i16); break;
+    case PN_OPCODE_SWITCH_INT32: PN_OPCODE_SWITCH(i32); break;
+    case PN_OPCODE_SWITCH_INT64: PN_OPCODE_SWITCH(i64); break;
+// clang-format on
 
     case PN_OPCODE_UNREACHABLE:
-      PN_PRINT("unreachable;\n");
       break;
+
+#undef PN_OPCODE_SWITCH
 
     case PN_OPCODE_VSELECT: {
       PNRuntimeInstructionVselect* i = (PNRuntimeInstructionVselect*)inst;
-      PN_PRINT("%s = select %s %s, %s %s, %s %s;\n",
-               pn_value_describe(module, function, i->result_value_id),
-               pn_value_describe_type(module, function, i->cond_id),
-               pn_value_describe(module, function, i->cond_id),
-               pn_value_describe_type(module, function, i->true_value_id),
-               pn_value_describe(module, function, i->true_value_id),
-               pn_value_describe_type(module, function, i->false_value_id),
-               pn_value_describe(module, function, i->false_value_id));
+      PNRuntimeValue result = pn_thread_get_value(thread, i->result_value_id);
+      PNRuntimeValue cond = pn_thread_get_value(thread, i->cond_id);
+      PNValueId value_id = (cond.u8 & 1) ? i->true_value_id : i->false_value_id;
+      pn_executor_value_trace(thread->executor, function, i->result_value_id,
+                              result, "    ", "  ");
+      pn_executor_value_trace(thread->executor, function, i->cond_id, cond, "",
+                              "  ");
+      pn_executor_value_trace(thread->executor, function, value_id, result, "",
+                              "\n");
       break;
     }
-#endif
+
     default:
       // PN_FATAL("Invalid runtime instruction opcode: %d\n", inst->opcode);
       break;

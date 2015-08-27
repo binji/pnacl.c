@@ -1235,28 +1235,25 @@ static void pn_thread_execute_instruction(PNThread* thread) {
 
 #undef PN_OPCODE_STORE
 
-#define PN_OPCODE_SWITCH(ty)                                              \
-  do {                                                                    \
-    PNRuntimeInstructionSwitch* i = (PNRuntimeInstructionSwitch*)inst;    \
-    PNRuntimeSwitchCase* cases =                                          \
-        (void*)inst + sizeof(PNRuntimeInstructionSwitch);                 \
-    PNRuntimeValue value = pn_thread_get_value(thread, i->value_id);      \
-    void* new_inst = i->default_inst;                                     \
-    uint32_t c;                                                           \
-    for (c = 0; c < i->num_cases; ++c) {                                  \
-      PNRuntimeSwitchCase* switch_case = &cases[c];                       \
-      if (value.ty == switch_case->value) {                               \
-        new_inst = switch_case->inst;                                     \
-        break;                                                            \
-      }                                                                   \
-    }                                                                     \
-    thread->inst += sizeof(PNRuntimeInstructionSwitch) +                  \
-                    i->num_cases * sizeof(PNSwitchCase);                  \
-    pn_thread_do_phi_assigns(thread, function, new_inst);                 \
-    thread->inst = new_inst;                                              \
-    PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_##ty "\n",                    \
-             PN_VALUE_DESCRIBE(i->value_id), value.ty);                   \
-    PN_TRACE(EXECUTE, "pc = %%%zd\n", new_inst - function->instructions); \
+#define PN_OPCODE_SWITCH(ty)                                           \
+  do {                                                                 \
+    PNRuntimeInstructionSwitch* i = (PNRuntimeInstructionSwitch*)inst; \
+    PNRuntimeSwitchCase* cases =                                       \
+        (void*)inst + sizeof(PNRuntimeInstructionSwitch);              \
+    PNRuntimeValue value = pn_thread_get_value(thread, i->value_id);   \
+    void* new_inst = i->default_inst;                                  \
+    uint32_t c;                                                        \
+    for (c = 0; c < i->num_cases; ++c) {                               \
+      PNRuntimeSwitchCase* switch_case = &cases[c];                    \
+      if (value.ty == switch_case->value) {                            \
+        new_inst = switch_case->inst;                                  \
+        break;                                                         \
+      }                                                                \
+    }                                                                  \
+    thread->inst += sizeof(PNRuntimeInstructionSwitch) +               \
+                    i->num_cases * sizeof(PNSwitchCase);               \
+    pn_thread_do_phi_assigns(thread, function, new_inst);              \
+    thread->inst = new_inst;                                           \
   } while (0) /* no semicolon */
 
     // clang-format off
@@ -1279,12 +1276,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PNValueId value_id = (cond.u8 & 1) ? i->true_value_id : i->false_value_id;
       PNRuntimeValue result = pn_thread_get_value(thread, value_id);
       pn_thread_set_value(thread, i->result_value_id, result);
-      pn_executor_value_trace(thread->executor, function, i->result_value_id,
-                              result, "    ", "  ");
-      pn_executor_value_trace(thread->executor, function, i->cond_id, cond, "",
-                              "  ");
-      pn_executor_value_trace(thread->executor, function, value_id, result, "",
-                              "\n");
       thread->inst += sizeof(PNRuntimeInstructionVselect);
       break;
     }
