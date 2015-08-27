@@ -1590,8 +1590,24 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
 
 #undef PN_OPCODE_INTRINSIC_RMW
 
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_LONGJMP:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_SETJMP:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_LONGJMP: {
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_TRACE(EXECUTE, "    %s = %u  %s = %u\n", PN_VALUE(arg_ids[0], u32),
+               PN_VALUE(arg_ids[1], u32));
+      PN_TRACE(EXECUTE, "function = %%f%d  pc = %%%zd\n",
+               thread->current_frame->location.function_id,
+               thread->inst - function->instructions);
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_SETJMP: {
+      PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_TRACE(EXECUTE, "    %s = %u  %s = %u\n",
+               PN_VALUE(i->result_value_id, u32), PN_VALUE(arg_ids[0], u32));
+      break;
+    }
+
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I32:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_READ_TP:
     case PN_OPCODE_INTRINSIC_LLVM_SQRT_F32:
@@ -1897,8 +1913,20 @@ static void pn_runtime_instruction_trace_intrinsics(
 
 #undef PN_OPCODE_INTRINSIC_EXCHANGE
 
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_LONGJMP:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_SETJMP:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_LONGJMP: {
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_TRACE(INTRINSICS, "    llvm.nacl.longjmp(jmpbuf: %u, value: %u)\n",
+               PN_ARG(0, u32), PN_ARG(1, u32));
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_SETJMP: {
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_TRACE(INTRINSICS, "    llvm.nacl.setjmp(jmpbuf: %u)\n",
+               PN_ARG(0, u32));
+      break;
+    }
+
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I32:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_READ_TP:
     case PN_OPCODE_INTRINSIC_LLVM_SQRT_F32:

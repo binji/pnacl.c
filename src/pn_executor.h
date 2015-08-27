@@ -957,10 +957,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
       uint32_t jmpbuf_p = PN_ARG(0, u32);
       PNRuntimeValue value = pn_thread_get_value(thread, arg_ids[1]);
-      PN_TRACE(INTRINSICS, "    llvm.nacl.longjmp(jmpbuf: %u, value: %u)\n",
-               jmpbuf_p, value.u32);
-      PN_TRACE(EXECUTE, "    %s = %u  %s = %u\n", PN_VALUE_DESCRIBE(arg_ids[0]),
-               jmpbuf_p, PN_VALUE_DESCRIBE(arg_ids[1]), value.u32);
 
       PNJmpBufId id = pn_memory_read_u32(thread->executor->memory, jmpbuf_p);
 
@@ -976,9 +972,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
             /* Reset the frame to its original state */
             *thread->current_frame = buf->frame;
             PNLocation* location = &thread->current_frame->location;
-            PN_TRACE(EXECUTE, "function = %%f%d  pc = %%%zd\n",
-                     location->function_id,
-                     location->inst - function->instructions);
             /* Set the return value */
             PNRuntimeInstructionCall* c = location->inst;
             pn_thread_set_value(thread, c->result_value_id, value);
@@ -1014,10 +1007,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       pn_memory_write_u32(thread->executor->memory, jmpbuf_p, buf->id);
       PNRuntimeValue result = pn_executor_value_u32(0);
       pn_thread_set_value(thread, i->result_value_id, result);
-      PN_TRACE(INTRINSICS, "    llvm.nacl.setjmp(jmpbuf: %u)\n", jmpbuf_p);
-      PN_TRACE(EXECUTE, "    %s = %u  %s = %u\n",
-               PN_VALUE_DESCRIBE(i->result_value_id), result.u32,
-               PN_VALUE_DESCRIBE(arg_ids[0]), jmpbuf_p);
       thread->inst +=
           sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId);
       break;
