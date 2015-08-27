@@ -1139,9 +1139,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     PNRuntimeValue result = pn_executor_value_##ty(                \
         pn_memory_read_##ty(thread->executor->memory, src.u32));   \
     pn_thread_set_value(thread, i->result_value_id, result);       \
-    PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_##ty "  %s = %u\n",    \
-             PN_VALUE_DESCRIBE(i->result_value_id), result.ty,     \
-             PN_VALUE_DESCRIBE(i->src_id), src.u32);               \
     thread->inst += sizeof(PNRuntimeInstructionLoad);              \
   } while (0) /*no semicolon */
 
@@ -1166,9 +1163,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
 
         pn_allocator_reset_to_mark(&thread->allocator,
                                    thread->current_frame->mark);
-        PN_TRACE(EXECUTE, "function = %%f%d  pc = %%%zd\n",
-                 location->function_id,
-                 location->inst - new_function->instructions);
         thread->inst = location->inst + sizeof(PNRuntimeInstructionCall) +
                        c->num_args * sizeof(PNValueId);
         thread->function = new_function;
@@ -1182,7 +1176,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
         if (thread == &thread->executor->start_thread) {
           thread->executor->exit_code = 0;
           thread->executor->exiting = PN_TRUE;
-          PN_TRACE(EXECUTE, "exiting\n");
         }
       }
       break;
@@ -1199,15 +1192,8 @@ static void pn_thread_execute_instruction(PNThread* thread) {
         PNFunction* new_function = &module->functions[location->function_id];
         PNRuntimeInstructionCall* c = location->inst;
         pn_thread_set_value(thread, c->result_value_id, value);
-        pn_executor_value_trace(thread->executor, function, i->value_id, value,
-                                "    ", "\n");
         pn_allocator_reset_to_mark(&thread->allocator,
                                    thread->current_frame->mark);
-        PN_TRACE(EXECUTE, "function = %%f%d  pc = %%%zd\n",
-                 location->function_id,
-                 location->inst - new_function->instructions);
-        pn_executor_value_trace(thread->executor, new_function,
-                                c->result_value_id, value, "    ", "\n");
         thread->inst = location->inst + sizeof(PNRuntimeInstructionCall) +
                        c->num_args * sizeof(PNValueId);
         thread->function = new_function;
@@ -1217,9 +1203,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
         if (thread == &thread->executor->start_thread) {
           thread->executor->exit_code = value.i32;
           thread->executor->exiting = PN_TRUE;
-          pn_executor_value_trace(thread->executor, function, i->value_id,
-                                  value, "    ", "\n");
-          PN_TRACE(EXECUTE, "exiting\n");
         }
 #if PN_PPAPI
         else {
@@ -1237,9 +1220,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     PNRuntimeInstructionStore* i = (PNRuntimeInstructionStore*)inst;    \
     PNRuntimeValue dest = pn_thread_get_value(thread, i->dest_id);      \
     PNRuntimeValue value = pn_thread_get_value(thread, i->value_id);    \
-    PN_TRACE(EXECUTE, "    %s = %u  %s = " PN_FORMAT_##ty "\n",         \
-             PN_VALUE_DESCRIBE(i->dest_id), dest.u32,                   \
-             PN_VALUE_DESCRIBE(i->value_id), value.ty);                 \
     pn_memory_write_##ty(thread->executor->memory, dest.u32, value.ty); \
     thread->inst += sizeof(PNRuntimeInstructionStore);                  \
   } while (0) /*no semicolon */

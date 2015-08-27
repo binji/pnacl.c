@@ -114,7 +114,7 @@ pc = %84
     %v3 = 1
 pc = %180
   ret void;
-function = %f12  pc = %808
+function = %f12  pc = %836
   %v27 = load i32* @g1, align 1;
     %v27 = 4  @g1 = 1056
   %v28 = icmp eq i32 %v27, %c0;
@@ -149,7 +149,7 @@ pc = %84
     %v3 = 1
 pc = %180
   ret void;
-function = %f12  pc = %1360
+function = %f12  pc = %1388
   %v41 = icmp eq i32 %v3, %c0;
     %v41 = 1  %v3 = 0  %c0 = 0
   br i1 %v41, label %1816, label %1432;
@@ -363,7 +363,7 @@ pc = %4088
     %v125 = 248 
 function = %f14  pc = %0
   ret void;
-function = %f12  pc = %4088
+function = %f12  pc = %4104
   br label %4348;
 pc = %4348
   %v141 = load i32* %v113, align 1;

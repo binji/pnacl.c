@@ -1682,49 +1682,69 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
     case PN_OPCODE_INTRINSIC_START:
       break;
 
-#if 0
+#define PN_OPCODE_LOAD(ty)                                                \
+  do {                                                                    \
+    PNRuntimeInstructionLoad* i = (PNRuntimeInstructionLoad*)inst;        \
+    PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_##ty "  %s = %u\n",           \
+             PN_VALUE(i->result_value_id, ty), PN_VALUE(i->src_id, u32)); \
+  } while (0) /*no semicolon */
 
-    case PN_OPCODE_LOAD_DOUBLE:
-    case PN_OPCODE_LOAD_FLOAT:
-    case PN_OPCODE_LOAD_INT8:
-    case PN_OPCODE_LOAD_INT16:
-    case PN_OPCODE_LOAD_INT32:
-    case PN_OPCODE_LOAD_INT64: {
-      PNRuntimeInstructionLoad* i = (PNRuntimeInstructionLoad*)inst;
-      PN_PRINT("%s = load %s* %s, align %d;\n",
-               pn_value_describe(module, function, i->result_value_id),
-               pn_value_describe_type(module, function, i->result_value_id),
-               pn_value_describe(module, function, i->src_id), i->alignment);
-      break;
-    }
+    // clang-format off
+    case PN_OPCODE_LOAD_DOUBLE: PN_OPCODE_LOAD(f64); break;
+    case PN_OPCODE_LOAD_FLOAT: PN_OPCODE_LOAD(f32); break;
+    case PN_OPCODE_LOAD_INT8: PN_OPCODE_LOAD(u8); break;
+    case PN_OPCODE_LOAD_INT16: PN_OPCODE_LOAD(u16); break;
+    case PN_OPCODE_LOAD_INT32: PN_OPCODE_LOAD(u32); break;
+    case PN_OPCODE_LOAD_INT64: PN_OPCODE_LOAD(u64); break;
+// clang-format on
+
+#undef PN_OPCODE_LOAD
 
     case PN_OPCODE_RET: {
-      PN_PRINT("ret void;\n");
+      if (thread->executor->exiting) {
+        PN_TRACE(EXECUTE, "exiting\n");
+      } else {
+        PN_TRACE(EXECUTE, "function = %%f%d  pc = %%%zd\n",
+                 thread->current_frame->location.function_id,
+                 thread->inst - function->instructions);
+      }
       break;
     }
 
     case PN_OPCODE_RET_VALUE: {
-      PNRuntimeInstructionRetValue* i = (PNRuntimeInstructionRetValue*)inst;
-      PN_PRINT("ret %s %s;\n",
-               pn_value_describe_type(module, function, i->value_id),
-               pn_value_describe(module, function, i->value_id));
+      if (thread->executor->exiting) {
+        PN_TRACE(EXECUTE, "exiting\n");
+      } else {
+        PNRuntimeInstructionCall* c = (PNRuntimeInstructionCall*)thread->inst;
+        PNRuntimeValue value = pn_thread_get_value(thread, c->result_value_id);
+        pn_executor_value_trace(thread->executor, function, c->result_value_id,
+                                value, "    ", "\n");
+        PN_TRACE(EXECUTE, "function = %%f%d  pc = %%%zd\n",
+                 thread->current_frame->location.function_id,
+                 thread->inst - function->instructions);
+      }
       break;
     }
 
-    case PN_OPCODE_STORE_DOUBLE:
-    case PN_OPCODE_STORE_FLOAT:
-    case PN_OPCODE_STORE_INT8:
-    case PN_OPCODE_STORE_INT16:
-    case PN_OPCODE_STORE_INT32:
-    case PN_OPCODE_STORE_INT64: {
-      PNRuntimeInstructionStore* i = (PNRuntimeInstructionStore*)inst;
-      PN_PRINT("store %s %s, %s* %s, align %d;\n",
-               pn_value_describe_type(module, function, i->value_id),
-               pn_value_describe(module, function, i->value_id),
-               pn_value_describe_type(module, function, i->value_id),
-               pn_value_describe(module, function, i->dest_id), i->alignment);
-      break;
-    }
+#define PN_OPCODE_STORE(ty)                                          \
+  do {                                                               \
+    PNRuntimeInstructionStore* i = (PNRuntimeInstructionStore*)inst; \
+    PN_TRACE(EXECUTE, "    %s = %u  %s = " PN_FORMAT_##ty "\n",      \
+             PN_VALUE(i->dest_id, u32), PN_VALUE(i->value_id, ty));  \
+  } while (0) /*no semicolon */
+
+    // clang-format off
+    case PN_OPCODE_STORE_DOUBLE: PN_OPCODE_STORE(f64); break;
+    case PN_OPCODE_STORE_FLOAT: PN_OPCODE_STORE(f32); break;
+    case PN_OPCODE_STORE_INT8: PN_OPCODE_STORE(u8); break;
+    case PN_OPCODE_STORE_INT16: PN_OPCODE_STORE(u16); break;
+    case PN_OPCODE_STORE_INT32: PN_OPCODE_STORE(u32); break;
+    case PN_OPCODE_STORE_INT64: PN_OPCODE_STORE(u64); break;
+// clang-format on
+
+#undef PN_OPCODE_STORE
+
+#if 0
 
     case PN_OPCODE_SWITCH_INT1:
     case PN_OPCODE_SWITCH_INT8:
