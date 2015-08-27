@@ -1608,7 +1608,29 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
       break;
     }
 
+#define PN_OPCODE_INTRINSIC_STORE(ty)                                    \
+  do {                                                                   \
+    PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall); \
+    PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_##ty "  %s = %u  %s = %u\n", \
+             PN_VALUE(arg_ids[0], ty), PN_VALUE(arg_ids[1], u32),        \
+             PN_VALUE(arg_ids[2], u32));                                 \
+  } while (0) /* no semicolon */
+
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I8:
+      PN_OPCODE_INTRINSIC_STORE(u8);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I16:
+      PN_OPCODE_INTRINSIC_STORE(u16);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I32:
+      PN_OPCODE_INTRINSIC_STORE(u32);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I64:
+      PN_OPCODE_INTRINSIC_STORE(u64);
+      break;
+
+#undef PN_OPCODE_INTRINSIC_STORE
+
     case PN_OPCODE_INTRINSIC_LLVM_NACL_READ_TP:
     case PN_OPCODE_INTRINSIC_LLVM_SQRT_F32:
     case PN_OPCODE_INTRINSIC_LLVM_SQRT_F64:
@@ -1624,9 +1646,6 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I16:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I32:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I64:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I8:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I16:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I64:
     case PN_OPCODE_INTRINSIC_LLVM_STACKRESTORE:
     case PN_OPCODE_INTRINSIC_LLVM_STACKSAVE:
     case PN_OPCODE_INTRINSIC_START:
@@ -1927,7 +1946,30 @@ static void pn_runtime_instruction_trace_intrinsics(
       break;
     }
 
+#define PN_OPCODE_INTRINSIC_STORE(ty)                                    \
+  do {                                                                   \
+    PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall); \
+    PN_TRACE(INTRINSICS,                                                 \
+             "    llvm.nacl.atomic.store.u32(value: " PN_FORMAT_##ty     \
+             " addr_p:%u, flags: %u)\n",                                 \
+             PN_ARG(0, ty), PN_ARG(1, u32), PN_ARG(2, u32));             \
+  } while (0) /* no semicolon */
+
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I8:
+      PN_OPCODE_INTRINSIC_STORE(u8);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I16:
+      PN_OPCODE_INTRINSIC_STORE(u16);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I32:
+      PN_OPCODE_INTRINSIC_STORE(u32);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I64:
+      PN_OPCODE_INTRINSIC_STORE(u64);
+      break;
+
+#undef PN_OPCODE_INTRINSIC_STORE
+
     case PN_OPCODE_INTRINSIC_LLVM_NACL_READ_TP:
     case PN_OPCODE_INTRINSIC_LLVM_SQRT_F32:
     case PN_OPCODE_INTRINSIC_LLVM_SQRT_F64:
@@ -1943,9 +1985,6 @@ static void pn_runtime_instruction_trace_intrinsics(
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I16:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I32:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I64:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I8:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I16:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I64:
     case PN_OPCODE_INTRINSIC_LLVM_STACKRESTORE:
     case PN_OPCODE_INTRINSIC_LLVM_STACKSAVE:
     case PN_OPCODE_INTRINSIC_START:

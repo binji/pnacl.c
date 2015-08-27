@@ -1012,28 +1012,33 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       break;
     }
 
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I32: {
-      PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
-      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
-      PN_CHECK(i->num_args == 3);
-      PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
-      uint32_t value = PN_ARG(0, u32);
-      uint32_t addr_p = PN_ARG(1, u32);
-      uint32_t flags = PN_ARG(2, u32);
-      pn_memory_write_u32(thread->executor->memory, addr_p, value);
-      PN_TRACE(
-          INTRINSICS,
-          "    llvm.nacl.atomic.store.u32(value: %u, addr_p:%u, flags: %u)\n",
-          value, addr_p, flags);
-      PN_TRACE(EXECUTE, "    %s = %u  %s = %u  %s = %u\n",
-               PN_VALUE_DESCRIBE(arg_ids[0]), value,
-               PN_VALUE_DESCRIBE(arg_ids[1]), addr_p,
-               PN_VALUE_DESCRIBE(arg_ids[2]), flags);
-      (void)flags;
-      thread->inst +=
-          sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId);
+#define PN_OPCODE_INTRINSIC_STORE(ty)                                       \
+  do {                                                                      \
+    PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;          \
+    PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);    \
+    PN_CHECK(i->num_args == 3);                                             \
+    PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);                    \
+    uint32_t value = PN_ARG(0, ty);                                         \
+    uint32_t addr_p = PN_ARG(1, u32);                                       \
+    pn_memory_write_u32(thread->executor->memory, addr_p, value);           \
+    thread->inst +=                                                         \
+        sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId); \
+  } while (0) /* no semicolon */
+
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I8:
+      PN_OPCODE_INTRINSIC_STORE(u8);
       break;
-    }
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I16:
+      PN_OPCODE_INTRINSIC_STORE(u16);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I32:
+      PN_OPCODE_INTRINSIC_STORE(u32);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I64:
+      PN_OPCODE_INTRINSIC_STORE(u64);
+      break;
+
+#undef PN_OPCODE_INTRINSIC_STORE
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_READ_TP: {
       PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
@@ -1140,9 +1145,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_RMW_I16)
       PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_RMW_I32)
       PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_RMW_I64)
-      PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I8)
-      PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I16)
-      PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I64)
       PN_OPCODE_INTRINSIC_STUB(START)
 
 #undef PN_ARG
