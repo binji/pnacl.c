@@ -711,14 +711,16 @@ static void pn_thread_execute_instruction(PNThread* thread) {
 #undef PN_OPCODE_CMP2_ORD
 #undef PN_OPCODE_CMP2_UNO
 
+#define PN_ARG(i, ty) pn_thread_get_value(thread, arg_ids[i]).ty
+
     case PN_OPCODE_INTRINSIC_LLVM_MEMCPY: {
       PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
       PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
       PN_CHECK(i->num_args == 5);
       PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
-      uint32_t dst_p = pn_thread_get_value(thread, arg_ids[0]).u32;
-      uint32_t src_p = pn_thread_get_value(thread, arg_ids[1]).u32;
-      uint32_t len = pn_thread_get_value(thread, arg_ids[2]).u32;
+      uint32_t dst_p = PN_ARG(0, u32);
+      uint32_t src_p = PN_ARG(1, u32);
+      uint32_t len = PN_ARG(2, u32);
 
       if (len > 0) {
         pn_memory_check(thread->executor->memory, dst_p, len);
@@ -737,9 +739,9 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
       PN_CHECK(i->num_args == 5);
       PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
-      uint32_t dst_p = pn_thread_get_value(thread, arg_ids[0]).u32;
-      uint8_t value = pn_thread_get_value(thread, arg_ids[1]).u8;
-      uint32_t len = pn_thread_get_value(thread, arg_ids[2]).u32;
+      uint32_t dst_p = PN_ARG(0, u32);
+      uint8_t value = PN_ARG(1, u8);
+      uint32_t len = PN_ARG(2, u32);
 
       if (len > 0) {
         pn_memory_check(thread->executor->memory, dst_p, len);
@@ -756,9 +758,9 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
       PN_CHECK(i->num_args == 5);
       PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
-      uint32_t dst_p = pn_thread_get_value(thread, arg_ids[0]).u32;
-      uint32_t src_p = pn_thread_get_value(thread, arg_ids[1]).u32;
-      uint32_t len = pn_thread_get_value(thread, arg_ids[2]).u32;
+      uint32_t dst_p = PN_ARG(0, u32);
+      uint32_t src_p = PN_ARG(1, u32);
+      uint32_t len = PN_ARG(2, u32);
 
       if (len > 0) {
         pn_memory_check(thread->executor->memory, dst_p, len);
@@ -777,9 +779,9 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;          \
     PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);    \
     PN_CHECK(i->num_args == 5);                                             \
-    uint32_t addr_p = pn_thread_get_value(thread, arg_ids[0]).u32;          \
-    pn_##ty expected = pn_thread_get_value(thread, arg_ids[1]).ty;          \
-    pn_##ty desired = pn_thread_get_value(thread, arg_ids[2]).ty;           \
+    uint32_t addr_p = PN_ARG(0, u32);                                       \
+    pn_##ty expected = PN_ARG(1, ty);                                       \
+    pn_##ty desired = PN_ARG(2, ty);                                        \
     pn_##ty read = pn_memory_read_##ty(thread->executor->memory, addr_p);   \
     PNRuntimeValue result = pn_executor_value_##ty(read);                   \
     if (read == expected) {                                                 \
@@ -810,7 +812,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;          \
     PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);    \
     PN_CHECK(i->num_args == 2);                                             \
-    uint32_t addr_p = pn_thread_get_value(thread, arg_ids[0]).u32;          \
+    uint32_t addr_p = PN_ARG(0, u32);                                       \
     pn_##ty value = pn_memory_read_##ty(thread->executor->memory, addr_p);  \
     PNRuntimeValue result = pn_executor_value_##ty(value);                  \
     pn_thread_set_value(thread, i->result_value_id, result);                \
@@ -838,9 +840,9 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;             \
     PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);       \
     PN_CHECK(i->num_args == 4);                                                \
-    PN_CHECK(pn_thread_get_value(thread, arg_ids[0]).u32 == opval);            \
-    uint32_t addr_p = pn_thread_get_value(thread, arg_ids[1]).u32;             \
-    pn_##ty value = pn_thread_get_value(thread, arg_ids[2]).ty;                \
+    PN_CHECK(PN_ARG(0, u32) == opval);                                         \
+    uint32_t addr_p = PN_ARG(1, u32);                                          \
+    pn_##ty value = PN_ARG(2, ty);                                             \
     pn_##ty old_value = pn_memory_read_##ty(thread->executor->memory, addr_p); \
     pn_##ty new_value = old_value op value;                                    \
     pn_memory_write_##ty(thread->executor->memory, addr_p, new_value);         \
@@ -920,9 +922,9 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;             \
     PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);       \
     PN_CHECK(i->num_args == 4);                                                \
-    PN_CHECK(pn_thread_get_value(thread, arg_ids[0]).u32 == opval);            \
-    uint32_t addr_p = pn_thread_get_value(thread, arg_ids[1]).u32;             \
-    pn_##ty value = pn_thread_get_value(thread, arg_ids[2]).ty;                \
+    PN_CHECK(PN_ARG(0, u32) == opval);                                         \
+    uint32_t addr_p = PN_ARG(1, u32);                                          \
+    pn_##ty value = PN_ARG(2, ty);                                             \
     pn_##ty old_value = pn_memory_read_##ty(thread->executor->memory, addr_p); \
     pn_##ty new_value = value;                                                 \
     pn_memory_write_##ty(thread->executor->memory, addr_p, new_value);         \
@@ -953,7 +955,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
       PN_CHECK(i->num_args == 2);
       PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
-      uint32_t jmpbuf_p = pn_thread_get_value(thread, arg_ids[0]).u32;
+      uint32_t jmpbuf_p = PN_ARG(0, u32);
       PNRuntimeValue value = pn_thread_get_value(thread, arg_ids[1]);
       PN_TRACE(INTRINSICS, "    llvm.nacl.longjmp(jmpbuf: %u, value: %u)\n",
                jmpbuf_p, value.u32);
@@ -1002,7 +1004,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PN_CHECK(i->num_args == 1);
       PN_CHECK(i->result_value_id != PN_INVALID_VALUE_ID);
       thread->current_frame->location.inst = thread->inst;
-      uint32_t jmpbuf_p = pn_thread_get_value(thread, arg_ids[0]).u32;
+      uint32_t jmpbuf_p = PN_ARG(0, u32);
       PNJmpBuf* buf = pn_allocator_alloc(&thread->allocator, sizeof(PNJmpBuf),
                                          PN_DEFAULT_ALIGN);
       buf->id = thread->executor->next_jmpbuf_id++;
@@ -1026,9 +1028,9 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
       PN_CHECK(i->num_args == 3);
       PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
-      uint32_t value = pn_thread_get_value(thread, arg_ids[0]).u32;
-      uint32_t addr_p = pn_thread_get_value(thread, arg_ids[1]).u32;
-      uint32_t flags = pn_thread_get_value(thread, arg_ids[2]).u32;
+      uint32_t value = PN_ARG(0, u32);
+      uint32_t addr_p = PN_ARG(1, u32);
+      uint32_t flags = PN_ARG(2, u32);
       pn_memory_write_u32(thread->executor->memory, addr_p, value);
       PN_TRACE(
           INTRINSICS,
@@ -1063,7 +1065,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
       PN_CHECK(i->num_args == 1);
       PN_CHECK(i->result_value_id != PN_INVALID_VALUE_ID);
-      float value = pn_thread_get_value(thread, arg_ids[0]).f32;
+      float value = PN_ARG(0, f32);
       PNRuntimeValue result = pn_executor_value_f32(sqrtf(value));
       pn_thread_set_value(thread, i->result_value_id, result);
       PN_TRACE(INTRINSICS, "    llvm.sqrt.f32(%f)\n", value);
@@ -1080,7 +1082,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
       PN_CHECK(i->num_args == 1);
       PN_CHECK(i->result_value_id != PN_INVALID_VALUE_ID);
-      double value = pn_thread_get_value(thread, arg_ids[0]).f64;
+      double value = PN_ARG(0, f64);
       PNRuntimeValue result = pn_executor_value_f64(sqrt(value));
       pn_thread_set_value(thread, i->result_value_id, result);
       PN_TRACE(INTRINSICS, "    llvm.sqrt.f64(%f)\n", value);
@@ -1097,7 +1099,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
       PN_CHECK(i->num_args == 1);
       PN_CHECK(i->result_value_id == PN_INVALID_VALUE_ID);
-      uint32_t value = pn_thread_get_value(thread, arg_ids[0]).u32;
+      uint32_t value = PN_ARG(0, u32);
       /* TODO(binji): validate stack pointer */
       thread->current_frame->memory_stack_top = value;
       PN_TRACE(INTRINSICS, "    llvm.stackrestore(%u)\n", value);
@@ -1153,6 +1155,8 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I16)
       PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_STORE_I64)
       PN_OPCODE_INTRINSIC_STUB(START)
+
+#undef PN_ARG
 
 #define PN_OPCODE_LOAD(ty)                                         \
   do {                                                             \

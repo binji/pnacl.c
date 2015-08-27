@@ -1716,6 +1716,8 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
 static void pn_runtime_instruction_trace_intrinsics(
     PNThread* thread,
     PNRuntimeInstruction* inst) {
+#define PN_ARG(i, ty) pn_thread_get_value(thread, arg_ids[i]).ty
+
   if (!PN_IS_TRACE(INTRINSICS)) {
     return;
   }
@@ -1726,11 +1728,8 @@ static void pn_runtime_instruction_trace_intrinsics(
       PN_TRACE(INTRINSICS,
                "    llvm.memcpy(dst_p:%u, src_p:%u, len:%u, align:%u, "
                "is_volatile:%u)\n",
-               pn_thread_get_value(thread, arg_ids[0]).u32,
-               pn_thread_get_value(thread, arg_ids[1]).u32,
-               pn_thread_get_value(thread, arg_ids[2]).u32,
-               pn_thread_get_value(thread, arg_ids[3]).u32,
-               pn_thread_get_value(thread, arg_ids[4]).u8);
+               PN_ARG(0, u32), PN_ARG(1, u32), PN_ARG(2, u32), PN_ARG(3, u32),
+               PN_ARG(4, u8));
       break;
     }
 
@@ -1739,11 +1738,8 @@ static void pn_runtime_instruction_trace_intrinsics(
       PN_TRACE(INTRINSICS,
                "    llvm.memset(dst_p:%u, value:%u, len:%u, align:%u, "
                "is_volatile:%u)\n",
-               pn_thread_get_value(thread, arg_ids[0]).u32,
-               pn_thread_get_value(thread, arg_ids[1]).u8,
-               pn_thread_get_value(thread, arg_ids[2]).u32,
-               pn_thread_get_value(thread, arg_ids[3]).u32,
-               pn_thread_get_value(thread, arg_ids[4]).u8);
+               PN_ARG(0, u32), PN_ARG(1, u8), PN_ARG(2, u32), PN_ARG(3, u32),
+               PN_ARG(4, u8));
       break;
     }
 
@@ -1752,11 +1748,8 @@ static void pn_runtime_instruction_trace_intrinsics(
       PN_TRACE(INTRINSICS,
                "    llvm.memmove(dst_p:%u, src_p:%u, len:%u, align:%u, "
                "is_volatile:%u)\n",
-               pn_thread_get_value(thread, arg_ids[0]).u32,
-               pn_thread_get_value(thread, arg_ids[1]).u32,
-               pn_thread_get_value(thread, arg_ids[2]).u32,
-               pn_thread_get_value(thread, arg_ids[3]).u32,
-               pn_thread_get_value(thread, arg_ids[4]).u8);
+               PN_ARG(0, u32), PN_ARG(1, u32), PN_ARG(2, u32), PN_ARG(3, u32),
+               PN_ARG(4, u8));
       break;
     }
 
@@ -1766,9 +1759,7 @@ static void pn_runtime_instruction_trace_intrinsics(
     PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.cmpxchg." #ty             \
                          "(addr_p:%u, expected:" PN_FORMAT_##ty          \
              ", desired:" PN_FORMAT_##ty ", ...)\n",                     \
-             pn_thread_get_value(thread, arg_ids[0]).u32,                \
-             pn_thread_get_value(thread, arg_ids[1]).ty,                 \
-             pn_thread_get_value(thread, arg_ids[2]).ty);                \
+             PN_ARG(0, u32), PN_ARG(1, ty), PN_ARG(2, ty));              \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I8:
@@ -1791,8 +1782,7 @@ static void pn_runtime_instruction_trace_intrinsics(
     PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall); \
     PN_TRACE(INTRINSICS,                                                 \
              "    llvm.nacl.atomic.load." #ty "(addr_p:%u, flags:%u)\n", \
-             pn_thread_get_value(thread, arg_ids[0]).u32,                \
-             pn_thread_get_value(thread, arg_ids[1]).u32);               \
+             PN_ARG(0, u32), PN_ARG(1, u32));                            \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I8:
@@ -1815,8 +1805,7 @@ static void pn_runtime_instruction_trace_intrinsics(
     PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);     \
     PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.rmw." #ty                     \
                          "(op: %s, addr_p:%u, value: " PN_FORMAT_##ty ")\n", \
-             #op, pn_thread_get_value(thread, arg_ids[0]).u32,               \
-             pn_thread_get_value(thread, arg_ids[1]).ty);                    \
+             #op, PN_ARG(0, u32), PN_ARG(1, ty));                            \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8:
@@ -1890,8 +1879,7 @@ static void pn_runtime_instruction_trace_intrinsics(
     PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall); \
     PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.exchange." #ty            \
                          "(addr_p:%u, value: " PN_FORMAT_##ty ")\n",     \
-             pn_thread_get_value(thread, arg_ids[1]).u32,                \
-             pn_thread_get_value(thread, arg_ids[2]).ty);                \
+             PN_ARG(1, u32), PN_ARG(2, ty));                             \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I8:
@@ -1937,6 +1925,7 @@ static void pn_runtime_instruction_trace_intrinsics(
     default:
       break;
   }
+#undef PN_ARG
 }
 
 #else
