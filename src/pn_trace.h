@@ -1471,15 +1471,52 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
 
 #undef PN_OPCODE_CMP2
 
-#if 0
-    // clang-format off
     case PN_OPCODE_INTRINSIC_LLVM_MEMCPY:
-    case PN_OPCODE_INTRINSIC_LLVM_MEMSET:
-    case PN_OPCODE_INTRINSIC_LLVM_MEMMOVE:
+    case PN_OPCODE_INTRINSIC_LLVM_MEMMOVE: {
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_TRACE(EXECUTE, "    %s = %u  %s = %u  %s = %u  %s = %u  %s = %u\n",
+               PN_VALUE(arg_ids[0], u32), PN_VALUE(arg_ids[1], u32),
+               PN_VALUE(arg_ids[2], u32), PN_VALUE(arg_ids[3], u32),
+               PN_VALUE(arg_ids[4], u8));
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_MEMSET: {
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_TRACE(EXECUTE, "    %s = %u  %s = %u  %s = %u  %s = %u  %s = %u\n",
+               PN_VALUE(arg_ids[0], u32), PN_VALUE(arg_ids[1], u8),
+               PN_VALUE(arg_ids[2], u32), PN_VALUE(arg_ids[3], u32),
+               PN_VALUE(arg_ids[4], u8));
+      break;
+    }
+
+#define PN_OPCODE_INTRINSIC_CMPXCHG(ty)                                   \
+  do {                                                                    \
+    PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;        \
+    PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);  \
+    PN_TRACE(EXECUTE,                                                     \
+             "    %s = " PN_FORMAT_##ty "  %s = %u  %s = " PN_FORMAT_##ty \
+             "  %s = " PN_FORMAT_##ty " %s = %u  %s = %u\n",              \
+             PN_VALUE(i->result_value_id, ty), PN_VALUE(arg_ids[0], u32), \
+             PN_VALUE(arg_ids[1], ty), PN_VALUE(arg_ids[2], ty),          \
+             PN_VALUE(arg_ids[3], u32), PN_VALUE(arg_ids[4], u32));       \
+  } while (0) /* no semicolon */
+
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I8:
+      PN_OPCODE_INTRINSIC_CMPXCHG(u8);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I16:
+      PN_OPCODE_INTRINSIC_CMPXCHG(u16);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I32:
+      PN_OPCODE_INTRINSIC_CMPXCHG(u32);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I64:
+      PN_OPCODE_INTRINSIC_CMPXCHG(u64);
+      break;
+
+#undef PN_OPCODE_INTRINSIC_CMPXCHG
+
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I8:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I16:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I32:
@@ -1532,6 +1569,8 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
     case PN_OPCODE_INTRINSIC_LLVM_STACKRESTORE:
     case PN_OPCODE_INTRINSIC_LLVM_STACKSAVE:
     case PN_OPCODE_INTRINSIC_START:
+
+#if 0
 
     case PN_OPCODE_LOAD_DOUBLE:
     case PN_OPCODE_LOAD_FLOAT:
@@ -1627,6 +1666,137 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
   }
 #undef PN_VALUE
 #undef PN_VALUE_OLD
+}
+
+static void pn_runtime_instruction_trace_intrinsics(
+    PNThread* thread,
+    PNRuntimeInstruction* inst) {
+  if (!PN_IS_TRACE(INTRINSICS)) {
+    return;
+  }
+
+  switch (inst->opcode) {
+    case PN_OPCODE_INTRINSIC_LLVM_MEMCPY: {
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_TRACE(INTRINSICS,
+               "    llvm.memcpy(dst_p:%u, src_p:%u, len:%u, align:%u, "
+               "is_volatile:%u)\n",
+               pn_thread_get_value(thread, arg_ids[0]).u32,
+               pn_thread_get_value(thread, arg_ids[1]).u32,
+               pn_thread_get_value(thread, arg_ids[2]).u32,
+               pn_thread_get_value(thread, arg_ids[3]).u32,
+               pn_thread_get_value(thread, arg_ids[4]).u8);
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_MEMSET: {
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_TRACE(INTRINSICS,
+               "    llvm.memset(dst_p:%u, value:%u, len:%u, align:%u, "
+               "is_volatile:%u)\n",
+               pn_thread_get_value(thread, arg_ids[0]).u32,
+               pn_thread_get_value(thread, arg_ids[1]).u8,
+               pn_thread_get_value(thread, arg_ids[2]).u32,
+               pn_thread_get_value(thread, arg_ids[3]).u32,
+               pn_thread_get_value(thread, arg_ids[4]).u8);
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_MEMMOVE: {
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_TRACE(INTRINSICS,
+               "    llvm.memmove(dst_p:%u, src_p:%u, len:%u, align:%u, "
+               "is_volatile:%u)\n",
+               pn_thread_get_value(thread, arg_ids[0]).u32,
+               pn_thread_get_value(thread, arg_ids[1]).u32,
+               pn_thread_get_value(thread, arg_ids[2]).u32,
+               pn_thread_get_value(thread, arg_ids[3]).u32,
+               pn_thread_get_value(thread, arg_ids[4]).u8);
+      break;
+    }
+
+#define PN_OPCODE_INTRINSIC_CMPXCHG(ty)                                  \
+  do {                                                                   \
+    PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall); \
+    PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.cmpxchg." #ty             \
+                         "(addr_p:%u, expected:" PN_FORMAT_##ty          \
+             ", desired:" PN_FORMAT_##ty ", ...)\n",                     \
+             pn_thread_get_value(thread, arg_ids[0]).u32,                \
+             pn_thread_get_value(thread, arg_ids[1]).ty,                 \
+             pn_thread_get_value(thread, arg_ids[2]).ty);                \
+  } while (0) /* no semicolon */
+
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I8:
+      PN_OPCODE_INTRINSIC_CMPXCHG(u8);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I16:
+      PN_OPCODE_INTRINSIC_CMPXCHG(u16);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I32:
+      PN_OPCODE_INTRINSIC_CMPXCHG(u32);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I64:
+      PN_OPCODE_INTRINSIC_CMPXCHG(u64);
+      break;
+
+#undef PN_OPCODE_INTRINSIC_CMPXCHG
+
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_LONGJMP:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_SETJMP:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_READ_TP:
+    case PN_OPCODE_INTRINSIC_LLVM_SQRT_F32:
+    case PN_OPCODE_INTRINSIC_LLVM_SQRT_F64:
+    case PN_OPCODE_INTRINSIC_LLVM_TRAP:
+    case PN_OPCODE_INTRINSIC_LLVM_BSWAP_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_BSWAP_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_BSWAP_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_CTLZ_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_CTTZ_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_FABS_F32:
+    case PN_OPCODE_INTRINSIC_LLVM_FABS_F64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I8:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_STACKRESTORE:
+    case PN_OPCODE_INTRINSIC_LLVM_STACKSAVE:
+    case PN_OPCODE_INTRINSIC_START:
+
+    default:
+      break;
+  }
 }
 
 #else

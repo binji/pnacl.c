@@ -719,20 +719,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       uint32_t dst_p = pn_thread_get_value(thread, arg_ids[0]).u32;
       uint32_t src_p = pn_thread_get_value(thread, arg_ids[1]).u32;
       uint32_t len = pn_thread_get_value(thread, arg_ids[2]).u32;
-      uint32_t align = pn_thread_get_value(thread, arg_ids[3]).u32;
-      uint8_t is_volatile = pn_thread_get_value(thread, arg_ids[4]).u8;
-      PN_TRACE(INTRINSICS,
-               "    llvm.memcpy(dst_p:%u, src_p:%u, len:%u, align:%u, "
-               "is_volatile:%u)\n",
-               dst_p, src_p, len, align, is_volatile);
-      PN_TRACE(EXECUTE, "    %s = %u  %s = %u  %s = %u  %s = %u  %s = %u\n",
-               PN_VALUE_DESCRIBE(arg_ids[0]), dst_p,
-               PN_VALUE_DESCRIBE(arg_ids[1]), src_p,
-               PN_VALUE_DESCRIBE(arg_ids[2]), len,
-               PN_VALUE_DESCRIBE(arg_ids[3]), align,
-               PN_VALUE_DESCRIBE(arg_ids[4]), is_volatile);
-      (void)align;
-      (void)is_volatile;
 
       if (len > 0) {
         pn_memory_check(thread->executor->memory, dst_p, len);
@@ -754,20 +740,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       uint32_t dst_p = pn_thread_get_value(thread, arg_ids[0]).u32;
       uint8_t value = pn_thread_get_value(thread, arg_ids[1]).u8;
       uint32_t len = pn_thread_get_value(thread, arg_ids[2]).u32;
-      uint32_t align = pn_thread_get_value(thread, arg_ids[3]).u32;
-      uint8_t is_volatile = pn_thread_get_value(thread, arg_ids[4]).u8;
-      PN_TRACE(INTRINSICS,
-               "    llvm.memset(dst_p:%u, value:%u, len:%u, align:%u, "
-               "is_volatile:%u)\n",
-               dst_p, value, len, align, is_volatile);
-      PN_TRACE(EXECUTE, "    %s = %u  %s = %u  %s = %u  %s = %u  %s = %u\n",
-               PN_VALUE_DESCRIBE(arg_ids[0]), dst_p,
-               PN_VALUE_DESCRIBE(arg_ids[1]), value,
-               PN_VALUE_DESCRIBE(arg_ids[2]), len,
-               PN_VALUE_DESCRIBE(arg_ids[3]), align,
-               PN_VALUE_DESCRIBE(arg_ids[4]), is_volatile);
-      (void)align;
-      (void)is_volatile;
 
       if (len > 0) {
         pn_memory_check(thread->executor->memory, dst_p, len);
@@ -787,20 +759,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       uint32_t dst_p = pn_thread_get_value(thread, arg_ids[0]).u32;
       uint32_t src_p = pn_thread_get_value(thread, arg_ids[1]).u32;
       uint32_t len = pn_thread_get_value(thread, arg_ids[2]).u32;
-      uint32_t align = pn_thread_get_value(thread, arg_ids[3]).u32;
-      uint8_t is_volatile = pn_thread_get_value(thread, arg_ids[4]).u8;
-      PN_TRACE(INTRINSICS,
-               "    llvm.memmove(dst_p:%u, src_p:%u, len:%u, align:%u, "
-               "is_volatile:%u)\n",
-               dst_p, src_p, len, align, is_volatile);
-      PN_TRACE(EXECUTE, "    %s = %u  %s = %u  %s = %u  %s = %u  %s = %u\n",
-               PN_VALUE_DESCRIBE(arg_ids[0]), dst_p,
-               PN_VALUE_DESCRIBE(arg_ids[1]), src_p,
-               PN_VALUE_DESCRIBE(arg_ids[2]), len,
-               PN_VALUE_DESCRIBE(arg_ids[3]), align,
-               PN_VALUE_DESCRIBE(arg_ids[4]), is_volatile);
-      (void)align;
-      (void)is_volatile;
 
       if (len > 0) {
         pn_memory_check(thread->executor->memory, dst_p, len);
@@ -814,40 +772,22 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       break;
     }
 
-#define PN_OPCODE_INTRINSIC_CMPXCHG(ty)                                       \
-  do {                                                                        \
-    PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;            \
-    PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);      \
-    PN_CHECK(i->num_args == 5);                                               \
-    uint32_t addr_p = pn_thread_get_value(thread, arg_ids[0]).u32;            \
-    pn_##ty expected = pn_thread_get_value(thread, arg_ids[1]).ty;            \
-    pn_##ty desired = pn_thread_get_value(thread, arg_ids[2]).ty;             \
-    uint32_t memory_order_success =                                           \
-        pn_thread_get_value(thread, arg_ids[3]).u32;                          \
-    uint32_t memory_order_failure =                                           \
-        pn_thread_get_value(thread, arg_ids[4]).u32;                          \
-    pn_##ty read = pn_memory_read_##ty(thread->executor->memory, addr_p);     \
-    PNRuntimeValue result = pn_executor_value_##ty(read);                     \
-    if (read == expected) {                                                   \
-      pn_memory_write_##ty(thread->executor->memory, addr_p, desired);        \
-    }                                                                         \
-    pn_thread_set_value(thread, i->result_value_id, result);                  \
-    PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.cmpxchg." #ty                  \
-                         "(addr_p:%u, expected:" PN_FORMAT_##ty               \
-             ", desired:" PN_FORMAT_##ty ", ...)\n",                          \
-             addr_p, expected, desired);                                      \
-    PN_TRACE(                                                                 \
-        EXECUTE, "    %s = " PN_FORMAT_##ty "  %s = %u  %s = " PN_FORMAT_##ty \
-        "  %s = " PN_FORMAT_##ty " %s = %u  %s = %u\n",                       \
-        PN_VALUE_DESCRIBE(i->result_value_id), result.ty,                     \
-        PN_VALUE_DESCRIBE(arg_ids[0]), addr_p, PN_VALUE_DESCRIBE(arg_ids[1]), \
-        expected, PN_VALUE_DESCRIBE(arg_ids[2]), desired,                     \
-        PN_VALUE_DESCRIBE(arg_ids[3]), memory_order_success,                  \
-        PN_VALUE_DESCRIBE(arg_ids[4]), memory_order_failure);                 \
-    (void) memory_order_success;                                              \
-    (void) memory_order_failure;                                              \
-    thread->inst +=                                                           \
-        sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId);   \
+#define PN_OPCODE_INTRINSIC_CMPXCHG(ty)                                     \
+  do {                                                                      \
+    PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;          \
+    PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);    \
+    PN_CHECK(i->num_args == 5);                                             \
+    uint32_t addr_p = pn_thread_get_value(thread, arg_ids[0]).u32;          \
+    pn_##ty expected = pn_thread_get_value(thread, arg_ids[1]).ty;          \
+    pn_##ty desired = pn_thread_get_value(thread, arg_ids[2]).ty;           \
+    pn_##ty read = pn_memory_read_##ty(thread->executor->memory, addr_p);   \
+    PNRuntimeValue result = pn_executor_value_##ty(read);                   \
+    if (read == expected) {                                                 \
+      pn_memory_write_##ty(thread->executor->memory, addr_p, desired);      \
+    }                                                                       \
+    pn_thread_set_value(thread, i->result_value_id, result);                \
+    thread->inst +=                                                         \
+        sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId); \
   } while (0) /* no semicolon */
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_CMPXCHG_I8:
@@ -1441,11 +1381,13 @@ void pn_executor_run(PNExecutor* executor) {
   while (PN_TRUE) {
     uint32_t i;
 
+#define PN_FOR_THREAD_QUANTUM \
+  for (i = 0;                 \
+       i < PN_INSTRUCTIONS_QUANTUM && thread->state == PN_THREAD_RUNNING; ++i)
+
 #if PN_TRACING
     if (PN_IS_TRACE(EXECUTE)) {
-      for (i = 0;
-           i < PN_INSTRUCTIONS_QUANTUM && thread->state == PN_THREAD_RUNNING;
-           ++i) {
+      PN_FOR_THREAD_QUANTUM {
         PNFunction* function = thread->function;
         PNCallFrame* frame = thread->current_frame;
         PNRuntimeInstruction* inst = thread->inst;
@@ -1453,14 +1395,19 @@ void pn_executor_run(PNExecutor* executor) {
         pn_runtime_instruction_trace(thread->module, function, inst);
         g_pn_trace_indent -= 2;
         pn_thread_execute_instruction(thread);
+        pn_runtime_instruction_trace_intrinsics(thread, inst);
         pn_runtime_instruction_trace_values(thread, function, frame, inst);
+      }
+    } else if (PN_IS_TRACE(INTRINSICS)) {
+      PN_FOR_THREAD_QUANTUM {
+        PNRuntimeInstruction* inst = thread->inst;
+        pn_thread_execute_instruction(thread);
+        pn_runtime_instruction_trace_intrinsics(thread, inst);
       }
     } else
 #endif /* PN_TRACING */
     {
-      for (i = 0;
-           i < PN_INSTRUCTIONS_QUANTUM && thread->state == PN_THREAD_RUNNING;
-           ++i) {
+      PN_FOR_THREAD_QUANTUM {
         pn_thread_execute_instruction(thread);
       }
     }
