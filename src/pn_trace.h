@@ -1370,10 +1370,106 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
     case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT32:  PN_OPCODE_CAST(f64, u32); break;
     case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT64:  PN_OPCODE_CAST(f64, u64); break;
     case PN_OPCODE_CAST_FPTRUNC_DOUBLE_FLOAT: PN_OPCODE_CAST(f64, f32); break;
-
     // clang-format on
 
 #undef PN_OPCODE_CAST
+
+#define PN_OPCODE_CMP2(ty)                                                 \
+  do {                                                                     \
+    PNRuntimeInstructionCmp2* i = (PNRuntimeInstructionCmp2*)inst;         \
+    PN_TRACE(EXECUTE, "    %s = %u  %s = " PN_FORMAT_##ty                  \
+             "  %s = " PN_FORMAT_##ty "\n",                                \
+             PN_VALUE(i->result_value_id, u8), PN_VALUE(i->value0_id, ty), \
+             PN_VALUE(i->value1_id, ty));                                  \
+  } while (0) /* no semicolon */
+
+    case PN_OPCODE_FCMP_OEQ_DOUBLE:
+    case PN_OPCODE_FCMP_OGE_DOUBLE:
+    case PN_OPCODE_FCMP_OGT_DOUBLE:
+    case PN_OPCODE_FCMP_OLE_DOUBLE:
+    case PN_OPCODE_FCMP_OLT_DOUBLE:
+    case PN_OPCODE_FCMP_ONE_DOUBLE:
+    case PN_OPCODE_FCMP_ORD_DOUBLE:
+    case PN_OPCODE_FCMP_UEQ_DOUBLE:
+    case PN_OPCODE_FCMP_UGE_DOUBLE:
+    case PN_OPCODE_FCMP_UGT_DOUBLE:
+    case PN_OPCODE_FCMP_ULE_DOUBLE:
+    case PN_OPCODE_FCMP_ULT_DOUBLE:
+    case PN_OPCODE_FCMP_UNE_DOUBLE:
+    case PN_OPCODE_FCMP_UNO_DOUBLE:
+      PN_OPCODE_CMP2(f64);
+      break;
+
+    case PN_OPCODE_FCMP_OEQ_FLOAT:
+    case PN_OPCODE_FCMP_OGE_FLOAT:
+    case PN_OPCODE_FCMP_OGT_FLOAT:
+    case PN_OPCODE_FCMP_OLE_FLOAT:
+    case PN_OPCODE_FCMP_OLT_FLOAT:
+    case PN_OPCODE_FCMP_ONE_FLOAT:
+    case PN_OPCODE_FCMP_ORD_FLOAT:
+    case PN_OPCODE_FCMP_UEQ_FLOAT:
+    case PN_OPCODE_FCMP_UGE_FLOAT:
+    case PN_OPCODE_FCMP_UGT_FLOAT:
+    case PN_OPCODE_FCMP_ULE_FLOAT:
+    case PN_OPCODE_FCMP_ULT_FLOAT:
+    case PN_OPCODE_FCMP_UNE_FLOAT:
+    case PN_OPCODE_FCMP_UNO_FLOAT:
+      PN_OPCODE_CMP2(f32);
+      break;
+
+    case PN_OPCODE_ICMP_EQ_INT8:
+    case PN_OPCODE_ICMP_NE_INT8:
+    case PN_OPCODE_ICMP_SGE_INT8:
+    case PN_OPCODE_ICMP_SGT_INT8:
+    case PN_OPCODE_ICMP_SLE_INT8:
+    case PN_OPCODE_ICMP_SLT_INT8:
+    case PN_OPCODE_ICMP_UGE_INT8:
+    case PN_OPCODE_ICMP_UGT_INT8:
+    case PN_OPCODE_ICMP_ULE_INT8:
+    case PN_OPCODE_ICMP_ULT_INT8:
+      PN_OPCODE_CMP2(i8);
+      break;
+
+    case PN_OPCODE_ICMP_EQ_INT16:
+    case PN_OPCODE_ICMP_NE_INT16:
+    case PN_OPCODE_ICMP_SGE_INT16:
+    case PN_OPCODE_ICMP_SGT_INT16:
+    case PN_OPCODE_ICMP_SLE_INT16:
+    case PN_OPCODE_ICMP_SLT_INT16:
+    case PN_OPCODE_ICMP_UGE_INT16:
+    case PN_OPCODE_ICMP_UGT_INT16:
+    case PN_OPCODE_ICMP_ULE_INT16:
+    case PN_OPCODE_ICMP_ULT_INT16:
+      PN_OPCODE_CMP2(i16);
+      break;
+
+    case PN_OPCODE_ICMP_EQ_INT32:
+    case PN_OPCODE_ICMP_NE_INT32:
+    case PN_OPCODE_ICMP_SGE_INT32:
+    case PN_OPCODE_ICMP_SGT_INT32:
+    case PN_OPCODE_ICMP_SLE_INT32:
+    case PN_OPCODE_ICMP_SLT_INT32:
+    case PN_OPCODE_ICMP_UGE_INT32:
+    case PN_OPCODE_ICMP_UGT_INT32:
+    case PN_OPCODE_ICMP_ULE_INT32:
+    case PN_OPCODE_ICMP_ULT_INT32:
+      PN_OPCODE_CMP2(i32);
+      break;
+
+    case PN_OPCODE_ICMP_EQ_INT64:
+    case PN_OPCODE_ICMP_NE_INT64:
+    case PN_OPCODE_ICMP_SGE_INT64:
+    case PN_OPCODE_ICMP_SGT_INT64:
+    case PN_OPCODE_ICMP_SLE_INT64:
+    case PN_OPCODE_ICMP_SLT_INT64:
+    case PN_OPCODE_ICMP_UGE_INT64:
+    case PN_OPCODE_ICMP_UGT_INT64:
+    case PN_OPCODE_ICMP_ULE_INT64:
+    case PN_OPCODE_ICMP_ULT_INT64:
+      PN_OPCODE_CMP2(i64);
+      break;
+
+#undef PN_OPCODE_CMP2
 
 #if 0
     // clang-format off
@@ -1436,86 +1532,6 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
     case PN_OPCODE_INTRINSIC_LLVM_STACKRESTORE:
     case PN_OPCODE_INTRINSIC_LLVM_STACKSAVE:
     case PN_OPCODE_INTRINSIC_START:
-
-    // clang-format off
-    case PN_OPCODE_FCMP_OEQ_DOUBLE:
-    case PN_OPCODE_FCMP_OEQ_FLOAT:  opname = "fcmp oeq"; goto cmp2;
-    case PN_OPCODE_FCMP_OGE_DOUBLE:
-    case PN_OPCODE_FCMP_OGE_FLOAT:  opname = "fcmp oge"; goto cmp2;
-    case PN_OPCODE_FCMP_OGT_DOUBLE:
-    case PN_OPCODE_FCMP_OGT_FLOAT:  opname = "fcmp ogt"; goto cmp2;
-    case PN_OPCODE_FCMP_OLE_DOUBLE:
-    case PN_OPCODE_FCMP_OLE_FLOAT:  opname = "fcmp ogt"; goto cmp2;
-    case PN_OPCODE_FCMP_OLT_DOUBLE:
-    case PN_OPCODE_FCMP_OLT_FLOAT:  opname = "fcmp olt"; goto cmp2;
-    case PN_OPCODE_FCMP_ONE_DOUBLE:
-    case PN_OPCODE_FCMP_ONE_FLOAT:  opname = "fcmp one"; goto cmp2;
-    case PN_OPCODE_FCMP_ORD_DOUBLE:
-    case PN_OPCODE_FCMP_ORD_FLOAT:  opname = "fcmp ord"; goto cmp2;
-    case PN_OPCODE_FCMP_UEQ_DOUBLE:
-    case PN_OPCODE_FCMP_UEQ_FLOAT:  opname = "fcmp ueq"; goto cmp2;
-    case PN_OPCODE_FCMP_UGE_DOUBLE:
-    case PN_OPCODE_FCMP_UGE_FLOAT:  opname = "fcmp uge"; goto cmp2;
-    case PN_OPCODE_FCMP_UGT_DOUBLE:
-    case PN_OPCODE_FCMP_UGT_FLOAT:  opname = "fcmp ugt"; goto cmp2;
-    case PN_OPCODE_FCMP_ULE_DOUBLE:
-    case PN_OPCODE_FCMP_ULE_FLOAT:  opname = "fcmp ule"; goto cmp2;
-    case PN_OPCODE_FCMP_ULT_DOUBLE:
-    case PN_OPCODE_FCMP_ULT_FLOAT:  opname = "fcmp ult"; goto cmp2;
-    case PN_OPCODE_FCMP_UNE_DOUBLE:
-    case PN_OPCODE_FCMP_UNE_FLOAT:  opname = "fcmp une"; goto cmp2;
-    case PN_OPCODE_FCMP_UNO_DOUBLE:
-    case PN_OPCODE_FCMP_UNO_FLOAT:  opname = "fcmp uno"; goto cmp2;
-    case PN_OPCODE_ICMP_EQ_INT8:
-    case PN_OPCODE_ICMP_EQ_INT16:
-    case PN_OPCODE_ICMP_EQ_INT32:
-    case PN_OPCODE_ICMP_EQ_INT64:  opname = "icmp eq"; goto cmp2;
-    case PN_OPCODE_ICMP_NE_INT8:
-    case PN_OPCODE_ICMP_NE_INT16:
-    case PN_OPCODE_ICMP_NE_INT32:
-    case PN_OPCODE_ICMP_NE_INT64:  opname = "icmp ne"; goto cmp2;
-    case PN_OPCODE_ICMP_SGE_INT8:
-    case PN_OPCODE_ICMP_SGE_INT16:
-    case PN_OPCODE_ICMP_SGE_INT32:
-    case PN_OPCODE_ICMP_SGE_INT64:  opname = "icmp sge"; goto cmp2;
-    case PN_OPCODE_ICMP_SGT_INT8:
-    case PN_OPCODE_ICMP_SGT_INT16:
-    case PN_OPCODE_ICMP_SGT_INT32:
-    case PN_OPCODE_ICMP_SGT_INT64:  opname = "icmp sgt"; goto cmp2;
-    case PN_OPCODE_ICMP_SLE_INT8:
-    case PN_OPCODE_ICMP_SLE_INT16:
-    case PN_OPCODE_ICMP_SLE_INT32:
-    case PN_OPCODE_ICMP_SLE_INT64:  opname = "icmp sle"; goto cmp2;
-    case PN_OPCODE_ICMP_SLT_INT8:
-    case PN_OPCODE_ICMP_SLT_INT16:
-    case PN_OPCODE_ICMP_SLT_INT32:
-    case PN_OPCODE_ICMP_SLT_INT64:  opname = "icmp slt"; goto cmp2;
-    case PN_OPCODE_ICMP_UGE_INT8:
-    case PN_OPCODE_ICMP_UGE_INT16:
-    case PN_OPCODE_ICMP_UGE_INT32:
-    case PN_OPCODE_ICMP_UGE_INT64:  opname = "icmp uge"; goto cmp2;
-    case PN_OPCODE_ICMP_UGT_INT8:
-    case PN_OPCODE_ICMP_UGT_INT16:
-    case PN_OPCODE_ICMP_UGT_INT32:
-    case PN_OPCODE_ICMP_UGT_INT64:  opname = "icmp ugt"; goto cmp2;
-    case PN_OPCODE_ICMP_ULE_INT8:
-    case PN_OPCODE_ICMP_ULE_INT16:
-    case PN_OPCODE_ICMP_ULE_INT32:
-    case PN_OPCODE_ICMP_ULE_INT64:  opname = "icmp ule"; goto cmp2;
-    case PN_OPCODE_ICMP_ULT_INT8:
-    case PN_OPCODE_ICMP_ULT_INT16:
-    case PN_OPCODE_ICMP_ULT_INT32:
-    case PN_OPCODE_ICMP_ULT_INT64:  opname = "icmp ult"; goto cmp2;
-    cmp2: {
-      // clang-format on
-      PNRuntimeInstructionCmp2* i = (PNRuntimeInstructionCmp2*)inst;
-      PN_PRINT("%s = %s %s %s, %s;\n",
-               pn_value_describe(module, function, i->result_value_id), opname,
-               pn_value_describe_type(module, function, i->value0_id),
-               pn_value_describe(module, function, i->value0_id),
-               pn_value_describe(module, function, i->value1_id));
-      break;
-    }
 
     case PN_OPCODE_LOAD_DOUBLE:
     case PN_OPCODE_LOAD_FLOAT:
