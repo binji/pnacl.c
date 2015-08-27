@@ -1631,10 +1631,43 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
 
 #undef PN_OPCODE_INTRINSIC_STORE
 
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_READ_TP:
-    case PN_OPCODE_INTRINSIC_LLVM_SQRT_F32:
-    case PN_OPCODE_INTRINSIC_LLVM_SQRT_F64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_READ_TP: {
+      PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
+      PN_TRACE(EXECUTE, "    %s = %u\n", PN_VALUE(i->result_value_id, u32));
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_SQRT_F32: {
+      PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_TRACE(EXECUTE, "    %s = %f  %s = %f\n",
+               PN_VALUE(i->result_value_id, f32), PN_VALUE(arg_ids[0], f32));
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_SQRT_F64: {
+      PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_TRACE(EXECUTE, "    %s = %f  %s = %f\n",
+               PN_VALUE(i->result_value_id, f64), PN_VALUE(arg_ids[0], f64));
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_STACKRESTORE: {
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_TRACE(EXECUTE, "    %s = %u\n", PN_VALUE(arg_ids[0], u32));
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_STACKSAVE: {
+      PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
+      PN_TRACE(EXECUTE, "    %s = %u\n", PN_VALUE(i->result_value_id, u32));
+      break;
+    }
+
     case PN_OPCODE_INTRINSIC_LLVM_TRAP:
+      break;
+
     case PN_OPCODE_INTRINSIC_LLVM_BSWAP_I16:
     case PN_OPCODE_INTRINSIC_LLVM_BSWAP_I32:
     case PN_OPCODE_INTRINSIC_LLVM_BSWAP_I64:
@@ -1646,9 +1679,8 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I16:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I32:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I64:
-    case PN_OPCODE_INTRINSIC_LLVM_STACKRESTORE:
-    case PN_OPCODE_INTRINSIC_LLVM_STACKSAVE:
     case PN_OPCODE_INTRINSIC_START:
+      break;
 
 #if 0
 
@@ -1971,9 +2003,35 @@ static void pn_runtime_instruction_trace_intrinsics(
 #undef PN_OPCODE_INTRINSIC_STORE
 
     case PN_OPCODE_INTRINSIC_LLVM_NACL_READ_TP:
-    case PN_OPCODE_INTRINSIC_LLVM_SQRT_F32:
-    case PN_OPCODE_INTRINSIC_LLVM_SQRT_F64:
+      PN_TRACE(INTRINSICS, "    llvm.nacl.read.tp()\n");
+      break;
+
+    case PN_OPCODE_INTRINSIC_LLVM_SQRT_F32: {
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_TRACE(INTRINSICS, "    llvm.sqrt.f32(%f)\n", PN_ARG(0, f32));
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_SQRT_F64: {
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_TRACE(INTRINSICS, "    llvm.sqrt.f64(%f)\n", PN_ARG(0, f64));
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_STACKRESTORE: {
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_TRACE(INTRINSICS, "    llvm.stackrestore(%u)\n", PN_ARG(0, u32));
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_STACKSAVE:
+      PN_TRACE(INTRINSICS, "    llvm.stacksave()\n");
+      break;
+
     case PN_OPCODE_INTRINSIC_LLVM_TRAP:
+      PN_TRACE(INTRINSICS, "    llvm.trap()\n");
+      break;
+
     case PN_OPCODE_INTRINSIC_LLVM_BSWAP_I16:
     case PN_OPCODE_INTRINSIC_LLVM_BSWAP_I32:
     case PN_OPCODE_INTRINSIC_LLVM_BSWAP_I64:
@@ -1985,8 +2043,6 @@ static void pn_runtime_instruction_trace_intrinsics(
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I16:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I32:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I64:
-    case PN_OPCODE_INTRINSIC_LLVM_STACKRESTORE:
-    case PN_OPCODE_INTRINSIC_LLVM_STACKSAVE:
     case PN_OPCODE_INTRINSIC_START:
 
     default:

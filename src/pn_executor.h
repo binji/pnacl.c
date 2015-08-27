@@ -1046,9 +1046,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PN_CHECK(i->result_value_id != PN_INVALID_VALUE_ID);
       PNRuntimeValue result = pn_executor_value_u32(thread->tls);
       pn_thread_set_value(thread, i->result_value_id, result);
-      PN_TRACE(INTRINSICS, "    llvm.nacl.read.tp()\n");
-      PN_TRACE(EXECUTE, "    %s = %u\n", PN_VALUE_DESCRIBE(i->result_value_id),
-               result.u32);
       thread->inst +=
           sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId);
       break;
@@ -1062,10 +1059,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       float value = PN_ARG(0, f32);
       PNRuntimeValue result = pn_executor_value_f32(sqrtf(value));
       pn_thread_set_value(thread, i->result_value_id, result);
-      PN_TRACE(INTRINSICS, "    llvm.sqrt.f32(%f)\n", value);
-      PN_TRACE(EXECUTE, "    %s = %f  %s = %f\n",
-               PN_VALUE_DESCRIBE(i->result_value_id), result.f32,
-               PN_VALUE_DESCRIBE(arg_ids[0]), value);
       thread->inst +=
           sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId);
       break;
@@ -1079,10 +1072,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       double value = PN_ARG(0, f64);
       PNRuntimeValue result = pn_executor_value_f64(sqrt(value));
       pn_thread_set_value(thread, i->result_value_id, result);
-      PN_TRACE(INTRINSICS, "    llvm.sqrt.f64(%f)\n", value);
-      PN_TRACE(EXECUTE, "    %s = %f  %s = %f\n",
-               PN_VALUE_DESCRIBE(i->result_value_id), result.f64,
-               PN_VALUE_DESCRIBE(arg_ids[0]), value);
       thread->inst +=
           sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId);
       break;
@@ -1096,8 +1085,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       uint32_t value = PN_ARG(0, u32);
       /* TODO(binji): validate stack pointer */
       thread->current_frame->memory_stack_top = value;
-      PN_TRACE(INTRINSICS, "    llvm.stackrestore(%u)\n", value);
-      PN_TRACE(EXECUTE, "    %s = %u\n", PN_VALUE_DESCRIBE(arg_ids[0]), value);
       thread->inst +=
           sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId);
       break;
@@ -1110,9 +1097,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PNRuntimeValue result =
           pn_executor_value_u32(thread->current_frame->memory_stack_top);
       pn_thread_set_value(thread, i->result_value_id, result);
-      PN_TRACE(INTRINSICS, "    llvm.stacksave()\n");
-      PN_TRACE(EXECUTE, "    %s = %u\n", PN_VALUE_DESCRIBE(i->result_value_id),
-               result.u32);
       thread->inst +=
           sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId);
       break;
@@ -1121,7 +1105,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     case PN_OPCODE_INTRINSIC_LLVM_TRAP: {
       PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
       PN_CHECK(i->num_args == 0);
-      PN_TRACE(INTRINSICS, "    llvm.trap()\n");
       thread->executor->exit_code = -1;
       thread->executor->exiting = PN_TRUE;
       thread->state = PN_THREAD_DEAD;
