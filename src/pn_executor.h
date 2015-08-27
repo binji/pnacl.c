@@ -841,23 +841,11 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     PN_CHECK(pn_thread_get_value(thread, arg_ids[0]).u32 == opval);            \
     uint32_t addr_p = pn_thread_get_value(thread, arg_ids[1]).u32;             \
     pn_##ty value = pn_thread_get_value(thread, arg_ids[2]).ty;                \
-    uint32_t memory_order = pn_thread_get_value(thread, arg_ids[3]).u32;       \
     pn_##ty old_value = pn_memory_read_##ty(thread->executor->memory, addr_p); \
     pn_##ty new_value = old_value op value;                                    \
     pn_memory_write_##ty(thread->executor->memory, addr_p, new_value);         \
     PNRuntimeValue result = pn_executor_value_u32(old_value);                  \
     pn_thread_set_value(thread, i->result_value_id, result);                   \
-    PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.rmw." #ty                       \
-                         "(op: %s, addr_p:%u, value: " PN_FORMAT_##ty ")\n",   \
-             #op, addr_p, value);                                              \
-    PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_##ty                               \
-             "  %s = %u  %s = %u  %s = " PN_FORMAT_##ty "  %s = %u\n",         \
-             PN_VALUE_DESCRIBE(i->result_value_id), result.ty,                 \
-             PN_VALUE_DESCRIBE(arg_ids[0]), opval,                             \
-             PN_VALUE_DESCRIBE(arg_ids[1]), addr_p,                            \
-             PN_VALUE_DESCRIBE(arg_ids[2]), value,                             \
-             PN_VALUE_DESCRIBE(arg_ids[3]), memory_order);                     \
-    (void) memory_order;                                                       \
     thread->inst +=                                                            \
         sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId);    \
   } while (0) /* no semicolon */
@@ -935,23 +923,11 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     PN_CHECK(pn_thread_get_value(thread, arg_ids[0]).u32 == opval);            \
     uint32_t addr_p = pn_thread_get_value(thread, arg_ids[1]).u32;             \
     pn_##ty value = pn_thread_get_value(thread, arg_ids[2]).ty;                \
-    uint32_t memory_order = pn_thread_get_value(thread, arg_ids[3]).u32;       \
     pn_##ty old_value = pn_memory_read_##ty(thread->executor->memory, addr_p); \
     pn_##ty new_value = value;                                                 \
     pn_memory_write_##ty(thread->executor->memory, addr_p, new_value);         \
     PNRuntimeValue result = pn_executor_value_u32(old_value);                  \
     pn_thread_set_value(thread, i->result_value_id, result);                   \
-    PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.exchange." #ty                  \
-                         "(addr_p:%u, value: " PN_FORMAT_##ty ")\n",           \
-             addr_p, value);                                                   \
-    PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_##ty                               \
-             "  %s = %u  %s = %u  %s = " PN_FORMAT_##ty "  %s = %u\n",         \
-             PN_VALUE_DESCRIBE(i->result_value_id), result.ty,                 \
-             PN_VALUE_DESCRIBE(arg_ids[0]), opval,                             \
-             PN_VALUE_DESCRIBE(arg_ids[1]), addr_p,                            \
-             PN_VALUE_DESCRIBE(arg_ids[2]), value,                             \
-             PN_VALUE_DESCRIBE(arg_ids[3]), memory_order);                     \
-    (void) memory_order;                                                       \
     thread->inst +=                                                            \
         sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId);    \
   } while (0) /* no semicolon */

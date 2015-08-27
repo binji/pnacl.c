@@ -1541,30 +1541,55 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
 
 #undef PN_OPCODE_INTRINSIC_LOAD
 
+#define PN_OPCODE_INTRINSIC_RMW(ty)                                       \
+  do {                                                                    \
+    PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;        \
+    PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);  \
+    PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_##ty                          \
+             "  %s = %u  %s = %u  %s = " PN_FORMAT_##ty "  %s = %u\n",    \
+             PN_VALUE(i->result_value_id, ty), PN_VALUE(arg_ids[0], u32), \
+             PN_VALUE(arg_ids[1], u32), PN_VALUE(arg_ids[2], ty),         \
+             PN_VALUE(arg_ids[3], u32));                                  \
+  } while (0) /* no semicolon */
+
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I16:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I32:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I64:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I8:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I16:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I32:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I64:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I8:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I16:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I32:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I64:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I8:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I16:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I32:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I64:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I8:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I16:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I32:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I64:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I8:
+      PN_OPCODE_INTRINSIC_RMW(u8);
+      break;
+
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I16:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I16:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I16:
+      PN_OPCODE_INTRINSIC_RMW(u16);
+      break;
+
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I32:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I32:
+      PN_OPCODE_INTRINSIC_RMW(u32);
+      break;
+
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I64:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I64:
+      PN_OPCODE_INTRINSIC_RMW(u64);
+      break;
+
+#undef PN_OPCODE_INTRINSIC_RMW
+
     case PN_OPCODE_INTRINSIC_LLVM_NACL_LONGJMP:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_SETJMP:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I32:
@@ -1785,30 +1810,105 @@ static void pn_runtime_instruction_trace_intrinsics(
 
 #undef PN_OPCODE_INTRINSIC_LOAD
 
+#define PN_OPCODE_INTRINSIC_RMW(op, ty)                                      \
+  do {                                                                       \
+    PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);     \
+    PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.rmw." #ty                     \
+                         "(op: %s, addr_p:%u, value: " PN_FORMAT_##ty ")\n", \
+             #op, pn_thread_get_value(thread, arg_ids[0]).u32,               \
+             pn_thread_get_value(thread, arg_ids[1]).ty);                    \
+  } while (0) /* no semicolon */
+
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I16:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I32:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I64:
+      PN_OPCODE_INTRINSIC_RMW(+, u8);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I8:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I16:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I32:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I64:
+      PN_OPCODE_INTRINSIC_RMW(-, u8);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I8:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I16:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I32:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I64:
+      PN_OPCODE_INTRINSIC_RMW(&, u8);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I8:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I16:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I32:
-    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I64:
+      PN_OPCODE_INTRINSIC_RMW(|, u8);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I8:
+      PN_OPCODE_INTRINSIC_RMW(^, u8);
+      break;
+
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I16:
+      PN_OPCODE_INTRINSIC_RMW(+, u16);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I16:
+      PN_OPCODE_INTRINSIC_RMW(-, u16);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I16:
+      PN_OPCODE_INTRINSIC_RMW(&, u16);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I16:
+      PN_OPCODE_INTRINSIC_RMW(|, u16);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I16:
+      PN_OPCODE_INTRINSIC_RMW(^, u16);
+      break;
+
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I32:
+      PN_OPCODE_INTRINSIC_RMW(+, u32);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I32:
+      PN_OPCODE_INTRINSIC_RMW(-, u32);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I32:
+      PN_OPCODE_INTRINSIC_RMW(&, u32);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I32:
+      PN_OPCODE_INTRINSIC_RMW(|, u32);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I32:
+      PN_OPCODE_INTRINSIC_RMW(^, u32);
+      break;
+
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I64:
+      PN_OPCODE_INTRINSIC_RMW(+, u64);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_SUB_I64:
+      PN_OPCODE_INTRINSIC_RMW(-, u64);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_AND_I64:
+      PN_OPCODE_INTRINSIC_RMW(&, u64);
+      break;
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_OR_I64:
+      PN_OPCODE_INTRINSIC_RMW(|, u64);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_XOR_I64:
+      PN_OPCODE_INTRINSIC_RMW(^, u64);
+      break;
+
+#undef PN_OPCODE_INTRINSIC_RMW
+
+#define PN_OPCODE_INTRINSIC_EXCHANGE(ty)                                 \
+  do {                                                                   \
+    PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall); \
+    PN_TRACE(INTRINSICS, "    llvm.nacl.atomic.exchange." #ty            \
+                         "(addr_p:%u, value: " PN_FORMAT_##ty ")\n",     \
+             pn_thread_get_value(thread, arg_ids[1]).u32,                \
+             pn_thread_get_value(thread, arg_ids[2]).ty);                \
+  } while (0) /* no semicolon */
+
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I8:
+      PN_OPCODE_INTRINSIC_EXCHANGE(u8);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I16:
+      PN_OPCODE_INTRINSIC_EXCHANGE(u16);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I32:
+      PN_OPCODE_INTRINSIC_EXCHANGE(u32);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I64:
+      PN_OPCODE_INTRINSIC_EXCHANGE(u64);
+      break;
+
+#undef PN_OPCODE_INTRINSIC_EXCHANGE
+
     case PN_OPCODE_INTRINSIC_LLVM_NACL_LONGJMP:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_SETJMP:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_STORE_I32:
