@@ -89,6 +89,7 @@ pc = %520
 pc = %604
   %v22 = call i32 %v20(i32 @g8, i32 @g0, i32 %c7);
     NACL_IRT_QUERY(1196 (nacl-irt-fdio-0.1), 1024, 32)
+    %v20 = 4 @g8 = 1196  @g0 = 1024  %c7 = 32  
   %v23 = icmp eq i32 %v22, %c7;
     %v23 = 1  %v22 = 32  %c7 = 32
   br i1 %v23, label %808, label %676;
@@ -106,6 +107,7 @@ function = %f2  pc = %0
 pc = %84
   %v2 = tail call i32 %v0(i32 %p0, i32 %p1, i32 %p2);
     NACL_IRT_QUERY(1236 (nacl-irt-basic-0.1), 1060, 24)
+    %v0 = 4 %p0 = 1236  %p1 = 1060  %p2 = 24  
   %v3 = icmp eq i32 %v2, %p2;
     %v3 = 1  %v2 = 24  %p2 = 24
   br i1 %v3, label %180, label %156;
@@ -122,6 +124,7 @@ function = %f12  pc = %808
 pc = %920
   %v29 = call i32 %v27(i32 @g11, i32 @g3, i32 %c8);
     NACL_IRT_QUERY(1255 (nacl-irt-memory-0.3), 1084, 12)
+    %v27 = 4 @g11 = 1255  @g3 = 1084  %c8 = 12  
   %v30 = icmp eq i32 %v29, %c8;
     %v30 = 1  %v29 = 12  %c8 = 12
   br i1 %v30, label %1360, label %992;
@@ -139,6 +142,7 @@ function = %f2  pc = %0
 pc = %84
   %v2 = tail call i32 %v0(i32 %p0, i32 %p1, i32 %p2);
     NACL_IRT_QUERY(1315 (nacl-irt-tls-0.1), 1096, 8)
+    %v0 = 4 %p0 = 1315  %p1 = 1096  %p2 = 8  
   %v3 = icmp eq i32 %v2, %p2;
     %v3 = 1  %v2 = 8  %p2 = 8
   br i1 %v3, label %180, label %156;
@@ -224,6 +228,7 @@ pc = %2428
     NACL_IRT_MEMORY_MMAP(1048572, 1155, 3, 34, -1, 0)
       Searching from [1, 1)
       returning 4096, errno = 0
+    %v78 = 152 %v0 = 1048572  %v77 = 1155  %c17 = 3  %c18 = 34  %c9 = 4294967295  %c28 = 0  
   %v80 = icmp eq i32 %v79, %c0;
     %v80 = 1  %v79 = 0  %c0 = 0
   br i1 %v80, label %2664, label %2564;
@@ -280,6 +285,7 @@ pc = %3148
     %v103 = 164  @g4 = 1096
   %v104 = call i32 %v103(i32 %v98);
     NACL_IRT_TLS_INIT(5240)
+    %v103 = 164 %v98 = 5240  
   %v105 = call i32 @f15();
     llvm.nacl.read.tp()
     %v105 = 5240
@@ -393,3 +399,4 @@ pc = %4588
     %v150 = 8  @g2 = 1060
   call void %v150(i32 %c0);
     NACL_IRT_BASIC_EXIT(0)
+    %v150 = 8 %c0 = 0  
