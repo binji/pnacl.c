@@ -1517,10 +1517,30 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
 
 #undef PN_OPCODE_INTRINSIC_CMPXCHG
 
+#define PN_OPCODE_INTRINSIC_LOAD(ty)                                        \
+  do {                                                                      \
+    PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;          \
+    PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);    \
+    PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_##ty "  %s = %u  %s = %u\n",    \
+             PN_VALUE(i->result_value_id, ty), PN_VALUE(arg_ids[0], u32),   \
+             PN_VALUE(arg_ids[1], u32));                                    \
+  } while (0) /* no semicolon */
+
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I8:
+      PN_OPCODE_INTRINSIC_LOAD(i8);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I16:
+      PN_OPCODE_INTRINSIC_LOAD(i16);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I32:
+      PN_OPCODE_INTRINSIC_LOAD(i32);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I64:
+      PN_OPCODE_INTRINSIC_LOAD(i64);
+      break;
+
+#undef PN_OPCODE_INTRINSIC_LOAD
+
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I16:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I32:
@@ -1741,10 +1761,30 @@ static void pn_runtime_instruction_trace_intrinsics(
 
 #undef PN_OPCODE_INTRINSIC_CMPXCHG
 
+#define PN_OPCODE_INTRINSIC_LOAD(ty)                                     \
+  do {                                                                   \
+    PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall); \
+    PN_TRACE(INTRINSICS,                                                 \
+             "    llvm.nacl.atomic.load." #ty "(addr_p:%u, flags:%u)\n", \
+             pn_thread_get_value(thread, arg_ids[0]).u32,                \
+             pn_thread_get_value(thread, arg_ids[1]).u32);               \
+  } while (0) /* no semicolon */
+
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I8:
+      PN_OPCODE_INTRINSIC_LOAD(i8);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I16:
+      PN_OPCODE_INTRINSIC_LOAD(i16);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I32:
+      PN_OPCODE_INTRINSIC_LOAD(i32);
+      break;
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_LOAD_I64:
+      PN_OPCODE_INTRINSIC_LOAD(i64);
+      break;
+
+#undef PN_OPCODE_INTRINSIC_LOAD
+
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I16:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_ADD_I32:

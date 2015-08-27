@@ -811,18 +811,9 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);    \
     PN_CHECK(i->num_args == 2);                                             \
     uint32_t addr_p = pn_thread_get_value(thread, arg_ids[0]).u32;          \
-    uint32_t flags = pn_thread_get_value(thread, arg_ids[1]).u32;           \
     pn_##ty value = pn_memory_read_##ty(thread->executor->memory, addr_p);  \
     PNRuntimeValue result = pn_executor_value_##ty(value);                  \
     pn_thread_set_value(thread, i->result_value_id, result);                \
-    PN_TRACE(INTRINSICS,                                                    \
-             "    llvm.nacl.atomic.load." #ty "(addr_p:%u, flags:%u)\n",    \
-             addr_p, flags);                                                \
-    PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_##ty "  %s = %u  %s = %u\n",    \
-             PN_VALUE_DESCRIBE(i->result_value_id), result.ty,              \
-             PN_VALUE_DESCRIBE(arg_ids[0]), addr_p,                         \
-             PN_VALUE_DESCRIBE(arg_ids[1]), flags);                         \
-    (void) flags;                                                           \
     thread->inst +=                                                         \
         sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId); \
   } while (0) /* no semicolon */
