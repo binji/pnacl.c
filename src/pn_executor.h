@@ -465,17 +465,13 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       break;
     }
 
-#define PN_OPCODE_CAST(from, to)                                         \
-  do {                                                                   \
-    PNRuntimeInstructionCast* i = (PNRuntimeInstructionCast*)inst;       \
-    PNRuntimeValue value = pn_thread_get_value(thread, i->value_id);     \
-    PNRuntimeValue result = pn_executor_value_##to(value.from);          \
-    pn_thread_set_value(thread, i->result_value_id, result);             \
-    PN_TRACE(EXECUTE,                                                    \
-             "    %s = " PN_FORMAT_##to "  %s = " PN_FORMAT_##from "\n", \
-             PN_VALUE_DESCRIBE(i->result_value_id), result.to,           \
-             PN_VALUE_DESCRIBE(i->value_id), result.from);               \
-    thread->inst += sizeof(PNRuntimeInstructionCast);                    \
+#define PN_OPCODE_CAST(from, to)                                     \
+  do {                                                               \
+    PNRuntimeInstructionCast* i = (PNRuntimeInstructionCast*)inst;   \
+    PNRuntimeValue value = pn_thread_get_value(thread, i->value_id); \
+    PNRuntimeValue result = pn_executor_value_##to(value.from);      \
+    pn_thread_set_value(thread, i->result_value_id, result);         \
+    thread->inst += sizeof(PNRuntimeInstructionCast);                \
   } while (0) /* no semicolon */
 
 #define PN_OPCODE_CAST_SEXT1(size)                                   \
@@ -485,9 +481,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     PNRuntimeValue result =                                          \
         pn_executor_value_i##size(-(int##size##_t)(value.u8 & 1));   \
     pn_thread_set_value(thread, i->result_value_id, result);         \
-    PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_i##size "  %s = %u\n",   \
-             PN_VALUE_DESCRIBE(i->result_value_id), result.i##size,  \
-             PN_VALUE_DESCRIBE(i->value_id), result.u8);             \
     thread->inst += sizeof(PNRuntimeInstructionCast);                \
   } while (0) /* no semicolon */
 
@@ -497,9 +490,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     PNRuntimeValue value = pn_thread_get_value(thread, i->value_id); \
     PNRuntimeValue result = pn_executor_value_u8(value.u##size & 1); \
     pn_thread_set_value(thread, i->result_value_id, result);         \
-    PN_TRACE(EXECUTE, "    %s = %u  %s = " PN_FORMAT_u##size "\n",   \
-             PN_VALUE_DESCRIBE(i->result_value_id), result.u8,       \
-             PN_VALUE_DESCRIBE(i->value_id), result.u##size);        \
     thread->inst += sizeof(PNRuntimeInstructionCast);                \
   } while (0) /* no semicolon */
 
@@ -510,9 +500,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
     PNRuntimeValue result =                                          \
         pn_executor_value_u##size((uint##size##_t)(value.u8 & 1));   \
     pn_thread_set_value(thread, i->result_value_id, result);         \
-    PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_u##size "  %s = %u\n",   \
-             PN_VALUE_DESCRIBE(i->result_value_id), result.u##size,  \
-             PN_VALUE_DESCRIBE(i->value_id), result.u8);             \
     thread->inst += sizeof(PNRuntimeInstructionCast);                \
   } while (0) /* no semicolon */
 

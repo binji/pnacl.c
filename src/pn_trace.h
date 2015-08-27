@@ -1294,6 +1294,87 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
       break;
     }
 
+#define PN_OPCODE_CAST(from, to)                                             \
+  do {                                                                       \
+    PNRuntimeInstructionCast* i = (PNRuntimeInstructionCast*)inst;           \
+    PN_TRACE(EXECUTE,                                                        \
+             "    %s = " PN_FORMAT_##to "  %s = " PN_FORMAT_##from "\n",     \
+             PN_VALUE(i->result_value_id, to), PN_VALUE(i->value_id, from)); \
+  } while (0) /* no semicolon */
+
+    // clang-format off
+    case PN_OPCODE_CAST_SEXT_INT1_INT8:
+    case PN_OPCODE_CAST_TRUNC_INT8_INT1:      PN_OPCODE_CAST(i8, i8); break;
+    case PN_OPCODE_CAST_SEXT_INT1_INT16:
+    case PN_OPCODE_CAST_SEXT_INT8_INT16:      PN_OPCODE_CAST(i8, i16); break;
+    case PN_OPCODE_CAST_SEXT_INT1_INT32:
+    case PN_OPCODE_CAST_SEXT_INT8_INT32:      PN_OPCODE_CAST(i8, i32); break;
+    case PN_OPCODE_CAST_SEXT_INT1_INT64:
+    case PN_OPCODE_CAST_SEXT_INT8_INT64:      PN_OPCODE_CAST(i8, i64); break;
+    case PN_OPCODE_CAST_SITOFP_INT8_FLOAT:    PN_OPCODE_CAST(i8, f32); break;
+    case PN_OPCODE_CAST_SITOFP_INT8_DOUBLE:   PN_OPCODE_CAST(i8, f64); break;
+    case PN_OPCODE_CAST_TRUNC_INT16_INT1:
+    case PN_OPCODE_CAST_TRUNC_INT16_INT8:     PN_OPCODE_CAST(i16, i8); break;
+    case PN_OPCODE_CAST_SEXT_INT16_INT32:     PN_OPCODE_CAST(i16, i32); break;
+    case PN_OPCODE_CAST_SEXT_INT16_INT64:     PN_OPCODE_CAST(i16, i64); break;
+    case PN_OPCODE_CAST_SITOFP_INT16_FLOAT:   PN_OPCODE_CAST(i16, f32); break;
+    case PN_OPCODE_CAST_SITOFP_INT16_DOUBLE:  PN_OPCODE_CAST(i16, f64); break;
+    case PN_OPCODE_CAST_TRUNC_INT32_INT1:
+    case PN_OPCODE_CAST_TRUNC_INT32_INT8:     PN_OPCODE_CAST(i32, i8); break;
+    case PN_OPCODE_CAST_TRUNC_INT32_INT16:    PN_OPCODE_CAST(i32, i16); break;
+    case PN_OPCODE_CAST_SEXT_INT32_INT64:     PN_OPCODE_CAST(i32, i64); break;
+    case PN_OPCODE_CAST_BITCAST_INT32_FLOAT:
+    case PN_OPCODE_CAST_SITOFP_INT32_FLOAT:   PN_OPCODE_CAST(i32, f32); break;
+    case PN_OPCODE_CAST_SITOFP_INT32_DOUBLE:  PN_OPCODE_CAST(i32, f64); break;
+    case PN_OPCODE_CAST_TRUNC_INT64_INT8:     PN_OPCODE_CAST(i64, i8); break;
+    case PN_OPCODE_CAST_TRUNC_INT64_INT16:    PN_OPCODE_CAST(i64, i16); break;
+    case PN_OPCODE_CAST_TRUNC_INT64_INT32:    PN_OPCODE_CAST(i64, i32); break;
+    case PN_OPCODE_CAST_SITOFP_INT64_FLOAT:   PN_OPCODE_CAST(i64, f32); break;
+    case PN_OPCODE_CAST_BITCAST_INT64_DOUBLE:
+    case PN_OPCODE_CAST_SITOFP_INT64_DOUBLE:  PN_OPCODE_CAST(i64, f64); break;
+    case PN_OPCODE_CAST_ZEXT_INT1_INT8:       PN_OPCODE_CAST(u8, u8); break;
+    case PN_OPCODE_CAST_ZEXT_INT1_INT16:      PN_OPCODE_CAST(u8, u16); break;
+    case PN_OPCODE_CAST_ZEXT_INT1_INT32:      PN_OPCODE_CAST(u8, u32); break;
+    case PN_OPCODE_CAST_ZEXT_INT1_INT64:      PN_OPCODE_CAST(u8, u64); break;
+    case PN_OPCODE_CAST_ZEXT_INT8_INT16:      PN_OPCODE_CAST(u8, u16); break;
+    case PN_OPCODE_CAST_ZEXT_INT8_INT32:      PN_OPCODE_CAST(u8, u32); break;
+    case PN_OPCODE_CAST_ZEXT_INT8_INT64:      PN_OPCODE_CAST(u8, u64); break;
+    case PN_OPCODE_CAST_UITOFP_INT8_FLOAT:    PN_OPCODE_CAST(u8, f32); break;
+    case PN_OPCODE_CAST_UITOFP_INT8_DOUBLE:   PN_OPCODE_CAST(u8, f64); break;
+    case PN_OPCODE_CAST_ZEXT_INT16_INT32:     PN_OPCODE_CAST(u16, u32); break;
+    case PN_OPCODE_CAST_ZEXT_INT16_INT64:     PN_OPCODE_CAST(u16, u64); break;
+    case PN_OPCODE_CAST_UITOFP_INT16_FLOAT:   PN_OPCODE_CAST(u16, f32); break;
+    case PN_OPCODE_CAST_UITOFP_INT16_DOUBLE:  PN_OPCODE_CAST(u16, f64); break;
+    case PN_OPCODE_CAST_ZEXT_INT32_INT64:     PN_OPCODE_CAST(u32, u64); break;
+    case PN_OPCODE_CAST_UITOFP_INT32_FLOAT:   PN_OPCODE_CAST(u32, f32); break;
+    case PN_OPCODE_CAST_UITOFP_INT32_DOUBLE:  PN_OPCODE_CAST(u32, f64); break;
+    case PN_OPCODE_CAST_UITOFP_INT64_FLOAT:   PN_OPCODE_CAST(u64, f32); break;
+    case PN_OPCODE_CAST_UITOFP_INT64_DOUBLE:  PN_OPCODE_CAST(u64, f64); break;
+    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT8:    PN_OPCODE_CAST(f32, i8); break;
+    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT16:   PN_OPCODE_CAST(f32, i16); break;
+    case PN_OPCODE_CAST_BITCAST_FLOAT_INT32:
+    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT32:   PN_OPCODE_CAST(f32, i32); break;
+    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT64:   PN_OPCODE_CAST(f32, i64); break;
+    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT8:    PN_OPCODE_CAST(f32, u8); break;
+    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT16:   PN_OPCODE_CAST(f32, u16); break;
+    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT32:   PN_OPCODE_CAST(f32, u32); break;
+    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT64:   PN_OPCODE_CAST(f32, u64); break;
+    case PN_OPCODE_CAST_FPEXT_FLOAT_DOUBLE:   PN_OPCODE_CAST(f32, f64); break;
+    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT8:   PN_OPCODE_CAST(f64, i8); break;
+    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT16:  PN_OPCODE_CAST(f64, i16); break;
+    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT32:  PN_OPCODE_CAST(f64, i32); break;
+    case PN_OPCODE_CAST_BITCAST_DOUBLE_INT64:
+    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT64:  PN_OPCODE_CAST(f64, i64); break;
+    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT8:   PN_OPCODE_CAST(f64, u8); break;
+    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT16:  PN_OPCODE_CAST(f64, u16); break;
+    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT32:  PN_OPCODE_CAST(f64, u32); break;
+    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT64:  PN_OPCODE_CAST(f64, u64); break;
+    case PN_OPCODE_CAST_FPTRUNC_DOUBLE_FLOAT: PN_OPCODE_CAST(f64, f32); break;
+
+    // clang-format on
+
+#undef PN_OPCODE_CAST
+
 #if 0
     // clang-format off
     case PN_OPCODE_INTRINSIC_LLVM_MEMCPY:
@@ -1355,85 +1436,6 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
     case PN_OPCODE_INTRINSIC_LLVM_STACKRESTORE:
     case PN_OPCODE_INTRINSIC_LLVM_STACKSAVE:
     case PN_OPCODE_INTRINSIC_START:
-
-    // clang-format off
-    case PN_OPCODE_CAST_BITCAST_DOUBLE_INT64:
-    case PN_OPCODE_CAST_BITCAST_FLOAT_INT32:
-    case PN_OPCODE_CAST_BITCAST_INT32_FLOAT:
-    case PN_OPCODE_CAST_BITCAST_INT64_DOUBLE: opname = "bitcast"; goto cast;
-    case PN_OPCODE_CAST_FPEXT_FLOAT_DOUBLE:   opname = "fpext"; goto cast;
-    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT8:
-    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT16:
-    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT32:
-    case PN_OPCODE_CAST_FPTOSI_DOUBLE_INT64:
-    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT8:
-    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT16:
-    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT32:
-    case PN_OPCODE_CAST_FPTOSI_FLOAT_INT64:   opname = "fptosi"; goto cast;
-    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT8:
-    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT16:
-    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT32:
-    case PN_OPCODE_CAST_FPTOUI_DOUBLE_INT64:
-    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT8:
-    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT16:
-    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT32:
-    case PN_OPCODE_CAST_FPTOUI_FLOAT_INT64:   opname = "fptoui"; goto cast;
-    case PN_OPCODE_CAST_FPTRUNC_DOUBLE_FLOAT: opname = "fptrunc"; goto cast;
-    case PN_OPCODE_CAST_SEXT_INT1_INT8:
-    case PN_OPCODE_CAST_SEXT_INT1_INT16:
-    case PN_OPCODE_CAST_SEXT_INT1_INT32:
-    case PN_OPCODE_CAST_SEXT_INT1_INT64:
-    case PN_OPCODE_CAST_SEXT_INT8_INT16:
-    case PN_OPCODE_CAST_SEXT_INT8_INT32:
-    case PN_OPCODE_CAST_SEXT_INT8_INT64:
-    case PN_OPCODE_CAST_SEXT_INT16_INT32:
-    case PN_OPCODE_CAST_SEXT_INT16_INT64:
-    case PN_OPCODE_CAST_SEXT_INT32_INT64:     opname = "sext"; goto cast;
-    case PN_OPCODE_CAST_SITOFP_INT8_DOUBLE:
-    case PN_OPCODE_CAST_SITOFP_INT8_FLOAT:
-    case PN_OPCODE_CAST_SITOFP_INT16_DOUBLE:
-    case PN_OPCODE_CAST_SITOFP_INT16_FLOAT:
-    case PN_OPCODE_CAST_SITOFP_INT32_DOUBLE:
-    case PN_OPCODE_CAST_SITOFP_INT32_FLOAT:
-    case PN_OPCODE_CAST_SITOFP_INT64_DOUBLE:
-    case PN_OPCODE_CAST_SITOFP_INT64_FLOAT:   opname = "sitofp"; goto cast;
-    case PN_OPCODE_CAST_TRUNC_INT8_INT1:
-    case PN_OPCODE_CAST_TRUNC_INT16_INT1:
-    case PN_OPCODE_CAST_TRUNC_INT16_INT8:
-    case PN_OPCODE_CAST_TRUNC_INT32_INT1:
-    case PN_OPCODE_CAST_TRUNC_INT32_INT8:
-    case PN_OPCODE_CAST_TRUNC_INT32_INT16:
-    case PN_OPCODE_CAST_TRUNC_INT64_INT8:
-    case PN_OPCODE_CAST_TRUNC_INT64_INT16:
-    case PN_OPCODE_CAST_TRUNC_INT64_INT32:    opname = "trunc"; goto cast;
-    case PN_OPCODE_CAST_UITOFP_INT8_DOUBLE:
-    case PN_OPCODE_CAST_UITOFP_INT8_FLOAT:
-    case PN_OPCODE_CAST_UITOFP_INT16_DOUBLE:
-    case PN_OPCODE_CAST_UITOFP_INT16_FLOAT:
-    case PN_OPCODE_CAST_UITOFP_INT32_DOUBLE:
-    case PN_OPCODE_CAST_UITOFP_INT32_FLOAT:
-    case PN_OPCODE_CAST_UITOFP_INT64_DOUBLE:
-    case PN_OPCODE_CAST_UITOFP_INT64_FLOAT:   opname = "uitofp"; goto cast;
-    case PN_OPCODE_CAST_ZEXT_INT1_INT8:
-    case PN_OPCODE_CAST_ZEXT_INT1_INT16:
-    case PN_OPCODE_CAST_ZEXT_INT1_INT32:
-    case PN_OPCODE_CAST_ZEXT_INT1_INT64:
-    case PN_OPCODE_CAST_ZEXT_INT8_INT16:
-    case PN_OPCODE_CAST_ZEXT_INT8_INT32:
-    case PN_OPCODE_CAST_ZEXT_INT8_INT64:
-    case PN_OPCODE_CAST_ZEXT_INT16_INT32:
-    case PN_OPCODE_CAST_ZEXT_INT16_INT64:
-    case PN_OPCODE_CAST_ZEXT_INT32_INT64:     opname = "zext"; goto cast;
-    cast: {
-      // clang-format on
-      PNRuntimeInstructionCast* i = (PNRuntimeInstructionCast*)inst;
-      PN_PRINT("%s = %s %s %s to %s;\n",
-               pn_value_describe(module, function, i->result_value_id), opname,
-               pn_value_describe_type(module, function, i->value_id),
-               pn_value_describe(module, function, i->value_id),
-               pn_value_describe_type(module, function, i->result_value_id));
-      break;
-    }
 
     // clang-format off
     case PN_OPCODE_FCMP_OEQ_DOUBLE:
