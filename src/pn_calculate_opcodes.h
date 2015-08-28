@@ -822,9 +822,10 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
   }
   if (write_phi_assigns) {
     if (write) {
-      *(uint32_t*)offset = bb->num_phi_assigns;
+      *(uint16_t*)offset = bb->num_phi_assigns;
+      *(uint16_t*)(offset + sizeof(uint16_t)) = bb->fast_phi_assign;
     }
-    offset += sizeof(uint32_t);
+    offset += sizeof(uint16_t) + sizeof(uint16_t);
     uint32_t n;
     for (n = 0; n < bb->num_phi_assigns; ++n) {
       if (write) {

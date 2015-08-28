@@ -1146,6 +1146,29 @@ static PNRuntimeValue pn_executor_get_value_from_frame(PNExecutor* executor,
                                                        PNCallFrame* frame,
                                                        PNValueId value_id);
 
+static void pn_basic_block_trace_phi_assigns(PNThread* thread,
+                                             PNFunction* old_function,
+                                             PNRuntimeInstruction* inst) {
+  PNModule* module = thread->module;
+  PNRuntimeInstruction* dest_inst = thread->inst;
+  void* istream = inst;
+  uint16_t num_phi_assigns = *(uint16_t*)istream;
+  istream += sizeof(uint16_t) + sizeof(uint16_t);
+  PNRuntimePhiAssign* phi_assigns = (PNRuntimePhiAssign*)istream;
+  istream += num_phi_assigns * sizeof(PNRuntimePhiAssign);
+
+  uint32_t i;
+  for (i = 0; i < num_phi_assigns; ++i) {
+    PNRuntimePhiAssign* assign = &phi_assigns[i];
+    if (assign->inst == dest_inst) {
+      PN_TRACE(
+          EXECUTE, "    %s <= %s\n",
+          pn_value_describe(module, old_function, assign->dest_value_id),
+          pn_value_describe(module, old_function, assign->source_value_id));
+    }
+  }
+}
+
 static void pn_runtime_instruction_trace_values(PNThread* thread,
                                                 PNFunction* old_function,
                                                 PNCallFrame* old_frame,
@@ -1256,11 +1279,16 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
 #undef PN_OPCODE_BINOP
 
     case PN_OPCODE_BR:
+      pn_basic_block_trace_phi_assigns(
+          thread, old_function, (void*)inst + sizeof(PNRuntimeInstructionBr));
       PN_TRACE(EXECUTE, "pc = %%%zd\n", thread->inst - function->instructions);
       break;
 
     case PN_OPCODE_BR_INT1: {
       PNRuntimeInstructionBrInt1* i = (PNRuntimeInstructionBrInt1*)inst;
+      pn_basic_block_trace_phi_assigns(
+          thread, old_function,
+          (void*)inst + sizeof(PNRuntimeInstructionBrInt1));
       PN_TRACE(EXECUTE, "    %s = %u\n", PN_VALUE(i->value_id, u8));
       PN_TRACE(EXECUTE, "pc = %%%zd\n", thread->inst - function->instructions);
       break;
@@ -1747,6 +1775,9 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
 #define PN_OPCODE_SWITCH(ty)                                                  \
   do {                                                                        \
     PNRuntimeInstructionSwitch* i = (PNRuntimeInstructionSwitch*)inst;        \
+    pn_basic_block_trace_phi_assigns(                                         \
+        thread, old_function,                                                 \
+        (void*)inst + sizeof(PNRuntimeInstructionSwitch));                    \
     PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_##ty "\n",                        \
              PN_VALUE(i->value_id, ty));                                      \
     PN_TRACE(EXECUTE, "pc = %%%zd\n", thread->inst - function->instructions); \

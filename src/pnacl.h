@@ -1058,6 +1058,7 @@ typedef struct PNBasicBlock {
   PNPhiUse* phi_uses;
   uint32_t num_phi_assigns;
   PNPhiAssign* phi_assigns;
+  PNBool fast_phi_assign;
 #if PN_CALCULATE_LIVENESS
   uint32_t num_succ_bbs;
   PNBasicBlockId* succ_bb_ids;

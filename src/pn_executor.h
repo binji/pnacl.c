@@ -140,35 +140,48 @@ static void pn_thread_do_phi_assigns(PNThread* thread,
                                      PNFunction* function,
                                      void* dest_inst) {
   void* istream = thread->inst;
-  uint32_t num_phi_assigns = *(uint32_t*)istream;
-  PNRuntimePhiAssign* phi_assigns = (PNRuntimePhiAssign*)(istream + 4);
-  istream += 4 + num_phi_assigns * sizeof(PNRuntimePhiAssign);
+  uint16_t num_phi_assigns = *(uint16_t*)istream;
+  istream += sizeof(uint16_t);
+  uint16_t fast_phi_assign = *(uint16_t*)istream;
+  istream += sizeof(uint16_t);
+  PNRuntimePhiAssign* phi_assigns = (PNRuntimePhiAssign*)istream;
+  istream += num_phi_assigns * sizeof(PNRuntimePhiAssign);
 
-  PNAllocatorMark mark = pn_allocator_mark(&thread->allocator);
   PNModule* module = thread->executor->module;
   (void)module;
-  PNRuntimeValue* temp = pn_allocator_alloc(
-      &thread->allocator, sizeof(PNRuntimeValue) * num_phi_assigns,
-      sizeof(PNRuntimeValue));
 
-  /* First pass, read values to temp */
-  uint32_t i;
-  for (i = 0; i < num_phi_assigns; ++i) {
-    temp[i] = pn_thread_get_value(thread, phi_assigns[i].source_value_id);
-  }
-
-  /* Second pass, write values from temp */
-  for (i = 0; i < num_phi_assigns; ++i) {
-    PNRuntimePhiAssign* assign = &phi_assigns[i];
-    if (assign->inst == dest_inst) {
-      pn_thread_set_value(thread, assign->dest_value_id, temp[i]);
-      PN_TRACE(EXECUTE, "    %s <= %s\n",
-               PN_VALUE_DESCRIBE(assign->dest_value_id),
-               PN_VALUE_DESCRIBE(assign->source_value_id));
+  if (fast_phi_assign) {
+    uint32_t i;
+    for (i = 0; i < num_phi_assigns; ++i) {
+      PNRuntimePhiAssign* assign = &phi_assigns[i];
+      if (assign->inst == dest_inst) {
+        PNRuntimeValue value =
+            pn_thread_get_value(thread, phi_assigns[i].source_value_id);
+        pn_thread_set_value(thread, assign->dest_value_id, value);
+      }
     }
-  }
+  } else {
+    PNAllocatorMark mark = pn_allocator_mark(&thread->allocator);
+    PNRuntimeValue* temp = pn_allocator_alloc(
+        &thread->allocator, sizeof(PNRuntimeValue) * num_phi_assigns,
+        sizeof(PNRuntimeValue));
 
-  pn_allocator_reset_to_mark(&thread->allocator, mark);
+    /* First pass, read values to temp */
+    uint32_t i;
+    for (i = 0; i < num_phi_assigns; ++i) {
+      temp[i] = pn_thread_get_value(thread, phi_assigns[i].source_value_id);
+    }
+
+    /* Second pass, write values from temp */
+    for (i = 0; i < num_phi_assigns; ++i) {
+      PNRuntimePhiAssign* assign = &phi_assigns[i];
+      if (assign->inst == dest_inst) {
+        pn_thread_set_value(thread, assign->dest_value_id, temp[i]);
+      }
+    }
+
+    pn_allocator_reset_to_mark(&thread->allocator, mark);
+  }
 }
 
 static void pn_executor_init(PNExecutor* executor, PNModule* module) {
