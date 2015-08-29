@@ -626,9 +626,14 @@ static int pn_opcode_count_pair_compare(const void* a, const void* b) {
   return ((PNOpcodeCountPair*)b)->count - ((PNOpcodeCountPair*)a)->count;
 }
 
-int main(int argc, char** argv, char** envp) {
-  PN_BEGIN_TIME(TOTAL);
-  pn_options_parse(argc, argv, envp);
+typedef struct PNFileData {
+  void* data;
+  size_t size;
+} PNFileData;
+
+static PNFileData pn_read_file(const char* filename) {
+  PNFileData result = {};
+
   PN_BEGIN_TIME(FILE_READ);
   FILE* f = fopen(g_pn_filename, "r");
   if (!f) {
@@ -639,15 +644,98 @@ int main(int argc, char** argv, char** envp) {
   size_t fsize = ftell(f);
   fseek(f, 0, SEEK_SET);
 
-  void* data = pn_malloc(fsize);
+  result.data = pn_malloc(fsize);
 
-  size_t read_size = fread(data, 1, fsize, f);
-  if (read_size != fsize) {
+  result.size = fread(result.data, 1, fsize, f);
+  if (result.size != fsize) {
     PN_FATAL("unable to read data from file\n");
   }
 
   fclose(f);
   PN_END_TIME(FILE_READ);
+
+  return result;
+}
+
+static void pn_print_stats(PNModule* module) {
+#if PN_TIMERS
+  if (g_pn_print_time) {
+    PN_PRINT("-----------------\n");
+    double time = 0;
+    double percent = 0;
+#define PN_PRINT_TIMER(name)                                          \
+  struct timespec* timer_##name = &g_pn_timer_times[PN_TIMER_##name]; \
+  if (!g_pn_print_time_as_zero) {                                     \
+    time = pn_timespec_to_double(timer_##name);                       \
+    percent = 100 * pn_timespec_to_double(timer_##name) /             \
+              pn_timespec_to_double(timer_TOTAL);                     \
+  }                                                                   \
+  PN_PRINT("timer %-30s: %f sec (%%%.0f)\n", #name, time, percent);
+    PN_FOREACH_TIMER(PN_PRINT_TIMER);
+#undef PN_PRINT_TIMER
+  }
+#endif /* PN_TIMERS */
+
+  if (g_pn_print_named_functions) {
+    PN_PRINT("-----------------\n");
+    uint32_t i;
+    for (i = 0; i < module->num_functions; ++i) {
+      PNFunction* function = &module->functions[i];
+      if (function->name) {
+        PN_PRINT("%d. %s\n", i, function->name);
+      }
+    }
+  }
+
+  if (g_pn_print_stats) {
+    PN_PRINT("-----------------\n");
+    PN_PRINT("num_types: %u\n", module->num_types);
+    PN_PRINT("num_functions: %u\n", module->num_functions);
+    PN_PRINT("num_global_vars: %u\n", module->num_global_vars);
+    PN_PRINT("max num_constants: %u\n", pn_max_num_constants(module));
+    PN_PRINT("max num_values: %u\n", pn_max_num_values(module));
+    PN_PRINT("max num_bbs: %u\n", pn_max_num_bbs(module));
+    PN_PRINT("max num_instructions: %u\n", pn_max_num_instructions(module));
+    PN_PRINT("total num_constants: %u\n", pn_total_num_constants(module));
+    PN_PRINT("total num_values: %u\n", pn_total_num_values(module));
+    PN_PRINT("total num_bbs: %u\n", pn_total_num_bbs(module));
+    PN_PRINT("total num_instructions: %u\n", pn_total_num_instructions(module));
+    PN_PRINT("global_var size : %s\n",
+             pn_human_readable_size_leaky(module->memory->globalvar_end -
+                                          module->memory->globalvar_start));
+    PN_PRINT("startinfo size : %s\n",
+             pn_human_readable_size_leaky(module->memory->startinfo_end -
+                                          module->memory->startinfo_start));
+    pn_allocator_print_stats_leaky(&module->allocator);
+    pn_allocator_print_stats_leaky(&module->value_allocator);
+    pn_allocator_print_stats_leaky(&module->instruction_allocator);
+  }
+
+  if (g_pn_print_opcode_counts) {
+    PNOpcodeCountPair pairs[PN_MAX_OPCODE];
+    uint32_t n;
+    for (n = 0; n < PN_MAX_OPCODE; ++n) {
+      pairs[n].opcode = n;
+      pairs[n].count = g_pn_opcode_count[n];
+    }
+    qsort(&pairs, PN_MAX_OPCODE, sizeof(PNOpcodeCountPair),
+          pn_opcode_count_pair_compare);
+
+    PN_PRINT("-----------------\n");
+    for (n = 0; n < PN_MAX_OPCODE; ++n) {
+      if (pairs[n].count > 0) {
+        PN_PRINT("%40s %d\n", g_pn_opcode_names[pairs[n].opcode],
+                 pairs[n].count);
+      }
+    }
+  }
+}
+
+int main(int argc, char** argv, char** envp) {
+  PN_BEGIN_TIME(TOTAL);
+  pn_options_parse(argc, argv, envp);
+
+  PNFileData file_data = pn_read_file(g_pn_filename);
 
   PNMemory memory;
   PNModule module;
@@ -655,7 +743,7 @@ int main(int argc, char** argv, char** envp) {
 
   pn_memory_init(&memory, g_pn_memory_size);
   pn_module_init(&module, &memory);
-  pn_bitstream_init(&bs, data, fsize);
+  pn_bitstream_init(&bs, file_data.data, file_data.size);
 
   uint32_t load_count;
   for (load_count = 0; load_count < g_pn_repeat_load_times; ++load_count) {
@@ -692,78 +780,6 @@ int main(int argc, char** argv, char** envp) {
 
   PN_END_TIME(TOTAL);
 
-#if PN_TIMERS
-  if (g_pn_print_time) {
-    PN_PRINT("-----------------\n");
-    double time = 0;
-    double percent = 0;
-#define PN_PRINT_TIMER(name)                                          \
-  struct timespec* timer_##name = &g_pn_timer_times[PN_TIMER_##name]; \
-  if (!g_pn_print_time_as_zero) {                                     \
-    time = pn_timespec_to_double(timer_##name);                       \
-    percent = 100 * pn_timespec_to_double(timer_##name) /             \
-              pn_timespec_to_double(timer_TOTAL);                     \
-  }                                                                   \
-  PN_PRINT("timer %-30s: %f sec (%%%.0f)\n", #name, time, percent);
-  PN_FOREACH_TIMER(PN_PRINT_TIMER);
-#undef PN_PRINT_TIMER
-  }
-#endif /* PN_TIMERS */
-
-  if (g_pn_print_named_functions) {
-    PN_PRINT("-----------------\n");
-    uint32_t i;
-    for (i = 0; i < module.num_functions; ++i) {
-      PNFunction* function = &module.functions[i];
-      if (function->name) {
-        PN_PRINT("%d. %s\n", i, function->name);
-      }
-    }
-  }
-
-  if (g_pn_print_stats) {
-    PN_PRINT("-----------------\n");
-    PN_PRINT("num_types: %u\n", module.num_types);
-    PN_PRINT("num_functions: %u\n", module.num_functions);
-    PN_PRINT("num_global_vars: %u\n", module.num_global_vars);
-    PN_PRINT("max num_constants: %u\n", pn_max_num_constants(&module));
-    PN_PRINT("max num_values: %u\n", pn_max_num_values(&module));
-    PN_PRINT("max num_bbs: %u\n", pn_max_num_bbs(&module));
-    PN_PRINT("max num_instructions: %u\n", pn_max_num_instructions(&module));
-    PN_PRINT("total num_constants: %u\n", pn_total_num_constants(&module));
-    PN_PRINT("total num_values: %u\n", pn_total_num_values(&module));
-    PN_PRINT("total num_bbs: %u\n", pn_total_num_bbs(&module));
-    PN_PRINT("total num_instructions: %u\n",
-             pn_total_num_instructions(&module));
-    PN_PRINT("global_var size : %s\n",
-             pn_human_readable_size_leaky(memory.globalvar_end -
-                                          memory.globalvar_start));
-    PN_PRINT("startinfo size : %s\n",
-             pn_human_readable_size_leaky(memory.startinfo_end -
-                                          memory.startinfo_start));
-    pn_allocator_print_stats_leaky(&module.allocator);
-    pn_allocator_print_stats_leaky(&module.value_allocator);
-    pn_allocator_print_stats_leaky(&module.instruction_allocator);
-  }
-
-  if (g_pn_print_opcode_counts) {
-    PNOpcodeCountPair pairs[PN_MAX_OPCODE];
-    uint32_t n;
-    for (n = 0; n < PN_MAX_OPCODE; ++n) {
-      pairs[n].opcode = n;
-      pairs[n].count = g_pn_opcode_count[n];
-    }
-    qsort(&pairs, PN_MAX_OPCODE, sizeof(PNOpcodeCountPair),
-          pn_opcode_count_pair_compare);
-
-    PN_PRINT("-----------------\n");
-    for (n = 0; n < PN_MAX_OPCODE; ++n) {
-      if (pairs[n].count > 0) {
-        PN_PRINT("%40s %d\n", g_pn_opcode_names[pairs[n].opcode],
-                 pairs[n].count);
-      }
-    }
-  }
-
+  pn_print_stats(&module);
   return 0;
 }
