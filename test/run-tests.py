@@ -6,7 +6,6 @@
 import argparse
 import difflib
 import fnmatch
-import logging
 import os
 import re
 import shlex
@@ -18,7 +17,6 @@ import time
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT_DIR = os.path.dirname(SCRIPT_DIR)
 DEFAULT_PNACL_EXE = os.path.join(REPO_ROOT_DIR, 'out', 'pnacl-opt-assert')
-logger = logging.getLogger(__name__)
 
 
 class Error(Exception):
@@ -194,44 +192,72 @@ class TestInfo(object):
         raise Error('stdout mismatch:\n' + ''.join(diff_lines))
 
 
-def PrintStatus(passed, failed, start_time, incremental):
-  total_duration = time.time() - start_time
-  if incremental:
-    sys.stderr.write('\r')
-  status = '[+%d|-%d] (%.2fs)' % (passed, failed, total_duration)
-  PrintStatus.last_status_length = len(status)
-  sys.stderr.write(status)
-  if not incremental:
+class Status(object):
+  def __init__(self, verbose):
+    self.verbose = verbose
+    self.start_time = None
+    self.last_length = 0
+    self.passed = 0
+    self.failed = 0
+    self.failed_tests = []
+
+  def Start(self):
+    self.start_time = time.time()
+
+  def Passed(self, info, duration):
+    self.passed += 1
+    if self.verbose:
+      sys.stderr.write('+ %s (%.3fs)\n' % (info.name, duration))
+    else:
+      self.Clear()
+      self._PrintShortStatus(info)
+      sys.stderr.flush()
+
+  def Failed(self, info, error_msg):
+    self.failed += 1
+    self.failed_tests.append(info)
+    self.Clear()
+    sys.stderr.write('- %s\n%s\n' % (info.name, Indent(error_msg, 2)))
+
+  def Skipped(self, info):
+    if self.verbose:
+      sys.stderr.write('. %s (skipped)\n' % info.name)
+
+  def Print(self):
+    self._PrintShortStatus(None)
     sys.stderr.write('\n')
-  sys.stderr.flush()
 
-PrintStatus.last_status_length = 0
+  def _PrintShortStatus(self, info):
+    total_duration = time.time() - self.start_time
+    name = info.name if info else ''
+    status = '[+%d|-%d] (%.2fs) %s\r' % (self.passed, self.failed,
+                                         total_duration, name)
+    self.last_length = len(status)
+    sys.stderr.write(status)
+
+  def Clear(self):
+    if not self.verbose:
+      sys.stderr.write('%s\r' % (' ' * self.last_length))
 
 
-def ClearStatus():
-  sys.stderr.write('\r%s\r' % (' ' * PrintStatus.last_status_length))
-
-
-def GetAllTestInfo(test_names):
+def GetAllTestInfo(test_names, status):
   infos = []
-  failed = []
   for test_name in test_names:
     info = TestInfo()
     try:
       info.Parse(test_name)
       infos.append(info)
     except Error as e:
-      failed.append(info)
-      logger.error('- %s\n%s' % (info.name, Indent(str(e), 2)))
+      status.Failed(info, str(e))
 
-  return infos, failed
+  return infos
 
 
 def main(args):
   parser = argparse.ArgumentParser()
   parser.add_argument('-e', '--executable', help='override executable.')
-  parser.add_argument('-v', '--verbose', help='print more diagnotic messages. '
-                      'Use more than once for more info.', action='count')
+  parser.add_argument('-v', '--verbose', help='print more diagnotic messages.',
+                      action='store_true')
   parser.add_argument('-l', '--list', help='list all tests.',
                       action='store_true')
   parser.add_argument('--list-exes',
@@ -252,14 +278,6 @@ def main(args):
   else:
     pattern_re = '.*'
 
-  if options.verbose >= 2:
-    level=logging.DEBUG
-  elif options.verbose:
-    level=logging.INFO
-  else:
-    level=logging.WARNING
-  logging.basicConfig(level=level, format='%(message)s')
-
   test_names = FindTestFiles(SCRIPT_DIR, '.txt', pattern_re)
   if options.list:
     for test_name in test_names:
@@ -275,12 +293,9 @@ def main(args):
   os.chdir(SCRIPT_DIR)
 
   isatty = os.isatty(1)
-  short_display = not logger.isEnabledFor(logging.INFO)
 
-  start_time = time.time()
-  passed = 0
-  infos, failed_tests = GetAllTestInfo(test_names)
-  failed = len(failed_tests)
+  status = Status(options.verbose)
+  infos = GetAllTestInfo(test_names, status)
 
   if options.list_exes:
     exes = set([info.exe for info in infos])
@@ -290,10 +305,11 @@ def main(args):
     print '\n'.join(exes)
     return 0
 
+  status.Start()
   for info in infos:
     try:
       if not options.slow and info.slow:
-        logger.info('. %s (skipped)' % info.name)
+        status.Skipped(info)
         continue
 
       stdout, stderr, returncode, duration = info.Run(options.executable)
@@ -313,26 +329,17 @@ def main(args):
       else:
         info.Diff(stdout, stderr)
 
-      passed += 1
-      logger.info('+ %s (%.3fs)' % (info.name, duration))
+      status.Passed(info, duration)
     except Error as e:
-      failed_tests.append(info)
-      failed += 1
-      if short_display:
-        ClearStatus()
-      logger.error('- %s\n%s' % (info.name, Indent(str(e), 2)))
+      status.Failed(info, str(e))
 
-    if short_display:
-      PrintStatus(passed, failed, start_time, True)
-
-  if short_display:
-    ClearStatus()
+  status.Clear()
 
   ret = 0
 
-  if failed:
-    logging.error('**** FAILED %s' % ('*' * (80 - 14)))
-    for info in failed_tests:
+  if status.failed:
+    sys.stderr.write('**** FAILED %s\n' % ('*' * (80 - 14)))
+    for info in status.failed_tests:
       name = info.name
       cmd = info.GetCommand(options.executable)
       exe = os.path.relpath(info.GetExecutable(options.executable), run_cwd)
@@ -340,10 +347,10 @@ def main(args):
           os.path.relpath(SCRIPT_DIR, run_cwd), ' '.join(cmd)), 2)
       msg += Indent('rerun = %s\n' % ' '.join(
           [sys.executable, sys.argv[0], '-e', exe, name]), 2)
-      logger.error('- %s\n%s' % (name, msg))
+      sys.stderr.write('- %s\n%s\n' % (name, msg))
     ret = 1
 
-  PrintStatus(passed, failed, start_time, False)
+  status.Print()
   return ret
 
 

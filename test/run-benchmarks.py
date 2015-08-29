@@ -5,7 +5,6 @@
 
 import argparse
 import fnmatch
-import logging
 import os
 import subprocess
 import sys
@@ -23,7 +22,32 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT_DIR = os.path.dirname(SCRIPT_DIR)
 BENCHMARK_DIR = os.path.join(SCRIPT_DIR, 'benchmark')
 DEFAULT_PNACL_EXE = os.path.join(REPO_ROOT_DIR, 'out', 'pnacl-opt-assert')
-logger = logging.getLogger(__name__)
+
+
+class Status(object):
+  def __init__(self):
+    self.start_time = None
+    self.passed = 0
+    self.failed = 0
+
+  def Start(self):
+    self.start_time = time.time()
+
+  def Passed(self, info, opt_level, duration, nexe_duration):
+    self.passed += 1
+    percent = duration / nexe_duration
+    sys.stderr.write('+ %s O%d (%.3fs) (%.3fs) (%.1fx)\n' % (
+        info.name, opt_level, duration, nexe_duration, percent))
+
+  def Failed(self, info, error_msg):
+    self.failed += 1
+    sys.stderr.write('- %s\n%s\n' % (info.name, Indent(error_msg, 2)))
+
+  def Print(self):
+    total_duration = time.time() - self.start_time
+    status = '[+%d|-%d] (%.2fs)\n' % (self.passed, self.failed,
+                                         total_duration)
+    sys.stderr.write(status)
 
 
 def RunNexe(test_info, suffix):
@@ -48,8 +72,8 @@ def RunNexe(test_info, suffix):
 def main(args):
   parser = argparse.ArgumentParser()
   parser.add_argument('-e', '--executable', help='override executable.')
-  parser.add_argument('-v', '--verbose', help='print more diagnotic messages. '
-                      'Use more than once for more info.', action='count')
+  parser.add_argument('-v', '--verbose', help='print more diagnotic messages.',
+                      action='store_true')
   parser.add_argument('-l', '--list', help='list all tests.',
                       action='store_true')
   parser.add_argument('-a', '--arch', help='nexe arch.', default='x86-64')
@@ -62,14 +86,6 @@ def main(args):
                           for p in options.patterns)
   else:
     pattern_re = '.*'
-
-  if options.verbose >= 2:
-    level=logging.DEBUG
-  elif options.verbose:
-    level=logging.INFO
-  else:
-    level=logging.WARNING
-  logging.basicConfig(level=level, format='%(message)s')
 
   tests = run_tests.FindTestFiles(BENCHMARK_DIR, '.bench', pattern_re)
   if options.list:
@@ -84,9 +100,8 @@ def main(args):
 
   os.chdir(SCRIPT_DIR)
 
-  passed = 0
-  failed = 0
-  start_time = time.time()
+  status = Status()
+  status.Start()
   for test in tests:
     info = TestInfo()
     try:
@@ -104,18 +119,13 @@ def main(args):
           else:
             diff_lines = run_tests.DiffLines(nexe_stdout, stdout)
             raise Error('stdout mismatch:\n' + ''.join(diff_lines))
-        percent = duration / nexe_duration
-        logger.warning('+ %s O%d (%.3fs) (%.3fs) (%.1fx)' % (
-            info.name, opt_level, duration, nexe_duration, percent))
-        passed += 1
+        status.Passed(info, opt_level, duration, nexe_duration)
     except Error as e:
-      failed += 1
-      msg = run_tests.Indent(str(e), 2)
-      logger.error('- %s\n%s' % (info.name, msg))
+      status.Failed(info, str(e))
 
-  run_tests.PrintStatus(passed, failed, start_time, False)
+  status.Print()
 
-  if failed:
+  if status.failed:
     return 1
   return 0
 
