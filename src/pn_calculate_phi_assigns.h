@@ -55,7 +55,7 @@ static void pn_function_calculate_phi_assigns(PNModule* module,
     bb->fast_phi_assign = PN_TRUE;
 
     uint32_t m;
-    uint32_t first;
+    uint32_t first = 0;
     PNBasicBlockId bb_id = PN_INVALID_BB_ID;
     PNBool done = PN_FALSE;
     for (m = 0; m < bb->num_phi_assigns && !done; ++m) {
