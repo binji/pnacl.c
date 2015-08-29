@@ -1619,4 +1619,22 @@ static void pn_header_read(PNBitStream* bs) {
   }
 }
 
+static void pn_module_read(PNModule* module, PNBitStream* bs) {
+  pn_header_read(bs);
+  uint32_t entry = pn_bitstream_read(bs, 2);
+  if (entry != PN_ENTRY_SUBBLOCK) {
+    PN_FATAL("expected subblock at top-level\n");
+  }
+
+  PNBlockId block_id = pn_bitstream_read_vbr(bs, 8);
+  PN_CHECK(block_id == PN_BLOCKID_MODULE);
+  PN_TRACE(MODULE_BLOCK, "module {  // BlockID = %d\n", block_id);
+  PN_TRACE_INDENT(MODULE_BLOCK, 2);
+
+  PNBlockInfoContext context = {};
+  pn_module_block_read(module, &context, bs);
+  PN_TRACE_DEDENT(MODULE_BLOCK, 2);
+  PN_TRACE(MODULE_BLOCK, "}\n");
+}
+
 #endif /* PN_READ_H_ */

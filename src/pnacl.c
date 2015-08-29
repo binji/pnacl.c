@@ -659,21 +659,7 @@ int main(int argc, char** argv, char** envp) {
 
   uint32_t load_count;
   for (load_count = 0; load_count < g_pn_repeat_load_times; ++load_count) {
-    pn_header_read(&bs);
-    uint32_t entry = pn_bitstream_read(&bs, 2);
-    if (entry != PN_ENTRY_SUBBLOCK) {
-      PN_FATAL("expected subblock at top-level\n");
-    }
-
-    PNBlockId block_id = pn_bitstream_read_vbr(&bs, 8);
-    PN_CHECK(block_id == PN_BLOCKID_MODULE);
-    PN_TRACE(MODULE_BLOCK, "module {  // BlockID = %d\n", block_id);
-    PN_TRACE_INDENT(MODULE_BLOCK, 2);
-
-    PNBlockInfoContext context = {};
-    pn_module_block_read(&module, &context, &bs);
-    PN_TRACE_DEDENT(MODULE_BLOCK, 2);
-    PN_TRACE(MODULE_BLOCK, "}\n");
+    pn_module_read(&module, &bs);
 
     /* Reset the state so everything can be reloaded */
     if (g_pn_repeat_load_times > 1 &&
