@@ -6,7 +6,9 @@
 import argparse
 import difflib
 import fnmatch
+import multiprocessing
 import os
+import Queue
 import re
 import shlex
 import subprocess
@@ -305,33 +307,69 @@ def main(args):
     print '\n'.join(exes)
     return 0
 
-  status.Start()
+  inq = multiprocessing.Queue()
+  test_count = 0
   for info in infos:
-    try:
-      if not options.slow and info.slow:
-        status.Skipped(info)
-        continue
+    if not options.slow and info.slow:
+      status.Skipped(info)
+      continue
+    inq.put(info)
+    test_count += 1
 
-      stdout, stderr, returncode, duration = info.Run(options.executable)
-      if returncode != info.expected_error:
-        # This test has already failed, but diff it anyway.
-        msg = 'expected error code %d, got %d.' % (info.expected_error,
-                                                   returncode)
+  outq = multiprocessing.Queue()
+  num_proc = multiprocessing.cpu_count()
+  processes = []
+  status.Start()
+
+  def Worker(options, inq, outq):
+    while True:
+      try:
+        info = inq.get(False)
         try:
-          info.Diff(stdout, stderr)
+          out = info.Run(options.executable)
         except Error as e:
-          msg += '\n' + str(e)
+          outq.put((info, e))
+          continue
+        outq.put((info, out))
+      except Queue.Empty:
+        break
 
-        raise Error(msg)
+  try:
+    for p in range(num_proc):
+      proc = multiprocessing.Process(target=Worker, args=(options, inq, outq))
+      processes.append(proc)
+      proc.start()
 
-      if options.rebase:
-        info.Rebase(stdout, stderr)
-      else:
-        info.Diff(stdout, stderr)
+    finished_tests = 0
+    while finished_tests < test_count:
+      info, result = outq.get()
+      finished_tests += 1
+      try:
+        if isinstance(result, Error):
+          raise result
 
-      status.Passed(info, duration)
-    except Error as e:
-      status.Failed(info, str(e))
+        stdout, stderr, returncode, duration = result
+        if returncode != info.expected_error:
+          # This test has already failed, but diff it anyway.
+          msg = 'expected error code %d, got %d.' % (info.expected_error,
+                                                     returncode)
+          try:
+            info.Diff(stdout, stderr)
+          except Error as e:
+            msg += '\n' + str(e)
+          raise Error(msg)
+        else:
+          if options.rebase:
+            info.Rebase(stdout, stderr)
+          else:
+            info.Diff(stdout, stderr)
+          status.Passed(info, duration)
+      except Error as e:
+        status.Failed(info, str(e))
+  finally:
+    for proc in processes:
+      proc.terminate()
+      proc.join()
 
   status.Clear()
 
