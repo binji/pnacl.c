@@ -7,7 +7,7 @@
 
 #if PN_PPAPI
 
-static void pn_memory_init_ppapi(PNMemory* memory) {
+void pn_memory_init_ppapi(PNMemory* memory) {
   uint32_t offset = pn_align_up(memory->ppapi_start, sizeof(uint32_t));
 
   /* PPB_Core;1.0 */

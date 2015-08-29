@@ -184,7 +184,7 @@ static void pn_thread_do_phi_assigns(PNThread* thread,
   }
 }
 
-static void pn_executor_init(PNExecutor* executor, PNModule* module) {
+void pn_executor_init(PNExecutor* executor, PNModule* module) {
   memset(executor, 0, sizeof(PNExecutor));
   pn_allocator_init(&executor->allocator, PN_MIN_CHUNKSIZE, "executor");
   executor->module = module;

@@ -5,7 +5,7 @@
 #ifndef PN_MODULE_H_
 #define PN_MODULE_H_
 
-static void pn_module_init(PNModule* module, PNMemory* memory) {
+void pn_module_init(PNModule* module, PNMemory* memory) {
   memset(module, 0, sizeof(PNModule));
   module->memory = memory;
   pn_allocator_init(&module->allocator, PN_MIN_CHUNKSIZE, "module");
@@ -15,7 +15,7 @@ static void pn_module_init(PNModule* module, PNMemory* memory) {
   pn_allocator_init(&module->temp_allocator, PN_MIN_CHUNKSIZE, "temp");
 }
 
-static void pn_module_reset(PNModule* module) {
+void pn_module_reset(PNModule* module) {
   PNModule copy = *module;
   /* Keep the allocators and memory, clear everything else */
   memset(module, 0, sizeof(PNModule));

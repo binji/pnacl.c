@@ -98,7 +98,8 @@ typedef double pn_f64;
     PN_FATAL("PN_CHECK failed: %s.\n", #x); \
   } else                                    \
   (void)0
-#define PN_STATIC_ASSERT__(x, line) int __pn_static_assert_##line[x ? 1 : -1]
+#define PN_STATIC_ASSERT__(x, line) \
+  typedef int __pn_static_assert_##line[x ? 1 : -1]
 #define PN_STATIC_ASSERT_(x, line) PN_STATIC_ASSERT__(x, line)
 #define PN_STATIC_ASSERT(x) PN_STATIC_ASSERT_(x, __LINE__)
 
