@@ -1,4 +1,4 @@
-# FLAGS: -r -m 10m -e "PYTHONHOME="
+# FLAGS: -m 10m -e "PYTHONHOME="
 # FILE: res/trunk-519-ge2e4ff2-python.pexe
 # ARGS: -S -c "print ', '.join(str(x) for x in range(10))"
 # STDOUT:

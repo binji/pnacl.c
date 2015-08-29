@@ -1,4 +1,4 @@
-# FLAGS: -r -m 4m
+# FLAGS: -m 4m
 # FILE: res/sem.pexe
 # STDOUT:
 total = 5050

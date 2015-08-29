@@ -1,4 +1,4 @@
-# FLAGS: -r
+# FLAGS:
 # FILE: benchmark/res/meteor.pexe
 # ARGS: 2098
 # SLOW:

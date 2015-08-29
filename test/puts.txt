@@ -1,4 +1,4 @@
-# FLAGS: -r
+# FLAGS:
 # FILE: res/puts.pexe
 # STDOUT:
 Hello, World!

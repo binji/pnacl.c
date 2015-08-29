@@ -1,4 +1,4 @@
-# FLAGS: -r
+# FLAGS:
 # FILE: benchmark/res/fasta.pexe
 # ARGS: 1000
 # STDOUT:

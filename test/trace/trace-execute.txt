@@ -1,4 +1,4 @@
-# FLAGS: --trace-execute -r
+# FLAGS: --trace-execute
 # FILE: res/main.pexe
 intrinsic "llvm.nacl.read.tp" (28)
 intrinsic "llvm.trap" (34)

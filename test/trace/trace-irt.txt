@@ -1,4 +1,4 @@
-# FLAGS: --trace-irt -r
+# FLAGS: --trace-irt
 # FILE: res/main.pexe
     NACL_IRT_QUERY(1196 (nacl-irt-fdio-0.1), 1024, 32)
     NACL_IRT_QUERY(1236 (nacl-irt-basic-0.1), 1060, 24)

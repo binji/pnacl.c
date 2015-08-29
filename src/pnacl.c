@@ -56,7 +56,7 @@ static PNBool g_pn_dedupe_phi_nodes = PN_TRUE;
 static PNBool g_pn_print_named_functions;
 static PNBool g_pn_print_stats;
 static PNBool g_pn_print_opcode_counts;
-static PNBool g_pn_run;
+static PNBool g_pn_run = PN_TRUE;
 static uint32_t g_pn_opcode_count[PN_MAX_OPCODE];
 static PNBool g_pn_repeat_load_times = 1;
 #if PN_PPAPI
@@ -118,7 +118,7 @@ enum {
   PN_FLAG_VERBOSE,
   PN_FLAG_HELP,
   PN_FLAG_MEMORY_SIZE,
-  PN_FLAG_RUN,
+  PN_FLAG_NO_RUN,
 #if PN_PPAPI
   PN_FLAG_PPAPI,
 #endif /* PN_PPAPI */
@@ -150,7 +150,7 @@ static struct option g_pn_long_options[] = {
     {"verbose", no_argument, NULL, 'v'},
     {"help", no_argument, NULL, 'h'},
     {"memory-size", required_argument, NULL, 'm'},
-    {"run", no_argument, NULL, 'r'},
+    {"no-run", no_argument, NULL, 'n'},
 #if PN_PPAPI
     {"ppapi", no_argument, NULL, 0},
 #endif /* PN_PPAPI */
@@ -318,7 +318,7 @@ static void pn_options_parse(int argc, char** argv, char** env) {
   char** environ_copy = pn_environ_copy(env);
 
   while (1) {
-    c = getopt_long(argc, argv, "vm:re:Ehtp", g_pn_long_options, &option_index);
+    c = getopt_long(argc, argv, "vm:ne:Ehtp", g_pn_long_options, &option_index);
     if (c == -1) {
       break;
     }
@@ -335,7 +335,7 @@ static void pn_options_parse(int argc, char** argv, char** env) {
           case PN_FLAG_VERBOSE:
           case PN_FLAG_HELP:
           case PN_FLAG_MEMORY_SIZE:
-          case PN_FLAG_RUN:
+          case PN_FLAG_NO_RUN:
           case PN_FLAG_ENV:
           case PN_FLAG_USE_HOST_ENV:
 #if PN_TRACING
@@ -472,8 +472,8 @@ static void pn_options_parse(int argc, char** argv, char** env) {
         break;
       }
 
-      case 'r':
-        g_pn_run = PN_TRUE;
+      case 'n':
+        g_pn_run = PN_FALSE;
         break;
 
       case 'e':

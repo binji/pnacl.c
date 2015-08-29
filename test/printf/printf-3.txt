@@ -1,4 +1,4 @@
-# FLAGS: -r
+# FLAGS:
 # FILE: res/printf.pexe
 # ARGS: one two three
 # STDOUT:

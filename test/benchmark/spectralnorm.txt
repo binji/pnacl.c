@@ -1,4 +1,4 @@
-# FLAGS: -r
+# FLAGS:
 # FILE: benchmark/res/spectralnorm.pexe
 # ARGS: 100
 # STDOUT:

@@ -1,4 +1,4 @@
-# FLAGS: --trace-function-filter=main
+# FLAGS: --trace-function-filter=main -n
 # FILE: res/dedupe_incoming.pexe
 function i32 @f1(i32 %p0, i32 %p1) {  // BlockID = 12
 %b0:

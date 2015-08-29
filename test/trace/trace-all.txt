@@ -1,4 +1,4 @@
-# FLAGS: --trace-all
+# FLAGS: --trace-all -n
 # FILE: res/main.pexe
 *** ARGS:
   [0] res/main.pexe

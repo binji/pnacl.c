@@ -1,4 +1,4 @@
-# FLAGS: -t
+# FLAGS: -nt
 # FILE: res/start.pexe
 *** ARGS:
   [0] res/start.pexe

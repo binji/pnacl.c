@@ -1,4 +1,4 @@
-# FLAGS: --print-stats
+# FLAGS: --print-stats -n
 # FILE: res/main.pexe
 -----------------
 num_types: 17

@@ -1,4 +1,4 @@
-# FLAGS: --print-opcode-counts -r
+# FLAGS: --print-opcode-counts
 # FILE: res/printf.pexe
 -----------------
                          BINOP_ADD_INT32 745

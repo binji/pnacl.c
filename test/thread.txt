@@ -1,4 +1,4 @@
-# FLAGS: -r
+# FLAGS:
 # FILE: res/thread.pexe
 # STDOUT:
 data = 10

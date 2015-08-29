@@ -1,4 +1,4 @@
-# FLAGS: -r
+# FLAGS:
 # FILE: res/printf.pexe
 # STDOUT:
 arg0 = res/printf.pexe

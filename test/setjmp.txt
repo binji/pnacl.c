@@ -1,4 +1,4 @@
-# FLAGS: -r
+# FLAGS:
 # FILE: res/setjmp.pexe
 # ARGS: 10
 # STDOUT:

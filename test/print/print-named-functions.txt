@@ -1,4 +1,4 @@
-# FLAGS: --print-named-functions
+# FLAGS: -n --print-named-functions
 # FILE: res/thread.pexe
 -----------------
 0. llvm.memcpy.p0i8.p0i8.i32

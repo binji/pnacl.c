@@ -1,4 +1,4 @@
-# FLAGS: -p --print-time-as-zero
+# FLAGS: -np --print-time-as-zero
 # FILE: res/main.pexe
 -----------------
 timer TOTAL                         : 0.000000 sec (%0)

@@ -160,7 +160,7 @@ def main(args):
     expected_cmd = [pnacl_bcdis, '--no-records', test]
     expected_name = ' '.join(expected_cmd)
     actual_cmd = [options.executable, '--trace-bcdis', '--no-dedupe-phi-nodes',
-                  '-m 10m', test]
+                  '-m 10m', test, '-n']
     actual_name = ' '.join(actual_cmd)
 
     expected_iter = PNaClBcdisLineIter(expected_cmd)

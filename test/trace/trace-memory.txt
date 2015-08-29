@@ -1,4 +1,4 @@
-# FLAGS: --trace-memory -r
+# FLAGS: --trace-memory
 # FILE: res/main.pexe
     write.u32 [    1024] <= 208
     write.u32 [    1028] <= 212

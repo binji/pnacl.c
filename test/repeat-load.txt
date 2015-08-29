@@ -1,4 +1,4 @@
-# FLAGS: --repeat-load=10 -p --print-time-as-zero
+# FLAGS: -n --repeat-load=10 -p --print-time-as-zero
 # FILE: res/puts.pexe
 -----------------
 timer TOTAL                         : 0.000000 sec (%0)
