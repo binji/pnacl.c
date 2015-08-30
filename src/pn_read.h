@@ -1619,7 +1619,7 @@ static void pn_header_read(PNBitStream* bs) {
   }
 }
 
-static void pn_module_read(PNModule* module, PNBitStream* bs) {
+void pn_module_read(PNModule* module, PNBitStream* bs) {
   pn_header_read(bs);
   uint32_t entry = pn_bitstream_read(bs, 2);
   if (entry != PN_ENTRY_SUBBLOCK) {

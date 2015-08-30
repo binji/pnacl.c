@@ -1304,122 +1304,128 @@ static void pn_event_finish(PNThread* thread);
 static void pn_event_handle_next(PNThread* thread);
 #endif /* PN_PPAPI */
 
-void pn_executor_run(PNExecutor* executor) {
-  PNThread* thread = executor->main_thread;
-  uint32_t last_thread_id = thread->id;
-  while (PN_TRUE) {
-    uint32_t i;
+PNThread* pn_executor_run_step(PNExecutor* executor, PNThread* thread) {
+  uint32_t i;
 
 #define PN_FOR_THREAD_QUANTUM \
   for (i = 0;                 \
        i < PN_INSTRUCTIONS_QUANTUM && thread->state == PN_THREAD_RUNNING; ++i)
 
 #if PN_TRACING
-    if (PN_IS_TRACE(EXECUTE)) {
-      PN_FOR_THREAD_QUANTUM {
-        PNFunction* function = thread->function;
-        PNCallFrame* frame = thread->current_frame;
-        PNRuntimeInstruction* inst = thread->inst;
-        g_pn_trace_indent += 2;
-        pn_runtime_instruction_trace(thread->module, function, inst);
-        g_pn_trace_indent -= 2;
-        pn_thread_execute_instruction(thread);
-        pn_runtime_instruction_trace_intrinsics(thread, inst);
-        pn_runtime_instruction_trace_values(thread, function, frame, inst);
-      }
-    } else if (PN_IS_TRACE(INTRINSICS)) {
-      PN_FOR_THREAD_QUANTUM {
-        PNRuntimeInstruction* inst = thread->inst;
-        pn_thread_execute_instruction(thread);
-        pn_runtime_instruction_trace_intrinsics(thread, inst);
+  if (PN_IS_TRACE(EXECUTE)) {
+    PN_FOR_THREAD_QUANTUM {
+      PNFunction* function = thread->function;
+      PNCallFrame* frame = thread->current_frame;
+      PNRuntimeInstruction* inst = thread->inst;
+      g_pn_trace_indent += 2;
+      pn_runtime_instruction_trace(thread->module, function, inst);
+      g_pn_trace_indent -= 2;
+      pn_thread_execute_instruction(thread);
+      pn_runtime_instruction_trace_intrinsics(thread, inst);
+      pn_runtime_instruction_trace_values(thread, function, frame, inst);
+    }
+  } else if (PN_IS_TRACE(INTRINSICS)) {
+    PN_FOR_THREAD_QUANTUM {
+      PNRuntimeInstruction* inst = thread->inst;
+      pn_thread_execute_instruction(thread);
+      pn_runtime_instruction_trace_intrinsics(thread, inst);
+    }
+  } else
+#endif /* PN_TRACING */
+  {
+    PN_FOR_THREAD_QUANTUM { pn_thread_execute_instruction(thread); }
+  }
+
+  if (executor->exiting) {
+    return NULL;
+  }
+
+  /* Remove the dead thread from the executing linked-list. Only the
+   * currently executing thread should be in this state. */
+  PNThread* next_thread = thread->next;
+  if (thread->state == PN_THREAD_DEAD
+#if PN_PPAPI
+      || thread->state == PN_THREAD_IDLE
+#endif /* PN_PPAPI */
+      ) {
+    assert(thread != &executor->start_thread);
+
+#if PN_PPAPI
+    /* The start thread should never be dead (the program should have exited
+     * above in that case). The main thread can be dead, though. This will
+     * happen if the ppapi event loop has started and the currently running
+     * event has been handled. At this point the next event should be
+     * handled. */
+    if (thread == executor->main_thread) {
+      assert(executor->start_thread.state == PN_THREAD_EVENT_LOOP);
+      pn_event_finish(thread);
+      pn_event_handle_next(thread);
+      if (thread->state == PN_THREAD_DEAD) {
+        thread->state = PN_THREAD_IDLE;
       }
     } else
-#endif /* PN_TRACING */
+#endif /* PN_PPAPI */
     {
-      PN_FOR_THREAD_QUANTUM {
-        pn_thread_execute_instruction(thread);
+      /* Unlink from executing linked list */
+      thread->prev->next = thread->next;
+      thread->next->prev = thread->prev;
+
+      /* Link into dead list, singly-linked */
+      thread->next = executor->dead_threads;
+      thread->prev = NULL;
+      executor->dead_threads = thread;
+    }
+  }
+
+  thread = next_thread;
+
+  /* Schedule the next thread */
+  while (1) {
+    assert(thread->state != PN_THREAD_DEAD);
+
+    if (thread->state == PN_THREAD_RUNNING) {
+      break;
+    } else if (thread->state == PN_THREAD_BLOCKED) {
+      struct timeval tv;
+      gettimeofday(&tv, NULL);
+      if (thread->has_timeout && (tv.tv_sec > thread->timeout_sec ||
+                                  (tv.tv_sec == thread->timeout_sec &&
+                                   tv.tv_usec > thread->timeout_usec))) {
+        /* Run the call instruction again from the timedout state. This
+         * will set the proper return value and continue on. */
+        thread->state = PN_THREAD_RUNNING;
+        thread->futex_state = PN_FUTEX_TIMEDOUT;
+        break;
       }
+
+      /* TODO(binji): detect deadlock */
+#if PN_PPAPI
+    } else if (thread->state == PN_THREAD_IDLE) {
+      break;
+#endif /* PN_PPAPI */
+    } else {
+      PN_UNREACHABLE();
     }
 
-    if (executor->exiting) {
+    thread = thread->next;
+  }
+
+  return thread;
+}
+
+void pn_executor_run(PNExecutor* executor) {
+  PNThread* thread = executor->main_thread;
+  uint32_t last_thread_id = thread->id;
+  while (PN_TRUE) {
+    thread = pn_executor_run_step(executor, thread);
+    if (!thread) {
       break;
     }
-
-    /* Remove the dead thread from the executing linked-list. Only the
-     * currently executing thread should be in this state. */
-    PNThread* next_thread = thread->next;
-    if (thread->state == PN_THREAD_DEAD
-#if PN_PPAPI
-        || thread->state == PN_THREAD_IDLE
-#endif /* PN_PPAPI */
-        ) {
-      assert(thread != &executor->start_thread);
-
-#if PN_PPAPI
-      /* The start thread should never be dead (the program should have exited
-       * above in that case). The main thread can be dead, though. This will
-       * happen if the ppapi event loop has started and the currently running
-       * event has been handled. At this point the next event should be
-       * handled. */
-      if (thread == executor->main_thread) {
-        assert(executor->start_thread.state == PN_THREAD_EVENT_LOOP);
-        pn_event_finish(thread);
-        pn_event_handle_next(thread);
-        if (thread->state == PN_THREAD_DEAD) {
-          thread->state = PN_THREAD_IDLE;
-        }
-      } else
-#endif /* PN_PPAPI */
-      {
-        /* Unlink from executing linked list */
-        thread->prev->next = thread->next;
-        thread->next->prev = thread->prev;
-
-        /* Link into dead list, singly-linked */
-        thread->next = executor->dead_threads;
-        thread->prev = NULL;
-        executor->dead_threads = thread;
+    if (thread->id != last_thread_id) {
+      last_thread_id = thread->id;
+      if (PN_IS_TRACE(EXECUTE) || PN_IS_TRACE(IRT) || PN_IS_TRACE(INTRINSICS)) {
+        PN_PRINT("Switch thread: %d\n", thread->id);
       }
-    }
-
-    thread = next_thread;
-
-    /* Schedule the next thread */
-    while (1) {
-      assert(thread->state != PN_THREAD_DEAD);
-
-      if (thread->state == PN_THREAD_RUNNING) {
-        if (thread->id != last_thread_id) {
-          last_thread_id = thread->id;
-          if (PN_IS_TRACE(EXECUTE) || PN_IS_TRACE(IRT) ||
-              PN_IS_TRACE(INTRINSICS)) {
-            PN_PRINT("Switch thread: %d\n", thread->id);
-          }
-        }
-        break;
-      } else if (thread->state == PN_THREAD_BLOCKED) {
-        struct timeval tv;
-        gettimeofday(&tv, NULL);
-        if (thread->has_timeout && (tv.tv_sec > thread->timeout_sec ||
-                                    (tv.tv_sec == thread->timeout_sec &&
-                                     tv.tv_usec > thread->timeout_usec))) {
-          /* Run the call instruction again from the timedout state. This
-           * will set the proper return value and continue on. */
-          thread->state = PN_THREAD_RUNNING;
-          thread->futex_state = PN_FUTEX_TIMEDOUT;
-          break;
-        }
-
-        /* TODO(binji): detect deadlock */
-#if PN_PPAPI
-      } else if (thread->state == PN_THREAD_IDLE) {
-        break;
-#endif /* PN_PPAPI */
-      } else {
-        PN_UNREACHABLE();
-      }
-
-      thread = thread->next;
     }
   }
 }

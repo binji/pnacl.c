@@ -3,6 +3,7 @@ SHELL = bash
 .SUFFIXES:
 
 CC = clang
+AR = ar
 ALL = pnacl pnacl-opt-assert
 EVERYTHING = pnacl pnacl-liveness pnacl-notrace pnacl-notimers \
 	pnacl-notrace-notimers pnacl-opt pnacl-opt-assert pnacl-msan pnacl-asan \
@@ -69,6 +70,11 @@ out/pnacl-gcc: src/pnacl.c | out
 
 out/pnacl-gcc-opt-assert: src/pnacl.c | out
 	gcc -O3 $(CFLAGS) -o $@ $< $(LDFLAGS)
+
+out/pnacl.a: src/pn_lib.c | out
+	$(CC) -O3 $(CFLAGS) -c -o $@.o $<
+	rm -f $@
+	$(AR) -crs $@ $@.o
 
 #### TESTS ####
 
