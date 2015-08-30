@@ -78,8 +78,7 @@ static void pn_executor_init_module_values(PNExecutor* executor) {
         break;
 
       case PN_VALUE_CODE_GLOBAL_VAR: {
-        PNGlobalVar* global_var =
-            pn_module_get_global_var(module, value->index);
+        PNGlobalVar* global_var = &module->global_vars[value->index];
         executor->module_values[value_id].u32 = global_var->offset;
         break;
       }

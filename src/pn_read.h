@@ -253,7 +253,7 @@ static void pn_globalvar_write_reloc(PNModule* module,
   uint32_t reloc_value;
   switch (value->code) {
     case PN_VALUE_CODE_GLOBAL_VAR: {
-      PNGlobalVar* var = pn_module_get_global_var(module, value->index);
+      PNGlobalVar* var = &module->global_vars[value->index];
       reloc_value = var->offset + addend;
       break;
     }

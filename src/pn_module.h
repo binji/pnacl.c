@@ -62,14 +62,9 @@ static void pn_function_id_check(PNModule* module, PNFunctionId function_id) {
   PN_CHECK(function_id < module->num_functions);
 }
 
-static PNGlobalVar* pn_module_get_global_var(PNModule* module,
-                                             PNGlobalVarId global_var_id) {
-  if (global_var_id >= module->num_global_vars) {
-    PN_FATAL("accessing invalid global_var %d (max %d)\n", global_var_id,
-             module->num_global_vars);
-  }
-
-  return &module->global_vars[global_var_id];
+static void pn_global_var_id_check(PNModule* module,
+                                   PNGlobalVarId global_var_id) {
+  PN_CHECK(global_var_id < module->num_global_vars);
 }
 
 static PNValue* pn_module_get_value(PNModule* module, PNValueId value_id) {
