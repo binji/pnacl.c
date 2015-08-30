@@ -199,11 +199,14 @@ class Status(object):
     self.verbose = verbose
     self.start_time = None
     self.last_length = 0
+    self.last_finished = None
     self.passed = 0
     self.failed = 0
+    self.total = 0
     self.failed_tests = []
 
-  def Start(self):
+  def Start(self, total):
+    self.total = total
     self.start_time = time.time()
 
   def Passed(self, info, duration):
@@ -225,6 +228,9 @@ class Status(object):
     if self.verbose:
       sys.stderr.write('. %s (skipped)\n' % info.name)
 
+  def Timeout(self):
+    self._PrintShortStatus(self.last_finished)
+
   def Print(self):
     self._PrintShortStatus(None)
     sys.stderr.write('\n')
@@ -232,9 +238,11 @@ class Status(object):
   def _PrintShortStatus(self, info):
     total_duration = time.time() - self.start_time
     name = info.name if info else ''
-    status = '[+%d|-%d] (%.2fs) %s\r' % (self.passed, self.failed,
-                                         total_duration, name)
+    percent = 100 * (self.passed + self.failed) / self.total
+    status = '[+%d|-%d|%%%d] (%.2fs) %s\r' % (self.passed, self.failed,
+                                              percent, total_duration, name)
     self.last_length = len(status)
+    self.last_finished = info
     sys.stderr.write(status)
 
   def Clear(self):
@@ -319,7 +327,7 @@ def main(args):
   outq = multiprocessing.Queue()
   num_proc = multiprocessing.cpu_count()
   processes = []
-  status.Start()
+  status.Start(test_count)
 
   def Worker(options, inq, outq):
     while True:
@@ -342,7 +350,12 @@ def main(args):
 
     finished_tests = 0
     while finished_tests < test_count:
-      info, result = outq.get()
+      try:
+        info, result = outq.get(True, 0.01)
+      except Queue.Empty:
+        status.Timeout()
+        continue
+
       finished_tests += 1
       try:
         if isinstance(result, Error):
