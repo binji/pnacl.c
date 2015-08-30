@@ -12,8 +12,8 @@ static PNTypeId pn_type_get_implicit_cast_type(PNModule* module,
     return type0_id;
   }
 
-  PNType* type0 = pn_module_get_type(module, type0_id);
-  PNType* type1 = pn_module_get_type(module, type1_id);
+  PNType* type0 = &module->types[type0_id];
+  PNType* type1 = &module->types[type1_id];
 
   if (type0->code == PN_TYPE_CODE_FUNCTION &&
       type1->code == PN_TYPE_CODE_INTEGER && type1->width == 32) {

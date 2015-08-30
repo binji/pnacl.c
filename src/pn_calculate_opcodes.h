@@ -57,10 +57,8 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
               pn_function_get_value(module, function, i->value0_id);
           PNValue* value1 =
               pn_function_get_value(module, function, i->value1_id);
-          PNBasicType basic_type0 =
-              pn_module_get_type(module, value0->type_id)->basic_type;
-          PNBasicType basic_type1 =
-              pn_module_get_type(module, value1->type_id)->basic_type;
+          PNBasicType basic_type0 = module->types[value0->type_id].basic_type;
+          PNBasicType basic_type1 = module->types[value1->type_id].basic_type;
           if (basic_type0 != basic_type1) {
             PN_FATAL(
                 "Expected binop to have the same basic type for each operand. "
@@ -184,8 +182,8 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
           PNRuntimeInstructionCast* o = (PNRuntimeInstructionCast*)offset;
 
           PNValue* value = pn_function_get_value(module, function, i->value_id);
-          PNType* type0 = pn_module_get_type(module, value->type_id);
-          PNType* type1 = pn_module_get_type(module, i->type_id);
+          PNType* type0 = &module->types[value->type_id];
+          PNType* type1 = &module->types[i->type_id];
           PNBasicType basic_type0 = type0->basic_type;
           PNBasicType basic_type1 = type1->basic_type;
 
@@ -325,8 +323,7 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
 
             PNValue* value =
                 pn_function_get_value(module, function, i->value_id);
-            PNBasicType basic_type0 =
-                pn_module_get_type(module, value->type_id)->basic_type;
+            PNBasicType basic_type0 = module->types[value->type_id].basic_type;
 
             PN_IF_TYPE(BR, INT1)
             PN_END_IF_TYPE(BR)
@@ -354,8 +351,7 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
           PNRuntimeInstructionSwitch* o = (PNRuntimeInstructionSwitch*)offset;
 
           PNValue* value = pn_function_get_value(module, function, i->value_id);
-          PNBasicType basic_type0 =
-              pn_module_get_type(module, value->type_id)->basic_type;
+          PNBasicType basic_type0 = module->types[value->type_id].basic_type;
 
           PN_IF_TYPE(SWITCH, INT1)
           PN_IF_TYPE(SWITCH, INT8)
@@ -399,8 +395,7 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
           PNRuntimeInstructionAlloca* o = (PNRuntimeInstructionAlloca*)offset;
 
           PNValue* value = pn_function_get_value(module, function, i->size_id);
-          PNBasicType basic_type0 =
-              pn_module_get_type(module, value->type_id)->basic_type;
+          PNBasicType basic_type0 = module->types[value->type_id].basic_type;
 
           PN_IF_TYPE(ALLOCA, INT32)
           PN_END_IF_TYPE(ALLOCA)
@@ -418,12 +413,10 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
           PNInstructionLoad* i = (PNInstructionLoad*)inst;
           PNRuntimeInstructionLoad* o = (PNRuntimeInstructionLoad*)offset;
 
-          PNBasicType basic_type0 =
-              pn_module_get_type(module, i->type_id)->basic_type;
+          PNBasicType basic_type0 = module->types[i->type_id].basic_type;
 
           PNValue* src = pn_function_get_value(module, function, i->src_id);
-          PNBasicType src_basic_type =
-              pn_module_get_type(module, src->type_id)->basic_type;
+          PNBasicType src_basic_type = module->types[src->type_id].basic_type;
           if (src_basic_type != PN_BASIC_TYPE_INT32) {
             PN_FATAL(
                 "Expected load src to have the int32 basic type, not %d.\n",
@@ -452,12 +445,10 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
           PNRuntimeInstructionStore* o = (PNRuntimeInstructionStore*)offset;
 
           PNValue* value = pn_function_get_value(module, function, i->value_id);
-          PNBasicType basic_type0 =
-              pn_module_get_type(module, value->type_id)->basic_type;
+          PNBasicType basic_type0 = module->types[value->type_id].basic_type;
 
           PNValue* dest = pn_function_get_value(module, function, i->dest_id);
-          PNBasicType dest_basic_type =
-              pn_module_get_type(module, dest->type_id)->basic_type;
+          PNBasicType dest_basic_type = module->types[dest->type_id].basic_type;
           if (dest_basic_type != PN_BASIC_TYPE_INT32) {
             PN_FATAL(
                 "Expected store dest to have the int32 basic type, not %d.\n",
@@ -489,10 +480,8 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
               pn_function_get_value(module, function, i->value0_id);
           PNValue* value1 =
               pn_function_get_value(module, function, i->value1_id);
-          PNBasicType basic_type0 =
-              pn_module_get_type(module, value0->type_id)->basic_type;
-          PNBasicType basic_type1 =
-              pn_module_get_type(module, value1->type_id)->basic_type;
+          PNBasicType basic_type0 = module->types[value0->type_id].basic_type;
+          PNBasicType basic_type1 = module->types[value1->type_id].basic_type;
           if (basic_type0 != basic_type1) {
             PN_FATAL(
                 "Expected cmp2 to have the same basic type for each operand. "
@@ -668,12 +657,9 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
           PNValue* value1 =
               pn_function_get_value(module, function, i->false_value_id);
           PNValue* value2 = pn_function_get_value(module, function, i->cond_id);
-          PNBasicType basic_type0 =
-              pn_module_get_type(module, value0->type_id)->basic_type;
-          PNBasicType basic_type1 =
-              pn_module_get_type(module, value1->type_id)->basic_type;
-          PNBasicType basic_type2 =
-              pn_module_get_type(module, value2->type_id)->basic_type;
+          PNBasicType basic_type0 = module->types[value0->type_id].basic_type;
+          PNBasicType basic_type1 = module->types[value1->type_id].basic_type;
+          PNBasicType basic_type2 = module->types[value2->type_id].basic_type;
 
           if (basic_type2 != PN_BASIC_TYPE_INT1) {
             PN_FATAL("Expected vselect cond to have basic type int1, not %d.\n",
@@ -790,7 +776,7 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
           }
 
           /* TODO(binji): check arg types against function type? */
-          PNType* return_type = pn_module_get_type(module, i->return_type_id);
+          PNType* return_type = &module->types[i->return_type_id];
           o->result_value_id = i->result_value_id;
           o->callee_id = i->callee_id;
           o->num_args = i->num_args;

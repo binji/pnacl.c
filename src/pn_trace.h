@@ -32,7 +32,7 @@ static const char* pn_type_describe_all(PNModule* module,
     return "<invalid>";
   }
 
-  PNType* type = pn_module_get_type(module, type_id);
+  PNType* type = &module->types[type_id];
   switch (type->code) {
     case PN_TYPE_CODE_VOID:
       return "void";
@@ -99,7 +99,7 @@ static const char* pn_type_describe_all(PNModule* module,
 }
 
 static const char* pn_type_describe(PNModule* module, PNTypeId type_id) {
-  PNType* type = pn_module_get_type(module, type_id);
+  PNType* type = &module->types[type_id];
   // clang-format off
   switch (type->code) {
     case PN_TYPE_CODE_VOID: return "void";
@@ -313,7 +313,7 @@ static void pn_instruction_trace(PNModule* module,
       PNInstructionBinop* i = (PNInstructionBinop*)inst;
       PNValue* result_value =
           pn_function_get_value(module, function, i->result_value_id);
-      PNType* result_type = pn_module_get_type(module, result_value->type_id);
+      PNType* result_type = &module->types[result_value->type_id];
       PNBasicType result_basic_type = result_type->basic_type;
       PN_PRINT(
           "%s = %s %s %s, %s;%s\n",
@@ -490,7 +490,7 @@ static void pn_instruction_trace(PNModule* module,
     case PN_FUNCTION_CODE_INST_CALL:
     case PN_FUNCTION_CODE_INST_CALL_INDIRECT: {
       PNInstructionCall* i = (PNInstructionCall*)inst;
-      PNType* return_type = pn_module_get_type(module, i->return_type_id);
+      PNType* return_type = &module->types[i->return_type_id];
       PNBool is_return_type_void = return_type->code == PN_TYPE_CODE_VOID;
       if (!is_return_type_void) {
         PN_PRINT("%s = %scall %s ",
@@ -1097,7 +1097,7 @@ static void pn_executor_value_trace(PNExecutor* executor,
     PNValue* val = pn_function_get_value(module, function, value_id);
     PNTypeId type_id = val->type_id;
 
-    PNType* type = pn_module_get_type(executor->module, type_id);
+    PNType* type = &executor->module->types[type_id];
     switch (type->basic_type) {
       case PN_BASIC_TYPE_INT1:
         PN_PRINT("%s%s = %u%s", prefix,

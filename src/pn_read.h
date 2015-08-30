@@ -213,6 +213,7 @@ static void pn_type_block_read(PNModule* module,
             type->basic_type = PN_BASIC_TYPE_INT32;
             type->is_varargs = pn_record_read_int32(&reader, "is_varargs");
             type->return_type = pn_record_read_int32(&reader, "return_type");
+            pn_type_id_check(module, type->return_type);
             type->num_args = pn_record_num_values_left(&reader);
             type->arg_types = pn_allocator_alloc(
                 &module->allocator, type->num_args * sizeof(PNTypeId),
@@ -220,6 +221,7 @@ static void pn_type_block_read(PNModule* module,
             uint32_t n;
             for (n = 0; n < type->num_args; ++n) {
               type->arg_types[n] = pn_record_read_uint16(&reader, "arg type");
+              pn_type_id_check(module, type->arg_types[n]);
             }
             break;
           }
@@ -679,8 +681,8 @@ static void pn_constants_block_read(PNModule* module,
         switch (code) {
           case PN_CONSTANTS_CODE_SETTYPE:
             cur_type_id = pn_record_read_int32(&reader, "current type");
-            cur_basic_type =
-                pn_module_get_type(module, cur_type_id)->basic_type;
+            pn_type_id_check(module, cur_type_id);
+            cur_basic_type = module->types[cur_type_id].basic_type;
             PN_TRACE_DEDENT(CONSTANTS_BLOCK, 2);
             PN_TRACE(CONSTANTS_BLOCK, "%s:\n",
                      pn_type_describe(module, cur_type_id));
@@ -887,7 +889,7 @@ static void pn_function_block_read(PNModule* module,
     pn_function_print_header(module, function, function_id);
   }
 
-  PNType* type = pn_module_get_type(module, function->type_id);
+  PNType* type = &module->types[function->type_id];
   assert(type->code == PN_TYPE_CODE_FUNCTION);
   assert(type->num_args == function->num_args);
 
@@ -1036,6 +1038,7 @@ static void pn_function_block_read(PNModule* module,
             inst->value_id = pn_record_read_uint32(&reader, "value");
             inst->type_id = pn_record_read_uint32(&reader, "type_id");
             inst->cast_opcode = pn_record_read_int32(&reader, "opcode");
+            pn_type_id_check(module, inst->type_id);
 
             value->type_id = inst->type_id;
 
@@ -1097,6 +1100,7 @@ static void pn_function_block_read(PNModule* module,
             inst->type_id = pn_record_read_uint32(&reader, "type_id");
             inst->value_id = pn_record_read_uint32(&reader, "value");
             inst->default_bb_id = pn_record_read_uint32(&reader, "default bb");
+            pn_type_id_check(module, inst->type_id);
 
             PN_BASIC_BLOCK_LIST_APPEND(module, &cur_bb->succ_bb_ids,
                                        &cur_bb->num_succ_bbs,
@@ -1176,6 +1180,7 @@ static void pn_function_block_read(PNModule* module,
             inst->result_value_id = value_id;
             inst->type_id = pn_record_read_int32(&reader, "type_id");
             inst->num_incoming = 0;
+            pn_type_id_check(module, inst->type_id);
 
             value->type_id = inst->type_id;
 
@@ -1348,6 +1353,7 @@ static void pn_function_block_read(PNModule* module,
             inst->base.code = code;
             inst->value_id = pn_record_read_int32(&reader, "value");
             inst->type_id = pn_record_read_int32(&reader, "type");
+            pn_type_id_check(module, inst->type_id);
             break;
           }
 
@@ -1371,6 +1377,7 @@ static void pn_function_block_read(PNModule* module,
             if (inst->is_indirect) {
               inst->return_type_id =
                   pn_record_read_int32(&reader, "return_type");
+              pn_type_id_check(module, inst->return_type_id);
             } else {
               PNValue* function_value =
                   pn_module_get_value(module, inst->callee_id);
@@ -1378,13 +1385,12 @@ static void pn_function_block_read(PNModule* module,
               PNFunction* called_function =
                   pn_module_get_function(module, function_value->index);
               type_id = called_function->type_id;
-              PNType* function_type = pn_module_get_type(module, type_id);
+              PNType* function_type = &module->types[type_id];
               assert(function_type->code == PN_TYPE_CODE_FUNCTION);
               inst->return_type_id = function_type->return_type;
             }
 
-            PNType* return_type =
-                pn_module_get_type(module, inst->return_type_id);
+            PNType* return_type = &module->types[inst->return_type_id];
             PNBool is_return_type_void = return_type->code == PN_TYPE_CODE_VOID;
             PNValueId value_id;
             if (!is_return_type_void) {
@@ -1528,6 +1534,7 @@ static void pn_module_block_read(PNModule* module,
 
             function->name = NULL;
             function->type_id = pn_record_read_int32(&reader, "type_id");
+            pn_type_id_check(module, function->type_id);
             function->intrinsic_id = PN_INTRINSIC_NULL;
             function->calling_convention =
                 pn_record_read_int32(&reader, "calling_convention");
@@ -1544,9 +1551,9 @@ static void pn_module_block_read(PNModule* module,
             function->value_liveness_range = NULL;
 #endif /* PN_CALCULATE_LIVENESS */
 
+
             /* Cache number of arguments to function */
-            PNType* function_type =
-                pn_module_get_type(module, function->type_id);
+            PNType* function_type = &module->types[function->type_id];
             PN_CHECK(function_type->code == PN_TYPE_CODE_FUNCTION);
             function->num_args = function_type->num_args;
 

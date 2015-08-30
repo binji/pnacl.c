@@ -35,13 +35,8 @@ void pn_module_reset(PNModule* module) {
   pn_memory_reset(module->memory);
 }
 
-static PNType* pn_module_get_type(PNModule* module, PNTypeId type_id) {
-  if (type_id >= module->num_types) {
-    PN_FATAL("accessing invalid type %d (max %d)\n", type_id,
-             module->num_types);
-  }
-
-  return &module->types[type_id];
+static void pn_type_id_check(PNModule* module, PNTypeId type_id) {
+  PN_CHECK(type_id < module->num_types);
 }
 
 static PNTypeId pn_module_find_integer_type(PNModule* module, int width) {
@@ -55,6 +50,7 @@ static PNTypeId pn_module_find_integer_type(PNModule* module, int width) {
     }
   }
 
+  PN_FATAL("No integer type found of width %d.", width);
   return PN_INVALID_TYPE_ID;
 }
 
