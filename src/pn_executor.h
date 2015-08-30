@@ -113,7 +113,7 @@ static void pn_thread_push_function(PNThread* thread,
 
   uint32_t n;
   for (n = 0; n < function->num_constants; ++n) {
-    PNConstant* constant = pn_function_get_constant(function, n);
+    PNConstant* constant = &function->constants[n];
     PNValueId value_id =
         thread->executor->module->num_values + function->num_args + n;
 #ifndef NDEBUG
@@ -262,13 +262,6 @@ static void pn_thread_backtrace(PNThread* thread) {
   }
 }
 #else
-static void pn_executor_value_trace(PNExecutor* executor,
-                                    PNFunction* function,
-                                    PNValueId value_id,
-                                    PNRuntimeValue value,
-                                    const char* prefix,
-                                    const char* postfix) {}
-
 static void pn_thread_backtrace(PNThread* thread) {}
 #endif
 

@@ -725,8 +725,7 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
                 PNValue* opcode =
                     pn_function_get_value(module, function, i->arg_ids[0]);
                 PN_CHECK(opcode->code == PN_VALUE_CODE_CONSTANT);
-                PNConstant* op =
-                    pn_function_get_constant(function, opcode->index);
+                PNConstant* op = &function->constants[opcode->index];
                 PN_CHECK(op->basic_type == PN_BASIC_TYPE_INT32);
                 switch (op->value.u32) {
                   case 1:

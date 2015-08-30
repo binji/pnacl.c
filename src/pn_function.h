@@ -5,16 +5,6 @@
 #ifndef PN_FUNCTION_H_
 #define PN_FUNCTION_H_
 
-static PNConstant* pn_function_get_constant(PNFunction* function,
-                                            PNConstantId constant_id) {
-  if (constant_id >= function->num_constants) {
-    PN_FATAL("accessing invalid constant %d (max %d)\n", constant_id,
-             function->num_constants);
-  }
-
-  return &function->constants[constant_id];
-}
-
 static PNConstant* pn_function_append_constant(PNModule* module,
                                                PNFunction* function,
                                                PNConstantId* out_constant_id) {
