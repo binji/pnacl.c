@@ -590,8 +590,7 @@ static void pn_value_symtab_block_read(PNModule* module,
             PNValue* value = pn_module_get_value(module, value_id);
             if (value->code == PN_VALUE_CODE_FUNCTION) {
               PNFunctionId function_id = value->index;
-              PNFunction* function =
-                  pn_module_get_function(module, function_id);
+              PNFunction* function = &module->functions[function_id];
               function->name = name;
 
 #define PN_INTRINSIC_CHECK(i_enum, i_name)                        \
@@ -884,7 +883,7 @@ static void pn_function_block_read(PNModule* module,
   pn_block_info_context_copy_abbrevs_for_block_id(
       &module->temp_allocator, context, PN_BLOCKID_FUNCTION, &abbrevs);
 
-  PNFunction* function = pn_module_get_function(module, function_id);
+  PNFunction* function = &module->functions[function_id];
   if (PN_IS_TRACE(FUNCTION_BLOCK)) {
     pn_function_print_header(module, function, function_id);
   }
@@ -1383,7 +1382,7 @@ static void pn_function_block_read(PNModule* module,
                   pn_module_get_value(module, inst->callee_id);
               assert(function_value->code == PN_VALUE_CODE_FUNCTION);
               PNFunction* called_function =
-                  pn_module_get_function(module, function_value->index);
+                  &module->functions[function_value->index];
               type_id = called_function->type_id;
               PNType* function_type = &module->types[type_id];
               assert(function_type->code == PN_TYPE_CODE_FUNCTION);
@@ -1487,7 +1486,7 @@ static void pn_module_block_read(PNModule* module,
             pn_value_symtab_block_read(module, context, bs);
             break;
           case PN_BLOCKID_FUNCTION: {
-            while (pn_module_get_function(module, function_id)->is_proto) {
+            while (module->functions[function_id].is_proto) {
               function_id++;
             }
 

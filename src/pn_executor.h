@@ -130,8 +130,8 @@ static PNFunction* pn_thread_push_function_pointer(PNThread* thread,
                                                    uint32_t func) {
   PNFunctionId function_id = pn_function_pointer_to_index(func);
   function_id -= PN_MAX_BUILTINS;
-  assert(function_id < thread->module->num_functions);
-  PNFunction* function = pn_module_get_function(thread->module, function_id);
+  pn_function_id_check(thread->module, function_id);
+  PNFunction* function = &thread->module->functions[function_id];
   pn_thread_push_function(thread, function_id, function);
   return function;
 }
@@ -230,8 +230,7 @@ void pn_executor_init(PNExecutor* executor, PNModule* module) {
 
   PNFunctionId start_function_id = module->known_functions[PN_INTRINSIC_START];
   PN_CHECK(start_function_id != PN_INVALID_FUNCTION_ID);
-  PNFunction* start_function =
-      pn_module_get_function(module, start_function_id);
+  PNFunction* start_function = &module->functions[start_function_id];
 
   pn_thread_push_function(thread, start_function_id, start_function);
 
@@ -448,8 +447,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
         new_function_id = function_value->index;
       }
 
-      PNFunction* new_function =
-          pn_module_get_function(module, new_function_id);
+      PNFunction* new_function = &module->functions[new_function_id];
       pn_thread_push_function(thread, new_function_id, new_function);
 
       uint32_t n;

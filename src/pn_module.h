@@ -58,14 +58,8 @@ static PNTypeId pn_module_find_pointer_type(PNModule* module) {
   return pn_module_find_integer_type(module, 32);
 }
 
-static PNFunction* pn_module_get_function(PNModule* module,
-                                          PNFunctionId function_id) {
-  if (function_id >= module->num_functions) {
-    PN_FATAL("accessing invalid function %d (max %d)\n", function_id,
-             module->num_functions);
-  }
-
-  return &module->functions[function_id];
+static void pn_function_id_check(PNModule* module, PNFunctionId function_id) {
+  PN_CHECK(function_id < module->num_functions);
 }
 
 static PNGlobalVar* pn_module_get_global_var(PNModule* module,

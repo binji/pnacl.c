@@ -712,11 +712,10 @@ static PNRuntimeValue pn_builtin_NACL_IRT_THREAD_CREATE(PNThread* thread,
   thread->next = new_thread;
 
   PNFunctionId new_function_id = pn_function_pointer_to_index(start_func_p);
-  assert(new_function_id >= PN_MAX_BUILTINS);
+  PN_CHECK(new_function_id >= PN_MAX_BUILTINS);
   new_function_id -= PN_MAX_BUILTINS;
-  PN_CHECK(new_function_id < executor->module->num_functions);
-  PNFunction* new_function =
-      pn_module_get_function(executor->module, new_function_id);
+  pn_function_id_check(executor->module, new_function_id);
+  PNFunction* new_function = &executor->module->functions[new_function_id];
   pn_thread_push_function(new_thread, new_function_id, new_function);
   new_thread->current_frame->memory_stack_top = stack_p;
 

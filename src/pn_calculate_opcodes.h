@@ -694,8 +694,7 @@ static void* pn_basic_block_write_instruction_stream(PNModule* module,
             PNValue* callee =
                 pn_function_get_value(module, function, i->callee_id);
             assert(callee->code == PN_VALUE_CODE_FUNCTION);
-            PNFunction* callee_function =
-                pn_module_get_function(module, callee->index);
+            PNFunction* callee_function = &module->functions[callee->index];
             if (callee_function->intrinsic_id != PN_INTRINSIC_NULL) {
               switch (callee_function->intrinsic_id) {
 #define PN_INTRINSIC_CHECK(e, name)           \
