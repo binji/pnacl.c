@@ -980,8 +980,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
             /* Set the return value */
             PNRuntimeInstructionCall* c = location->inst;
             pn_thread_set_value(thread, c->result_value_id, value);
-            pn_executor_value_trace(thread->executor, function, arg_ids[1],
-                                    value, "    ", "\n");
             thread->inst = location->inst + sizeof(PNRuntimeInstructionCall) +
                            c->num_args * sizeof(PNValueId);
             thread->function = &module->functions[location->function_id];
