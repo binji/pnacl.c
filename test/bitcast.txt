@@ -1,0 +1,13 @@
+# FLAGS: --trace-execute
+# FILE: res/bitcast.pexe
+intrinsic "_start" (35)
+startinfo = 1024
+envc = 1028 (0)
+argc = 1032 (1)
+argv = 1036
+envp = 1044
+auxv = 1048
+  %v0 = bitcast i32 %p0 to float;
+    %v0 = 0.000000  %p0 = 1024
+  ret float %v0;
+exiting

@@ -466,11 +466,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PNRuntimeInstructionCast* i = (PNRuntimeInstructionCast*)inst;
       PNRuntimeValue result = pn_thread_get_value(thread, i->value_id);
       pn_thread_set_value(thread, i->result_value_id, result);
-      pn_executor_value_trace(thread->executor, function, i->result_value_id,
-                              result, "    ", "\n");
-      pn_executor_value_trace(thread->executor, function, i->value_id, result,
-                              "    ", "\n");
-
       thread->inst += sizeof(PNRuntimeInstructionCast);
       break;
     }

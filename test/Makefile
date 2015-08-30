@@ -5,6 +5,7 @@ TESTS = \
 	res/setjmp \
 	res/printf \
 	res/dedupe_incoming \
+	res/bitcast
 
 THREAD_TESTS = \
 	res/thread \
