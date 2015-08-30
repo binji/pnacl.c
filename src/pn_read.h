@@ -248,8 +248,7 @@ static void pn_globalvar_write_reloc(PNModule* module,
                                      PNValueId value_id,
                                      uint32_t offset,
                                      uint32_t addend) {
-  PN_CHECK(value_id < module->num_values);
-  PNValue* value = pn_module_get_value(module, value_id);
+  PNValue* value = &module->values[value_id];
   uint32_t reloc_value;
   switch (value->code) {
     case PN_VALUE_CODE_GLOBAL_VAR: {
@@ -332,6 +331,7 @@ static void pn_globalvar_block_read(PNModule* module,
 
         uint32_t i;
         for (i = 0; i < num_reloc_infos; ++i) {
+          PN_CHECK(reloc_infos[i].index < module->num_values);
           pn_globalvar_write_reloc(module, reloc_infos[i].index,
                                    reloc_infos[i].offset,
                                    reloc_infos[i].addend);
@@ -573,6 +573,7 @@ static void pn_value_symtab_block_read(PNModule* module,
         switch (code) {
           case PN_VALUESYMBTAB_CODE_ENTRY: {
             PNValueId value_id = pn_record_read_int32(&reader, "value_id");
+            pn_module_value_id_check(module, value_id);
             uint32_t len = pn_record_num_values_left(&reader);
             char* name = NULL;
             if (len) {
@@ -587,7 +588,7 @@ static void pn_value_symtab_block_read(PNModule* module,
             PN_TRACE(VALUE_SYMTAB_BLOCK, "%s : \"%s\";\n",
                      pn_value_describe(module, NULL, value_id), name);
 
-            PNValue* value = pn_module_get_value(module, value_id);
+            PNValue* value = &module->values[value_id];
             if (value->code == PN_VALUE_CODE_FUNCTION) {
               PNFunctionId function_id = value->index;
               PNFunction* function = &module->functions[function_id];
@@ -1378,8 +1379,8 @@ static void pn_function_block_read(PNModule* module,
                   pn_record_read_int32(&reader, "return_type");
               pn_type_id_check(module, inst->return_type_id);
             } else {
-              PNValue* function_value =
-                  pn_module_get_value(module, inst->callee_id);
+              pn_module_value_id_check(module, inst->callee_id);
+              PNValue* function_value = &module->values[inst->callee_id];
               assert(function_value->code == PN_VALUE_CODE_FUNCTION);
               PNFunction* called_function =
                   &module->functions[function_value->index];

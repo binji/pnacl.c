@@ -441,7 +441,7 @@ static void pn_thread_execute_instruction(PNThread* thread) {
           assert(new_function_id < module->num_functions);
         }
       } else {
-        PNValue* function_value = pn_module_get_value(module, i->callee_id);
+        PNValue* function_value = &module->values[i->callee_id];
         assert(function_value->code == PN_VALUE_CODE_FUNCTION);
         new_function_id = function_value->index;
       }

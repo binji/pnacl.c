@@ -67,13 +67,8 @@ static void pn_global_var_id_check(PNModule* module,
   PN_CHECK(global_var_id < module->num_global_vars);
 }
 
-static PNValue* pn_module_get_value(PNModule* module, PNValueId value_id) {
-  if (value_id >= module->num_values) {
-    PN_FATAL("accessing invalid value %d (max %d)\n", value_id,
-             module->num_values);
-  }
-
-  return &module->values[value_id];
+static void pn_module_value_id_check(PNModule* module, PNValueId value_id) {
+  PN_CHECK(value_id < module->num_values);
 }
 
 static PNValue* pn_module_append_value(PNModule* module,

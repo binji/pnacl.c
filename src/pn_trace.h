@@ -149,7 +149,7 @@ static void pn_value_print_to_string(PNModule* module,
       }
     }
   } else {
-    value = pn_module_get_value(module, value_id);
+    value = &module->values[value_id];
   }
 
   uint32_t base;
