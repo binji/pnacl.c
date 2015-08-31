@@ -230,6 +230,7 @@ void pn_executor_init(PNExecutor* executor, PNModule* module) {
   PNFunctionId start_function_id = module->known_functions[PN_INTRINSIC_START];
   PN_CHECK(start_function_id != PN_INVALID_FUNCTION_ID);
   PNFunction* start_function = &module->functions[start_function_id];
+  PN_CHECK(start_function->instructions);
 
   pn_thread_push_function(thread, start_function_id, start_function);
 

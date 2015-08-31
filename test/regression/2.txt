@@ -1,0 +1,4 @@
+#FLAGS:
+#FILE: regression/2.pexe
+#ERROR: 1
+PN_CHECK failed: start_function->instructions.
