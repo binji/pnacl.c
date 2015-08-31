@@ -1491,6 +1491,7 @@ static void pn_module_block_read(PNModule* module,
               function_id++;
             }
 
+            pn_function_id_check(module, function_id);
             pn_function_block_read(module, context, bs, function_id);
             function_id++;
             break;

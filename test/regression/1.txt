@@ -1,0 +1,4 @@
+# FLAGS: -n
+# FILE: regression/1.pexe
+# ERROR: 1
+PN_CHECK failed: function_id < module->num_functions.

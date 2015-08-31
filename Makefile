@@ -115,7 +115,7 @@ fuzz-slave3: out/pnacl-afl
 	$(AFL_DIR)/afl-fuzz -i $(FUZZ_IN) -o $(FUZZ_OUT) -m 800 -S fuzz04 -- $^ @@
 
 out/pnacl-afl: src/pnacl.c | out
-	$(AFL_DIR)/afl-gcc -O3 $(CFLAGS) -o $@ $^
+	$(AFL_DIR)/afl-gcc -O3 $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 #### CLEAN ####
 
