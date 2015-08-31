@@ -8,6 +8,9 @@
 void pn_module_init(PNModule* module, PNMemory* memory) {
   memset(module, 0, sizeof(PNModule));
   module->memory = memory;
+  /* Set all known functions to PN_INVALID_FUNCTION_ID */
+  memset(module->known_functions, 0xff, sizeof(module->known_functions));
+  assert(module->known_functions[0] == PN_INVALID_FUNCTION_ID);
   pn_allocator_init(&module->allocator, PN_MIN_CHUNKSIZE, "module");
   pn_allocator_init(&module->value_allocator, PN_MIN_CHUNKSIZE, "value");
   pn_allocator_init(&module->instruction_allocator, PN_MIN_CHUNKSIZE,
