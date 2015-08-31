@@ -1487,7 +1487,8 @@ static void pn_module_block_read(PNModule* module,
             pn_value_symtab_block_read(module, context, bs);
             break;
           case PN_BLOCKID_FUNCTION: {
-            while (module->functions[function_id].is_proto) {
+            while (function_id < module->num_functions &&
+                   module->functions[function_id].is_proto) {
               function_id++;
             }
 
