@@ -34,4 +34,4 @@ global_var size : 3.6K
 startinfo size : 0
       module allocator: used:    6.3K frag:       0
        value allocator: used:    4.3K frag:       0
- instruction allocator: used:    6.2K frag:       0
+ instruction allocator: used:    6.4K frag:       0

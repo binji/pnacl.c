@@ -848,6 +848,9 @@ static void pn_function_calculate_opcodes(PNModule* module,
     offset = pn_basic_block_write_instruction_stream(
         module, function, &function->bbs[n], NULL, offset, PN_FALSE);
   }
+  /* Add size of trap instruction, to prevent falling off the end */
+  offset += sizeof(PNRuntimeInstructionCall);
+
   uint32_t istream_size = (uint32_t)(uintptr_t)offset;
   function->instructions = pn_allocator_alloc(&module->instruction_allocator,
                                               istream_size, PN_DEFAULT_ALIGN);
@@ -863,6 +866,13 @@ static void pn_function_calculate_opcodes(PNModule* module,
     offset = pn_basic_block_write_instruction_stream(
         module, function, &function->bbs[n], bb_offsets, offset, PN_TRUE);
   }
+  /* Write trap instruction */
+  PNRuntimeInstructionCall* trap = offset;
+  trap->base.opcode = PN_OPCODE_INTRINSIC_LLVM_TRAP;
+  trap->result_value_id = PN_INVALID_VALUE_ID;
+  trap->callee_id = PN_INVALID_VALUE_ID;
+  trap->num_args = 0;
+  trap->flags = PN_CALL_FLAGS_INDIRECT | PN_CALL_FLAGS_RETURN_TYPE_VOID;
 
   pn_allocator_reset_to_mark(&module->temp_allocator, mark);
   PN_END_TIME(CALCULATE_OPCODES);
