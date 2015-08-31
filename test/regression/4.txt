@@ -1,0 +1,3 @@
+#FILE: regression/4.pexe
+#ERROR: 1
+Unable to resolve types for 1 value(s).

@@ -44,12 +44,7 @@ static PNBool pn_function_assign_result_value_type(PNModule* module,
   result_value->type_id =
       pn_type_get_implicit_cast_type(module, value0->type_id, value1->type_id);
 
-  if (result_value->type_id == PN_INVALID_TYPE_ID) {
-    PN_ERROR("Incompatible types:\n");
-    pn_instruction_trace(module, function, inst, PN_TRUE);
-    exit(1);
-  }
-
+  pn_type_id_check(module, result_value->type_id);
   return PN_TRUE;
 }
 
@@ -117,11 +112,7 @@ static void pn_function_calculate_result_value_types(PNModule* module,
     }
 
     if (num_invalid > 0 && last_invalid == num_invalid) {
-      PN_ERROR("Unable to resolve types for %d values:\n", num_invalid);
-      for (n = 0; n < num_invalid; ++n) {
-        pn_instruction_trace(module, function, invalid[n], PN_TRUE);
-      }
-      exit(1);
+      PN_FATAL("Unable to resolve types for %d value(s).\n", num_invalid);
     }
   }
 
