@@ -340,7 +340,10 @@ def main(args):
           continue
         outq.put((info, out))
       except Queue.Empty:
-        break
+        # Seems this can be fired even when the queue isn't actually empty.
+        # Double-check, via inq.empty()
+        if inq.empty():
+          break
 
   try:
     for p in range(num_proc):
