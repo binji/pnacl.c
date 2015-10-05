@@ -850,6 +850,11 @@ static void* pn_basic_block_append_instruction(PNModule* module,
 #define PN_BASIC_BLOCK_APPEND_INSTRUCTION(type, module, bb) \
   (type*) pn_basic_block_append_instruction(module, bb, sizeof(type))
 
+#if PN_CALCULATE_PRED_BBS
+
+#define PN_BASIC_BLOCK_LIST_APPEND(module, bb_list, num_els, bb_id) \
+  pn_basic_block_list_append(module, bb_list, num_els, bb_id)
+
 static void pn_basic_block_list_append(PNModule* module,
                                        PNBasicBlockId** bb_list,
                                        uint32_t* num_els,
@@ -859,16 +864,11 @@ static void pn_basic_block_list_append(PNModule* module,
   (*bb_list)[(*num_els)++] = bb_id;
 }
 
-#if PN_CALCULATE_LIVENESS
-
-#define PN_BASIC_BLOCK_LIST_APPEND(module, bb_list, num_els, bb_id) \
-  pn_basic_block_list_append(module, bb_list, num_els, bb_id)
-
 #else
 
 #define PN_BASIC_BLOCK_LIST_APPEND(module, bb_list, num_els, bb_id) (void)(0)
 
-#endif /* PN_CALCULATE_LIVENESS */
+#endif /* PN_CALCULATE_PRED_BBS */
 
 static void pn_function_block_read(PNModule* module,
                                    PNBlockInfoContext* context,
@@ -917,8 +917,10 @@ static void pn_function_block_read(PNModule* module,
         pn_function_calculate_result_value_types(module, function);
         pn_function_calculate_uses(module, function);
         pn_function_calculate_phi_assigns(module, function);
-#if PN_CALCULATE_LIVENESS
+#if PN_CALCULATE_PRED_BBS
         pn_function_calculate_pred_bbs(module, function);
+#endif /* PN_CALCULATE_PRED_BBS */
+#if PN_CALCULATE_LIVENESS
         pn_function_calculate_liveness(module, function);
 #endif /* PN_CALCULATE_LIVENESS */
         pn_function_calculate_opcodes(module, function);
