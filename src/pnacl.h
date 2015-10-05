@@ -18,8 +18,18 @@
 #define PN_TRACING 1
 #endif
 
+#ifndef PN_CALCULATE_PRED_BBS
+#define PN_CALCULATE_PRED_BBS 0
+#endif
+
 #ifndef PN_CALCULATE_LIVENESS
 #define PN_CALCULATE_LIVENESS 0
+#endif
+
+/* Liveness analysis requires calculating predecessor basic blocks. */
+#if PN_CALCULATE_LIVENESS
+#undef PN_CALCULATE_PRED_BBS
+#define PN_CALCULATE_PRED_BBS 1
 #endif
 
 #ifndef PN_PPAPI
@@ -1060,13 +1070,15 @@ typedef struct PNBasicBlock {
   uint32_t num_phi_assigns;
   PNPhiAssign* phi_assigns;
   PNBool fast_phi_assign;
-#if PN_CALCULATE_LIVENESS
+#if PN_CALCULATE_PRED_BBS
   uint32_t num_succ_bbs;
   PNBasicBlockId* succ_bb_ids;
-  uint32_t num_uses;
-  PNValueId* uses;
   uint32_t num_pred_bbs;
   PNBasicBlockId* pred_bb_ids;
+#endif
+#if PN_CALCULATE_LIVENESS
+  uint32_t num_uses;
+  PNValueId* uses;
   PNValueId first_def_id; /* Or PN_INVALID_VALUE_ID */
   PNValueId last_def_id;  /* Or PN_INVALID_VALUE_ID */
 #endif /* PN_CALCULATE_LIVENESS */
