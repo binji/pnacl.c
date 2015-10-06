@@ -54,6 +54,7 @@ static char** g_pn_environ;
 static uint32_t g_pn_memory_size = PN_DEFAULT_MEMORY_SIZE;
 static PNBool g_pn_dedupe_phi_nodes = PN_TRUE;
 static PNBool g_pn_print_named_functions;
+static char* g_pn_print_block_graph_function;
 static PNBool g_pn_print_stats;
 static PNBool g_pn_print_opcode_counts;
 static PNBool g_pn_run = PN_TRUE;
@@ -137,6 +138,7 @@ enum {
 #endif /* PN_TRACING */
   PN_FLAG_PRINT_ALL,
   PN_FLAG_PRINT_NAMED_FUNCTIONS,
+  PN_FLAG_PRINT_BLOCK_GRAPH,
 #if PN_TIMERS
   PN_FLAG_PRINT_TIME,
   PN_FLAG_PRINT_TIME_AS_ZERO,
@@ -170,6 +172,7 @@ static struct option g_pn_long_options[] = {
 #endif /* PN_TRACING */
     {"print-all", no_argument, NULL, 'p'},
     {"print-named-functions", no_argument, NULL, 0},
+    {"print-block-graph", required_argument, NULL, 0},
 #if PN_TIMERS
     {"print-time", no_argument, NULL, 0},
     {"print-time-as-zero", no_argument, NULL, 0},
@@ -196,6 +199,8 @@ static PNOptionHelp g_pn_option_help[] = {
     {PN_FLAG_TRACE_FUNCTION_FILTER, "NAME",
      "only trace function with given name or id"},
 #endif /* PN_TRACING */
+    {PN_FLAG_PRINT_BLOCK_GRAPH, "NAME",
+     "print the basic-block graph of a function with given name or id"},
     {PN_FLAG_REPEAT_LOAD, "TIMES",
      "number of times to repeat loading. Useful for profiling"},
     {PN_NUM_FLAGS, NULL},
@@ -397,6 +402,10 @@ static void pn_options_parse(int argc, char** argv, char** env) {
 
           case PN_FLAG_PRINT_NAMED_FUNCTIONS:
             g_pn_print_named_functions = PN_TRUE;
+            break;
+
+          case PN_FLAG_PRINT_BLOCK_GRAPH:
+            g_pn_print_block_graph_function = optarg;
             break;
 
 #if PN_TIMERS
@@ -658,6 +667,43 @@ static PNFileData pn_read_file(const char* filename) {
   return result;
 }
 
+static void pn_print_basic_block_graph(PNModule* module) {
+  if (!g_pn_print_block_graph_function || !g_pn_print_block_graph_function[0]) {
+    return;
+  }
+
+  PNFunctionId index = PN_INVALID_FUNCTION_ID;
+
+  char first = g_pn_print_block_graph_function[0];
+  if (first >= '0' && first <= '9') {
+    /* Filter based on function id */
+    index = atoi(g_pn_print_block_graph_function);
+    if (index >= module->num_functions) {
+      PN_FATAL("Invalid function id: %d\n", index);
+    }
+  } else {
+    int i;
+    for (i = 0; i < module->num_functions; ++i) {
+      PNFunction* function = &module->functions[i];
+      if (function->name) {
+        if (strcmp(function->name, g_pn_print_block_graph_function) == 0) {
+          index = i;
+          break;
+        }
+      }
+    }
+
+    if (index == -1) {
+      PN_FATAL("Invalid function name: \"%s\"\n",
+               g_pn_print_block_graph_function);
+    }
+  }
+
+  PNFunction* function = &module->functions[index];
+
+  /* Print graph in dot format */
+}
+
 static void pn_print_stats(PNModule* module) {
 #if PN_TIMERS
   if (g_pn_print_time) {
@@ -781,6 +827,7 @@ int main(int argc, char** argv, char** envp) {
 
   PN_END_TIME(TOTAL);
 
+  pn_print_basic_block_graph(&module);
   pn_print_stats(&module);
   return 0;
 }
