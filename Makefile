@@ -5,7 +5,7 @@ SHELL = bash
 CC = clang
 AR = ar
 ALL = pnacl pnacl-opt-assert
-EVERYTHING = pnacl pnacl-liveness pnacl-notrace pnacl-notimers \
+EVERYTHING = pnacl pnacl-liveness pnacl-loops pnacl-notrace pnacl-notimers \
 	pnacl-notrace-notimers pnacl-opt pnacl-opt-assert pnacl-msan pnacl-asan \
 	pnacl-ubsan pnacl-32 pnacl-ppapi pnacl-ppapi-opt-assert pnacl-gcc \
 	pnacl-gcc-opt-assert
@@ -28,6 +28,9 @@ out/test/:
 
 out/pnacl: src/pnacl.c | out
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+
+out/pnacl-loops: src/pnacl.c | out
+	$(CC) -DPN_CALCULATE_LOOPS=1 $(CFLAGS) -o $@ $< $(LDFLAGS)
 
 out/pnacl-liveness: src/pnacl.c | out
 	$(CC) -DPN_CALCULATE_LIVENESS=1 $(CFLAGS) -o $@ $< $(LDFLAGS)

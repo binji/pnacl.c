@@ -567,6 +567,25 @@ static void pn_basic_block_trace(PNModule* module,
     PN_PRINT_LINE_LIST(uses, bb->num_uses, ", ", "%s",
                        pn_value_describe(module, function, bb->uses[n]));
 #endif /* PN_CALCULATE_LIVENESS */
+#if PN_CALCULATE_LOOPS
+    if (bb->loop_header_id != PN_INVALID_BB_ID) {
+      PN_TRACE_PRINT_INDENTX(-1);
+      PN_PRINT("loop header: %%b%d\n", bb->loop_header_id);
+    }
+    if (bb->is_loop_header || bb->is_irreducible || bb->is_reentry) {
+      PN_TRACE_PRINT_INDENTX(-2);
+      if (bb->is_loop_header) {
+        PN_PRINT(" (is loop header)");
+      }
+      if (bb->is_irreducible) {
+        PN_PRINT(" (is irreducible)");
+      }
+      if (bb->is_reentry) {
+        PN_PRINT(" (is re-entry)");
+      }
+      PN_PRINT("\n");
+    }
+#endif /* PN_CALCULATE_LOOPS */
     PN_PRINT_LINE_LIST(
         phi uses, bb->num_phi_uses, ", ", "[%s, %%b%d]",
         pn_value_describe(module, function, bb->phi_uses[n].incoming.value_id),
