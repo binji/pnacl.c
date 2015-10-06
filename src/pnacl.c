@@ -106,6 +106,7 @@ static const char* g_pn_opcode_names[] = {
 #include "pn_calculate_uses.h"
 #include "pn_calculate_pred_bbs.h"
 #include "pn_calculate_phi_assigns.h"
+#include "pn_calculate_loops.h"
 #include "pn_calculate_liveness.h"
 #include "pn_read.h"
 #include "pn_executor.h"

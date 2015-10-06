@@ -22,12 +22,16 @@
 #define PN_CALCULATE_PRED_BBS 0
 #endif
 
+#ifndef PN_CALCULATE_LOOPS
+#define PN_CALCULATE_LOOPS 0
+#endif
+
 #ifndef PN_CALCULATE_LIVENESS
 #define PN_CALCULATE_LIVENESS 0
 #endif
 
-/* Liveness analysis requires calculating predecessor basic blocks. */
-#if PN_CALCULATE_LIVENESS
+/* Liveness and loop analysis require calculating predecessor basic blocks. */
+#if PN_CALCULATE_LIVENESS || PN_CALCULATE_LOOPS
 #undef PN_CALCULATE_PRED_BBS
 #define PN_CALCULATE_PRED_BBS 1
 #endif
@@ -216,6 +220,7 @@ enum { PN_FOREACH_TRACE(PN_TRACE_ENUM) PN_NUM_TRACE };
   V(CALCULATE_PRED_BBS)           \
   V(CALCULATE_PHI_ASSIGNS)        \
   V(CALCULATE_LIVENESS)           \
+  V(CALCULATE_LOOPS)              \
   V(FUNCTION_TRACE)               \
   V(EXECUTE)
 
@@ -1075,6 +1080,13 @@ typedef struct PNBasicBlock {
   PNBasicBlockId* succ_bb_ids;
   uint32_t num_pred_bbs;
   PNBasicBlockId* pred_bb_ids;
+#endif
+#if PN_CALCULATE_LOOPS
+  uint32_t dfsp_pos;
+  PNBasicBlockId loop_header_id;
+  PNBool is_loop_header;
+  PNBool is_irreducible;
+  PNBool is_reentry;
 #endif
 #if PN_CALCULATE_LIVENESS
   uint32_t num_uses;

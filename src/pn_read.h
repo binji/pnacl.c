@@ -920,6 +920,9 @@ static void pn_function_block_read(PNModule* module,
 #if PN_CALCULATE_PRED_BBS
         pn_function_calculate_pred_bbs(module, function);
 #endif /* PN_CALCULATE_PRED_BBS */
+#if PN_CALCULATE_LOOPS
+        pn_function_calculate_loops(module, function);
+#endif /* PN_CALCULATE_LOOPS */
 #if PN_CALCULATE_LIVENESS
         pn_function_calculate_liveness(module, function);
 #endif /* PN_CALCULATE_LIVENESS */
@@ -983,6 +986,9 @@ static void pn_function_block_read(PNModule* module,
           PN_CHECK(cur_bb_id < function->num_bbs);
           prev_bb_id = cur_bb_id;
           cur_bb = &function->bbs[cur_bb_id];
+#if PN_CALCULATE_LOOPS
+          cur_bb->loop_header_id = PN_INVALID_BB_ID;
+#endif /* PN_CALCULATE_LOOPS */
 #if PN_CALCULATE_LIVENESS
           cur_bb->first_def_id = PN_INVALID_VALUE_ID;
           cur_bb->last_def_id = PN_INVALID_VALUE_ID;

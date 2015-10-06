@@ -16,6 +16,7 @@ timer CALCULATE_USES                : 0.000000 sec (%0)
 timer CALCULATE_PRED_BBS            : 0.000000 sec (%0)
 timer CALCULATE_PHI_ASSIGNS         : 0.000000 sec (%0)
 timer CALCULATE_LIVENESS            : 0.000000 sec (%0)
+timer CALCULATE_LOOPS               : 0.000000 sec (%0)
 timer FUNCTION_TRACE                : 0.000000 sec (%0)
 timer EXECUTE                       : 0.000000 sec (%0)
 -----------------
