@@ -976,7 +976,7 @@ static void pn_function_block_read(PNModule* module,
           function->num_bbs =
               pn_record_read_uint32(&reader, "num basic blocks");
           function->bbs = pn_allocator_allocz(
-              &module->temp_allocator, sizeof(PNBasicBlock) * function->num_bbs,
+              &module->allocator, sizeof(PNBasicBlock) * function->num_bbs,
               PN_DEFAULT_ALIGN);
           PN_TRACE(FUNCTION_BLOCK, "blocks %d;\n", function->num_bbs);
           break;
