@@ -715,13 +715,26 @@ static void pn_print_basic_block_graph(PNModule* module) {
   /* Print graph in dot format */
   PN_PRINT("digraph {\n");
   for (i = 0; i < function->num_bbs; ++i) {
-    PN_PRINT("  B%d;\n", i);
+    PNBasicBlock* bb = &function->bbs[i];
+    PN_PRINT("  B%d", i);
+#if PN_CALCULATE_LOOPS
+    if (bb->is_loop_header) {
+      PN_PRINT(" [style = bold]");
+    }
+#endif
+    PN_PRINT(";\n");
   }
   for (i = 0; i < function->num_bbs; ++i) {
     PNBasicBlock* bb = &function->bbs[i];
     int j;
     for (j = 0; j < bb->num_succ_bbs; ++j) {
-      PN_PRINT("  B%d -> B%d;\n", i, bb->succ_bb_ids[j]);
+      PN_PRINT("  B%d -> B%d", i, bb->succ_bb_ids[j]);
+#if PN_CALCULATE_LOOPS
+    if (bb->succ_bb_ids[j] == bb->loop_header_id) {
+      PN_PRINT(" [style = dotted]");
+    }
+#endif
+      PN_PRINT(";\n");
     }
   }
   PN_PRINT("}\n");
