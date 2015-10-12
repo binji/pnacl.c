@@ -75,13 +75,14 @@ static void pn_block_info_context_copy_abbrevs_for_block_id(
   }
 }
 
-static uint32_t pn_block_info_context_append_abbrev(PNAllocator* allocator,
-                                                    PNBlockInfoContext* context,
-                                                    PNBlockId block_id,
-                                                    PNAbbrev* abbrev) {
+static PNAbbrevId pn_block_info_context_append_abbrev(
+    PNAllocator* allocator,
+    PNBlockInfoContext* context,
+    PNBlockId block_id,
+    PNAbbrev* abbrev) {
   PN_CHECK(block_id < PN_MAX_BLOCK_IDS);
   PNAbbrevs* abbrevs = &context->block_abbrev_map[block_id];
-  uint32_t abbrev_id = abbrevs->num_abbrevs;
+  PNAbbrevId abbrev_id = abbrevs->num_abbrevs;
   pn_abbrev_copy(allocator, abbrevs, abbrev);
   return abbrev_id;
 }
@@ -160,7 +161,7 @@ static PNAbbrev* pn_abbrev_read(PNAllocator* allocator,
 
 #if PN_TRACING
 static void pn_abbrev_trace(PNAbbrev* abbrev,
-                            uint32_t abbrev_id,
+                            PNAbbrevId abbrev_id,
                             PNBool global) {
   if (!PN_IS_TRACE(ABBREV)) {
     return;
@@ -200,7 +201,7 @@ static void pn_abbrev_trace(PNAbbrev* abbrev,
 }
 #else
 static void pn_abbrev_trace(PNAbbrev* abbrev,
-                            uint32_t abbrev_id,
+                            PNAbbrevId abbrev_id,
                             PNBool global) {}
 #endif /* PN_TRACING */
 

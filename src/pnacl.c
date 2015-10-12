@@ -715,9 +715,9 @@ static void pn_print_basic_block_graph(PNModule* module) {
   /* Print graph in dot format */
   PN_PRINT("digraph {\n");
   for (i = 0; i < function->num_bbs; ++i) {
-    PNBasicBlock* bb = &function->bbs[i];
     PN_PRINT("  B%d", i);
 #if PN_CALCULATE_LOOPS
+    PNBasicBlock* bb = &function->bbs[i];
     if (bb->is_loop_header) {
       PN_PRINT(" [style = bold]");
     }
@@ -815,23 +815,66 @@ static void pn_print_stats(PNModule* module) {
   }
 }
 
+void pn_read_context_init(PNReadContext* read_context) {
+  memset(read_context, 0, sizeof(*read_context));
+
+#if PN_TRACING
+  read_context->define_abbrev = pn_trace_define_abbrev;
+  read_context->before_blockinfo_block = pn_trace_before_blockinfo_block;
+  read_context->blockinfo_setbid = pn_trace_blockinfo_setbid;
+  read_context->blockinfo_blockname = pn_trace_blockinfo_blockname;
+  read_context->blockinfo_setrecordname = pn_trace_blockinfo_setrecordname;
+  read_context->after_blockinfo_block = pn_trace_after_blockinfo_block;
+  read_context->before_type_block = pn_trace_before_type_block;
+  read_context->type_num_entries = pn_trace_type_num_entries;
+  read_context->type_entry = pn_trace_type_entry;
+  read_context->after_type_block = pn_trace_after_type_block;
+  read_context->before_globalvar_block = pn_trace_before_globalvar_block;
+  read_context->globalvar_before_var = pn_trace_globalvar_before_var;
+  read_context->globalvar_compound = pn_trace_globalvar_compound;
+  read_context->globalvar_zerofill = pn_trace_globalvar_zerofill;
+  read_context->globalvar_data = pn_trace_globalvar_data;
+  read_context->globalvar_reloc = pn_trace_globalvar_reloc;
+  read_context->globalvar_count = pn_trace_globalvar_count;
+  read_context->globalvar_after_var = pn_trace_globalvar_after_var;
+  read_context->after_globalvar_block = pn_trace_after_globalvar_block;
+  read_context->before_value_symtab_block = pn_trace_before_value_symtab_block;
+  read_context->value_symtab_entry = pn_trace_value_symtab_entry;
+  read_context->value_symtab_intrinsic = pn_trace_value_symtab_intrinsic;
+  read_context->after_value_symtab_block = pn_trace_after_value_symtab_block;
+  read_context->before_constants_block = pn_trace_before_constants_block;
+  read_context->constants_settype = pn_trace_constants_settype;
+  read_context->constants_value = pn_trace_constants_value;
+  read_context->after_constants_block = pn_trace_after_constants_block;
+  read_context->before_function_block = pn_trace_before_function_block;
+  read_context->function_numblocks = pn_trace_function_numblocks;
+  read_context->after_function_block = pn_trace_after_function_block;
+  read_context->before_module_block = pn_trace_before_module_block;
+  read_context->module_version = pn_trace_module_version;
+  read_context->module_function = pn_trace_module_function;
+  read_context->after_module_block = pn_trace_after_module_block;
+#endif
+}
+
 int main(int argc, char** argv, char** envp) {
   PN_BEGIN_TIME(TOTAL);
   pn_options_parse(argc, argv, envp);
 
   PNFileData file_data = pn_read_file(g_pn_filename);
 
+  PNReadContext read_context;
   PNMemory memory;
   PNModule module;
   PNBitStream bs;
 
+  pn_read_context_init(&read_context);
   pn_memory_init(&memory, g_pn_memory_size);
   pn_module_init(&module, &memory);
   pn_bitstream_init(&bs, file_data.data, file_data.size);
 
   uint32_t load_count;
   for (load_count = 0; load_count < g_pn_repeat_load_times; ++load_count) {
-    pn_module_read(&module, &bs);
+    pn_module_read(&read_context, &module, &bs);
 
     /* Reset the state so everything can be reloaded */
     if (g_pn_repeat_load_times > 1 &&

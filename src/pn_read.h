@@ -5,13 +5,14 @@
 #ifndef PN_READ_H_
 #define PN_READ_H_
 
-static void pn_blockinfo_block_read(PNModule* module,
+static void pn_blockinfo_block_read(PNReadContext* read_context,
+                                    PNModule* module,
                                     PNBlockInfoContext* context,
                                     PNBitStream* bs) {
   PN_BEGIN_TIME(BLOCKINFO_BLOCK_READ);
-  PN_TRACE(BLOCKINFO_BLOCK, "abbreviations {  // BlockID = %d\n",
-           PN_BLOCKID_BLOCKINFO);
-  PN_TRACE_INDENT(BLOCKINFO_BLOCK, 2);
+  PN_CALLBACK(read_context, before_blockinfo_block,
+              (module, read_context->user_data));
+
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
   PN_CHECK(codelen <= 32);
   pn_bitstream_align_32(bs);
@@ -20,15 +21,12 @@ static void pn_blockinfo_block_read(PNModule* module,
   PNAbbrevs abbrevs = {};
   PNBlockId block_id = -1;
 
-  /* Indent 2 more, that we we can always dedent 2 on SETBID */
-  PN_TRACE_INDENT(BLOCKINFO_BLOCK, 2);
-
   while (!pn_bitstream_at_end(bs)) {
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
-        PN_TRACE_DEDENT(BLOCKINFO_BLOCK, 4);
-        PN_TRACE(BLOCKINFO_BLOCK, "}\n");
+        PN_CALLBACK(read_context, after_blockinfo_block,
+                    (module, read_context->user_data));
         pn_bitstream_align_32(bs);
         PN_END_TIME(BLOCKINFO_BLOCK_READ);
         return;
@@ -39,9 +37,11 @@ static void pn_blockinfo_block_read(PNModule* module,
       case PN_ENTRY_DEFINE_ABBREV: {
         PNAbbrev* abbrev =
             pn_abbrev_read(&module->temp_allocator, bs, &abbrevs);
-        uint32_t abbrev_id = pn_block_info_context_append_abbrev(
+        PNAbbrevId abbrev_id = pn_block_info_context_append_abbrev(
             &module->allocator, context, block_id, abbrev);
-        pn_abbrev_trace(abbrev, abbrev_id, PN_TRUE);
+        PN_CALLBACK(
+            read_context, define_abbrev,
+            (module, abbrev_id, abbrev, PN_TRUE, read_context->user_data));
         break;
       }
 
@@ -54,32 +54,19 @@ static void pn_blockinfo_block_read(PNModule* module,
 
         switch (code) {
           case PN_BLOCKINFO_CODE_SETBID:
-            PN_TRACE_DEDENT(BLOCKINFO_BLOCK, 2);
             block_id = pn_record_read_int32(&reader, "block id");
-            const char* name = NULL;
-            (void)name;
-            switch (block_id) {
-              // clang-format off
-              case PN_BLOCKID_BLOCKINFO: name = "abbreviations"; break;
-              case PN_BLOCKID_MODULE: name = "module"; break;
-              case PN_BLOCKID_CONSTANTS: name = "constants"; break;
-              case PN_BLOCKID_FUNCTION: name = "function"; break;
-              case PN_BLOCKID_VALUE_SYMTAB: name = "valuesymtab"; break;
-              case PN_BLOCKID_TYPE: name = "type"; break;
-              case PN_BLOCKID_GLOBALVAR: name = "globals"; break;
-              default: PN_UNREACHABLE(); break;
-              // clang-format on
-            }
-            PN_TRACE(BLOCKINFO_BLOCK, "%s:\n", name);
-            PN_TRACE_INDENT(BLOCKINFO_BLOCK, 2);
+            PN_CALLBACK(read_context, blockinfo_setbid,
+                        (module, block_id, read_context->user_data));
             break;
 
           case PN_BLOCKINFO_CODE_BLOCKNAME:
-            PN_TRACE(BLOCKINFO_BLOCK, "block name\n");
+            PN_CALLBACK(read_context, blockinfo_blockname,
+                        (module, read_context->user_data));
             break;
 
           case PN_BLOCKINFO_CODE_SETRECORDNAME:
-            PN_TRACE(BLOCKINFO_BLOCK, "block record name\n");
+            PN_CALLBACK(read_context, blockinfo_setrecordname,
+                        (module, read_context->user_data));
             break;
 
           default:
@@ -94,12 +81,14 @@ static void pn_blockinfo_block_read(PNModule* module,
   PN_FATAL("Unexpected end of stream.\n");
 }
 
-static void pn_type_block_read(PNModule* module,
+static void pn_type_block_read(PNReadContext* read_context,
+                               PNModule* module,
                                PNBlockInfoContext* context,
                                PNBitStream* bs) {
   PN_BEGIN_TIME(TYPE_BLOCK_READ);
-  PN_TRACE(TYPE_BLOCK, "types {  // BlockID = %d\n", PN_BLOCKID_TYPE);
-  PN_TRACE_INDENT(TYPE_BLOCK, 2);
+  PN_CALLBACK(read_context, before_type_block,
+              (module, read_context->user_data));
+
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
   PN_CHECK(codelen <= 32);
   pn_bitstream_align_32(bs);
@@ -110,14 +99,15 @@ static void pn_type_block_read(PNModule* module,
       &module->temp_allocator, context, PN_BLOCKID_TYPE, &abbrevs);
 
   PNTypeId current_type_id = 0;
+  PNType* type = NULL;
 
   while (!pn_bitstream_at_end(bs)) {
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
         PN_CHECK(current_type_id == module->num_types);
-        PN_TRACE_DEDENT(TYPE_BLOCK, 2);
-        PN_TRACE(TYPE_BLOCK, "}\n");
+        PN_CALLBACK(read_context, after_type_block,
+                    (module, read_context->user_data));
         pn_bitstream_align_32(bs);
         PN_END_TIME(TYPE_BLOCK_READ);
         return;
@@ -128,8 +118,10 @@ static void pn_type_block_read(PNModule* module,
       case PN_ENTRY_DEFINE_ABBREV: {
         PNAbbrev* abbrev =
             pn_abbrev_read(&module->temp_allocator, bs, &abbrevs);
-        uint32_t abbrev_id = abbrev - abbrevs.abbrevs;
-        pn_abbrev_trace(abbrev, abbrev_id, PN_FALSE);
+        PNAbbrevId abbrev_id = abbrev - abbrevs.abbrevs;
+        PN_CALLBACK(
+            read_context, define_abbrev,
+            (module, abbrev_id, abbrev, PN_FALSE, read_context->user_data));
         break;
       }
 
@@ -146,14 +138,15 @@ static void pn_type_block_read(PNModule* module,
             module->types = pn_allocator_allocz(
                 &module->allocator, module->num_types * sizeof(PNType),
                 PN_DEFAULT_ALIGN);
-            PN_TRACE(TYPE_BLOCK, "count %d;\n", module->num_types);
+            PN_CALLBACK(read_context, type_num_entries,
+                        (module, module->num_types, read_context->user_data));
             break;
           }
 
           case PN_TYPE_CODE_VOID: {
             PN_CHECK(current_type_id < module->num_types);
             PNTypeId type_id = current_type_id++;
-            PNType* type = &module->types[type_id];
+            type = &module->types[type_id];
             type->code = PN_TYPE_CODE_VOID;
             type->basic_type = PN_BASIC_TYPE_VOID;
             break;
@@ -162,7 +155,7 @@ static void pn_type_block_read(PNModule* module,
           case PN_TYPE_CODE_FLOAT: {
             PN_CHECK(current_type_id < module->num_types);
             PNTypeId type_id = current_type_id++;
-            PNType* type = &module->types[type_id];
+            type = &module->types[type_id];
             type->code = PN_TYPE_CODE_FLOAT;
             type->basic_type = PN_BASIC_TYPE_FLOAT;
             break;
@@ -171,7 +164,7 @@ static void pn_type_block_read(PNModule* module,
           case PN_TYPE_CODE_DOUBLE: {
             PN_CHECK(current_type_id < module->num_types);
             PNTypeId type_id = current_type_id++;
-            PNType* type = &module->types[type_id];
+            type = &module->types[type_id];
             type->code = PN_TYPE_CODE_DOUBLE;
             type->basic_type = PN_BASIC_TYPE_DOUBLE;
             break;
@@ -180,7 +173,7 @@ static void pn_type_block_read(PNModule* module,
           case PN_TYPE_CODE_INTEGER: {
             PN_CHECK(current_type_id < module->num_types);
             PNTypeId type_id = current_type_id++;
-            PNType* type = &module->types[type_id];
+            type = &module->types[type_id];
             type->code = PN_TYPE_CODE_INTEGER;
             type->width = pn_record_read_int32(&reader, "width");
             switch (type->width) {
@@ -208,7 +201,7 @@ static void pn_type_block_read(PNModule* module,
           case PN_TYPE_CODE_FUNCTION: {
             PN_CHECK(current_type_id < module->num_types);
             PNTypeId type_id = current_type_id++;
-            PNType* type = &module->types[type_id];
+            type = &module->types[type_id];
             type->code = PN_TYPE_CODE_FUNCTION;
             type->basic_type = PN_BASIC_TYPE_INT32;
             type->is_varargs = pn_record_read_int32(&reader, "is_varargs");
@@ -231,9 +224,8 @@ static void pn_type_block_read(PNModule* module,
         }
 
         if (code != PN_TYPE_CODE_NUMENTRY) {
-          PN_TRACE(TYPE_BLOCK, "@t%d = %s;\n", current_type_id - 1,
-                   pn_type_describe_all(module, current_type_id - 1, NULL,
-                                        PN_FALSE));
+          PN_CALLBACK(read_context, type_entry,
+                      (module, current_type_id, type, read_context->user_data));
         }
 
         pn_record_reader_finish(&reader);
@@ -268,21 +260,17 @@ static void pn_globalvar_write_reloc(PNModule* module,
       break;
   }
 
-#if 0
-  PN_TRACE(GLOBALVAR_BLOCK,
-           "  writing reloc value. offset:%u value:%d (0x%x)\n", offset,
-           reloc_value, reloc_value);
-#endif
   pn_memory_write_u32(module->memory, offset, reloc_value);
 }
 
-static void pn_globalvar_block_read(PNModule* module,
+static void pn_globalvar_block_read(PNReadContext* read_context,
+                                    PNModule* module,
                                     PNBlockInfoContext* context,
                                     PNBitStream* bs) {
   PN_BEGIN_TIME(GLOBALVAR_BLOCK_READ);
-  PN_TRACE(GLOBALVAR_BLOCK, "globals {  // BlockID = %d\n",
-           PN_BLOCKID_GLOBALVAR);
-  PN_TRACE_INDENT(GLOBALVAR_BLOCK, 2);
+  PN_CALLBACK(read_context, before_globalvar_block,
+              (module, read_context->user_data));
+
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
   PN_CHECK(codelen <= 32);
   pn_bitstream_align_32(bs);
@@ -292,6 +280,7 @@ static void pn_globalvar_block_read(PNModule* module,
   pn_block_info_context_copy_abbrevs_for_block_id(
       &module->temp_allocator, context, PN_BLOCKID_GLOBALVAR, &abbrevs);
 
+  PNGlobalVarId global_var_id = 0;
   PNGlobalVar* global_var = NULL;
 
   uint32_t num_global_vars = 0;
@@ -316,17 +305,14 @@ static void pn_globalvar_block_read(PNModule* module,
     switch (entry) {
       case PN_ENTRY_END_BLOCK: {
         if (global_var) {
-          /* Dedent if there was a previous variable */
-          PN_TRACE_DEDENT(GLOBALVAR_BLOCK, 2);
-          /* Additional dedent if there was a previous compound initializer */
-          if (global_var->num_initializers > 1) {
-            PN_TRACE(GLOBALVAR_BLOCK, "}\n");
-            PN_TRACE_DEDENT(GLOBALVAR_BLOCK, 2);
-          }
+          PN_CALLBACK(
+              read_context, globalvar_after_var,
+              (module, global_var_id, global_var, read_context->user_data));
         }
 
-        PN_TRACE_DEDENT(GLOBALVAR_BLOCK, 2);
-        PN_TRACE(GLOBALVAR_BLOCK, "}\n");
+        PN_CALLBACK(read_context, after_globalvar_block,
+                    (module, read_context->user_data));
+
         pn_bitstream_align_32(bs);
 
         uint32_t i;
@@ -348,8 +334,10 @@ static void pn_globalvar_block_read(PNModule* module,
       case PN_ENTRY_DEFINE_ABBREV: {
         PNAbbrev* abbrev =
             pn_abbrev_read(&module->temp_allocator, bs, &abbrevs);
-        uint32_t abbrev_id = abbrev - abbrevs.abbrevs;
-        pn_abbrev_trace(abbrev, abbrev_id, PN_FALSE);
+        PNAbbrevId abbrev_id = abbrev - abbrevs.abbrevs;
+        PN_CALLBACK(
+            read_context, define_abbrev,
+            (module, abbrev_id, abbrev, PN_FALSE, read_context->user_data));
         break;
       }
 
@@ -362,19 +350,14 @@ static void pn_globalvar_block_read(PNModule* module,
 
         switch (code) {
           case PN_GLOBALVAR_CODE_VAR: {
-            PNGlobalVarId global_var_id = module->num_global_vars++;
-            PN_CHECK(global_var_id < num_global_vars);
-
             if (global_var) {
-              /* Dedent if there was a previous variable */
-              PN_TRACE_DEDENT(GLOBALVAR_BLOCK, 2);
-              /* Additional dedent if there was a previous compound initializer
-               */
-              if (global_var->num_initializers > 1) {
-                PN_TRACE(GLOBALVAR_BLOCK, "}\n");
-                PN_TRACE_DEDENT(GLOBALVAR_BLOCK, 2);
-              }
+              PN_CALLBACK(
+                  read_context, globalvar_after_var,
+                  (module, global_var_id, global_var, read_context->user_data));
             }
+
+            global_var_id = module->num_global_vars++;
+            PN_CHECK(global_var_id < num_global_vars);
 
             global_var = &module->global_vars[global_var_id];
             global_var->alignment =
@@ -394,11 +377,9 @@ static void pn_globalvar_block_read(PNModule* module,
             value->type_id = pn_module_find_pointer_type(module);
             value->index = global_var_id;
 
-            PN_TRACE(GLOBALVAR_BLOCK, "%s %s, align %d,\n",
-                     global_var->is_constant ? "const" : "var",
-                     pn_value_describe(module, NULL, value_id),
-                     global_var->alignment);
-            PN_TRACE_INDENT(GLOBALVAR_BLOCK, 2);
+            PN_CALLBACK(read_context, globalvar_before_var,
+                        (module, global_var_id, global_var, value_id,
+                         read_context->user_data));
             break;
           }
 
@@ -406,9 +387,10 @@ static void pn_globalvar_block_read(PNModule* module,
             PN_CHECK(global_var);
             global_var->num_initializers =
                 pn_record_read_int32(&reader, "num_initializers");
-            PN_TRACE(GLOBALVAR_BLOCK, "initializers %d {\n",
-                     global_var->num_initializers);
-            PN_TRACE_INDENT(GLOBALVAR_BLOCK, 2);
+            PN_CALLBACK(
+                read_context, globalvar_compound,
+                (module, global_var_id, global_var,
+                 global_var->num_initializers, read_context->user_data));
             break;
           }
 
@@ -421,7 +403,9 @@ static void pn_globalvar_block_read(PNModule* module,
             pn_memory_zerofill(memory, data_offset, num_bytes);
             data_offset += num_bytes;
 
-            PN_TRACE(GLOBALVAR_BLOCK, "zerofill %d;\n", num_bytes);
+            PN_CALLBACK(read_context, globalvar_zerofill,
+                        (module, global_var_id, global_var, num_bytes,
+                         read_context->user_data));
             break;
           }
 
@@ -430,8 +414,8 @@ static void pn_globalvar_block_read(PNModule* module,
             PN_CHECK(initializer_id < global_var->num_initializers);
             initializer_id++;
             uint32_t num_bytes = 0;
+            uint32_t data_start = data_offset;
             uint32_t value;
-            PN_TRACE(GLOBALVAR_BLOCK, "{");
 
             /* TODO(binji): optimize. Check if this data is aligned with type
              * abbreviation type PN_ENCODING_BLOB. If so, we can just memcpy. */
@@ -444,25 +428,13 @@ static void pn_globalvar_block_read(PNModule* module,
                 PN_FATAL("memory-size is too small (%u < %u).\n", memory->size,
                          data_offset + 1);
               }
-              if (PN_IS_TRACE(GLOBALVAR_BLOCK)) {
-                if (num_bytes) {
-                  PN_PRINT(", ");
-                  if (num_bytes % 14 == 0) {
-                    PN_PRINT("\n");
-                    PN_TRACE_PRINT_INDENT();
-                    PN_PRINT(" ");
-                  }
-                }
-                PN_PRINT("%3d", value);
-              }
-
               data8[data_offset++] = value;
               num_bytes++;
             }
 
-            if (PN_IS_TRACE(GLOBALVAR_BLOCK)) {
-              PN_PRINT("}\n");
-            }
+            PN_CALLBACK(read_context, globalvar_data,
+                        (module, global_var_id, global_var, &data8[data_start],
+                         num_bytes, read_context->user_data));
             break;
           }
 
@@ -475,16 +447,9 @@ static void pn_globalvar_block_read(PNModule* module,
             /* Optional */
             pn_record_try_read_int32(&reader, &addend);
 
-            if (addend > 0) {
-              PN_TRACE(GLOBALVAR_BLOCK, "reloc %s + %d;\n",
-                       pn_value_describe(module, NULL, index), addend);
-            } else if (addend < 0) {
-              PN_TRACE(GLOBALVAR_BLOCK, "reloc %s - %d;\n",
-                       pn_value_describe(module, NULL, index), -addend);
-            } else {
-              PN_TRACE(GLOBALVAR_BLOCK, "reloc %s;\n",
-                       pn_value_describe(module, NULL, index));
-            }
+            PN_CALLBACK(read_context, globalvar_reloc,
+                        (module, global_var_id, global_var, index, addend,
+                         read_context->user_data));
 
             if (index < module->num_values) {
               pn_globalvar_write_reloc(module, index, data_offset, addend);
@@ -510,7 +475,8 @@ static void pn_globalvar_block_read(PNModule* module,
                 &module->allocator, num_global_vars * sizeof(PNGlobalVar),
                 PN_DEFAULT_ALIGN);
 
-            PN_TRACE(GLOBALVAR_BLOCK, "count %d;\n", num_global_vars);
+            PN_CALLBACK(read_context, globalvar_count,
+                        (module, num_global_vars, read_context->user_data));
             break;
           }
 
@@ -526,13 +492,13 @@ static void pn_globalvar_block_read(PNModule* module,
   PN_FATAL("Unexpected end of stream.\n");
 }
 
-static void pn_value_symtab_block_read(PNModule* module,
+static void pn_value_symtab_block_read(PNReadContext* read_context,
+                                       PNModule* module,
                                        PNBlockInfoContext* context,
                                        PNBitStream* bs) {
   PN_BEGIN_TIME(VALUE_SYMTAB_BLOCK_READ);
-  PN_TRACE(VALUE_SYMTAB_BLOCK, "valuesymtab {  // BlockID = %d\n",
-           PN_BLOCKID_VALUE_SYMTAB);
-  PN_TRACE_INDENT(VALUE_SYMTAB_BLOCK, 2);
+  PN_CALLBACK(read_context, before_value_symtab_block,
+              (module, read_context->user_data));
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
   PN_CHECK(codelen <= 32);
   pn_bitstream_align_32(bs);
@@ -546,8 +512,8 @@ static void pn_value_symtab_block_read(PNModule* module,
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
-        PN_TRACE_DEDENT(VALUE_SYMTAB_BLOCK, 2);
-        PN_TRACE(VALUE_SYMTAB_BLOCK, "}\n");
+        PN_CALLBACK(read_context, after_value_symtab_block,
+                    (module, read_context->user_data));
         pn_bitstream_align_32(bs);
         PN_END_TIME(VALUE_SYMTAB_BLOCK_READ);
         return;
@@ -558,8 +524,10 @@ static void pn_value_symtab_block_read(PNModule* module,
       case PN_ENTRY_DEFINE_ABBREV: {
         PNAbbrev* abbrev =
             pn_abbrev_read(&module->temp_allocator, bs, &abbrevs);
-        uint32_t abbrev_id = abbrev - abbrevs.abbrevs;
-        pn_abbrev_trace(abbrev, abbrev_id, PN_FALSE);
+        PNAbbrevId abbrev_id = abbrev - abbrevs.abbrevs;
+        PN_CALLBACK(
+            read_context, define_abbrev,
+            (module, abbrev_id, abbrev, PN_FALSE, read_context->user_data));
         break;
       }
 
@@ -585,8 +553,8 @@ static void pn_value_symtab_block_read(PNModule* module,
               name[len] = 0;
             }
 
-            PN_TRACE(VALUE_SYMTAB_BLOCK, "%s : \"%s\";\n",
-                     pn_value_describe(module, NULL, value_id), name);
+            PN_CALLBACK(read_context, value_symtab_entry,
+                        (module, value_id, name, read_context->user_data));
 
             PNValue* value = &module->values[value_id];
             if (value->code == PN_VALUE_CODE_FUNCTION) {
@@ -594,16 +562,18 @@ static void pn_value_symtab_block_read(PNModule* module,
               PNFunction* function = &module->functions[function_id];
               function->name = name;
 
-#define PN_INTRINSIC_CHECK(i_enum, i_name)                        \
-  if (strcmp(name, i_name) == 0) {                                \
-    module->known_functions[PN_INTRINSIC_##i_enum] = function_id; \
-    function->intrinsic_id = PN_INTRINSIC_##i_enum;               \
-    PN_TRACE(INTRINSICS, "intrinsic \"%s\" (%d)\n", i_name,       \
-             PN_INTRINSIC_##i_enum);                              \
+#define PN_INTRINSIC_CHECK(i_enum, i_name)                                 \
+  if (strcmp(name, i_name) == 0) {                                         \
+    module->known_functions[PN_INTRINSIC_##i_enum] = function_id;          \
+    function->intrinsic_id = PN_INTRINSIC_##i_enum;                        \
+    PN_CALLBACK(                                                           \
+        read_context, value_symtab_intrinsic,                              \
+        (module, PN_INTRINSIC_##i_enum, i_name, read_context->user_data)); \
   } else
 
-              PN_FOREACH_INTRINSIC(PN_INTRINSIC_CHECK)
-              { /* Unknown function name */ }
+              PN_FOREACH_INTRINSIC(
+                  PN_INTRINSIC_CHECK) { /* Unknown function name */
+              }
 
 #undef PN_INTRINSIC_CHECK
             }
@@ -626,14 +596,14 @@ static void pn_value_symtab_block_read(PNModule* module,
   PN_FATAL("Unexpected end of stream.\n");
 }
 
-static void pn_constants_block_read(PNModule* module,
+static void pn_constants_block_read(PNReadContext* read_context,
+                                    PNModule* module,
                                     PNFunction* function,
                                     PNBlockInfoContext* context,
                                     PNBitStream* bs) {
   PN_BEGIN_TIME(CONSTANTS_BLOCK_READ);
-  PN_TRACE(CONSTANTS_BLOCK, "constants {  // BlockID = %d\n",
-           PN_BLOCKID_CONSTANTS);
-  PN_TRACE_INDENT(CONSTANTS_BLOCK, 2);
+  PN_CALLBACK(read_context, before_constants_block,
+              (module, function, read_context->user_data));
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
   PN_CHECK(codelen <= 32);
   pn_bitstream_align_32(bs);
@@ -643,19 +613,14 @@ static void pn_constants_block_read(PNModule* module,
   pn_block_info_context_copy_abbrevs_for_block_id(
       &module->temp_allocator, context, PN_BLOCKID_CONSTANTS, &abbrevs);
 
-  /* Indent 2 more, that we we can always dedent 2 on PN_CONSTANTS_CODE_SETTYPE
-   */
-  PN_TRACE_INDENT(CONSTANTS_BLOCK, 2);
-
   PNTypeId cur_type_id = -1;
   PNBasicType cur_basic_type = PN_BASIC_TYPE_VOID;
   while (!pn_bitstream_at_end(bs)) {
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
-        PN_TRACE_DEDENT(CONSTANTS_BLOCK, 2);
-        PN_TRACE(CONSTANTS_BLOCK, "}\n");
-        PN_TRACE_DEDENT(CONSTANTS_BLOCK, 2);
+        PN_CALLBACK(read_context, after_constants_block,
+                    (module, function, read_context->user_data));
         pn_bitstream_align_32(bs);
         PN_END_TIME(CONSTANTS_BLOCK_READ);
         return;
@@ -666,8 +631,10 @@ static void pn_constants_block_read(PNModule* module,
       case PN_ENTRY_DEFINE_ABBREV: {
         PNAbbrev* abbrev =
             pn_abbrev_read(&module->temp_allocator, bs, &abbrevs);
-        uint32_t abbrev_id = abbrev - abbrevs.abbrevs;
-        pn_abbrev_trace(abbrev, abbrev_id, PN_FALSE);
+        PNAbbrevId abbrev_id = abbrev - abbrevs.abbrevs;
+        PN_CALLBACK(
+            read_context, define_abbrev,
+            (module, abbrev_id, abbrev, PN_FALSE, read_context->user_data));
         break;
       }
 
@@ -683,10 +650,9 @@ static void pn_constants_block_read(PNModule* module,
             cur_type_id = pn_record_read_int32(&reader, "current type");
             pn_type_id_check(module, cur_type_id);
             cur_basic_type = module->types[cur_type_id].basic_type;
-            PN_TRACE_DEDENT(CONSTANTS_BLOCK, 2);
-            PN_TRACE(CONSTANTS_BLOCK, "%s:\n",
-                     pn_type_describe(module, cur_type_id));
-            PN_TRACE_INDENT(CONSTANTS_BLOCK, 2);
+            PN_CALLBACK(
+                read_context, constants_settype,
+                (module, function, cur_type_id, read_context->user_data));
             break;
 
           case PN_CONSTANTS_CODE_UNDEF: {
@@ -704,9 +670,9 @@ static void pn_constants_block_read(PNModule* module,
             value->type_id = cur_type_id;
             value->index = constant_id;
 
-            PN_TRACE(CONSTANTS_BLOCK, "%s = %s undef;\n",
-                     pn_value_describe(module, function, value_id),
-                     pn_type_describe(module, cur_type_id));
+            PN_CALLBACK(read_context, constants_value,
+                        (module, function, constant_id, constant, value_id,
+                         read_context->user_data));
             break;
           }
 
@@ -752,9 +718,9 @@ static void pn_constants_block_read(PNModule* module,
                     break;
                 }
 
-                PN_TRACE(CONSTANTS_BLOCK, "%s = %s %d;\n",
-                         pn_value_describe(module, function, value_id),
-                         pn_type_describe(module, cur_type_id), data);
+                PN_CALLBACK(read_context, constants_value,
+                            (module, function, constant_id, constant, value_id,
+                             read_context->user_data));
                 break;
               }
 
@@ -763,9 +729,9 @@ static void pn_constants_block_read(PNModule* module,
                     pn_record_read_decoded_int64(&reader, "integer64 value");
                 constant->value.i64 = data;
 
-                PN_TRACE(CONSTANTS_BLOCK, "%s = %s %" PRId64 ";\n",
-                         pn_value_describe(module, function, value_id),
-                         pn_type_describe(module, cur_type_id), data);
+                PN_CALLBACK(read_context, constants_value,
+                            (module, function, constant_id, constant, value_id,
+                             read_context->user_data));
                 break;
               }
 
@@ -796,18 +762,12 @@ static void pn_constants_block_read(PNModule* module,
               case PN_BASIC_TYPE_FLOAT: {
                 float data = pn_record_read_float(&reader, "float value");
                 constant->value.f32 = data;
-                PN_TRACE(CONSTANTS_BLOCK, "%s = %s %g;\n",
-                         pn_value_describe(module, function, value_id),
-                         pn_type_describe(module, cur_type_id), data);
                 break;
               }
 
               case PN_BASIC_TYPE_DOUBLE: {
                 double data = pn_record_read_double(&reader, "double value");
                 constant->value.f64 = data;
-                PN_TRACE(CONSTANTS_BLOCK, "%s = %s %g;\n",
-                         pn_value_describe(module, function, value_id),
-                         pn_type_describe(module, cur_type_id), data);
                 break;
               }
 
@@ -815,6 +775,10 @@ static void pn_constants_block_read(PNModule* module,
                 PN_UNREACHABLE();
                 break;
             }
+
+            PN_CALLBACK(read_context, constants_value,
+                        (module, function, constant_id, constant, value_id,
+                         read_context->user_data));
 
             break;
           }
@@ -870,7 +834,8 @@ static void pn_basic_block_list_append(PNModule* module,
 
 #endif /* PN_CALCULATE_PRED_BBS */
 
-static void pn_function_block_read(PNModule* module,
+static void pn_function_block_read(PNReadContext* read_context,
+                                   PNModule* module,
                                    PNBlockInfoContext* context,
                                    PNBitStream* bs,
                                    PNFunctionId function_id) {
@@ -885,9 +850,8 @@ static void pn_function_block_read(PNModule* module,
       &module->temp_allocator, context, PN_BLOCKID_FUNCTION, &abbrevs);
 
   PNFunction* function = &module->functions[function_id];
-  if (PN_IS_TRACE(FUNCTION_BLOCK)) {
-    pn_function_print_header(module, function, function_id);
-  }
+  PN_CALLBACK(read_context, before_function_block,
+              (module, function_id, function, read_context->user_data));
 
   PNType* type = &module->types[function->type_id];
   assert(type->code == PN_TYPE_CODE_FUNCTION);
@@ -927,10 +891,9 @@ static void pn_function_block_read(PNModule* module,
         pn_function_calculate_liveness(module, function);
 #endif /* PN_CALCULATE_LIVENESS */
         pn_function_calculate_opcodes(module, function);
-        pn_function_trace(module, function, function_id);
 
-        PN_TRACE_DEDENT(FUNCTION_BLOCK, 2);
-        PN_TRACE(FUNCTION_BLOCK, "}\n");
+        PN_CALLBACK(read_context, after_function_block,
+                    (module, function_id, function, read_context->user_data));
         pn_bitstream_align_32(bs);
         PN_END_TIME(FUNCTION_BLOCK_READ);
         return;
@@ -940,11 +903,12 @@ static void pn_function_block_read(PNModule* module,
         PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
         switch (id) {
           case PN_BLOCKID_CONSTANTS:
-            pn_constants_block_read(module, function, context, bs);
+            pn_constants_block_read(read_context, module, function, context,
+                                    bs);
             break;
 
           case PN_BLOCKID_VALUE_SYMTAB:
-            pn_value_symtab_block_read(module, context, bs);
+            pn_value_symtab_block_read(read_context, module, context, bs);
             break;
 
           default:
@@ -957,8 +921,10 @@ static void pn_function_block_read(PNModule* module,
       case PN_ENTRY_DEFINE_ABBREV: {
         PNAbbrev* abbrev =
             pn_abbrev_read(&module->temp_allocator, bs, &abbrevs);
-        uint32_t abbrev_id = abbrev - abbrevs.abbrevs;
-        pn_abbrev_trace(abbrev, abbrev_id, PN_FALSE);
+        PNAbbrevId abbrev_id = abbrev - abbrevs.abbrevs;
+        PN_CALLBACK(
+            read_context, define_abbrev,
+            (module, abbrev_id, abbrev, PN_FALSE, read_context->user_data));
         break;
       }
 
@@ -978,7 +944,9 @@ static void pn_function_block_read(PNModule* module,
           function->bbs = pn_allocator_allocz(
               &module->allocator, sizeof(PNBasicBlock) * function->num_bbs,
               PN_DEFAULT_ALIGN);
-          PN_TRACE(FUNCTION_BLOCK, "blocks %d;\n", function->num_bbs);
+          PN_CALLBACK(read_context, function_numblocks,
+                      (module, function_id, function, function->num_bbs,
+                       read_context->user_data));
           break;
         }
 
@@ -998,6 +966,8 @@ static void pn_function_block_read(PNModule* module,
           num_bbs++;
         }
 
+        PNInstruction* instruction = NULL;
+
         switch (code) {
           case PN_FUNCTION_CODE_DECLAREBLOCKS:
             /* Handled above so we only print the basic block index when listing
@@ -1007,6 +977,7 @@ static void pn_function_block_read(PNModule* module,
           case PN_FUNCTION_CODE_INST_BINOP: {
             PNInstructionBinop* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
                 PNInstructionBinop, module, cur_bb);
+            instruction = &inst->base;
 
             PNValueId value_id;
             PNValue* value =
@@ -1035,6 +1006,7 @@ static void pn_function_block_read(PNModule* module,
           case PN_FUNCTION_CODE_INST_CAST: {
             PNInstructionCast* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
                 PNInstructionCast, module, cur_bb);
+            instruction = &inst->base;
 
             PNValueId value_id;
             PNValue* value =
@@ -1077,6 +1049,7 @@ static void pn_function_block_read(PNModule* module,
           case PN_FUNCTION_CODE_INST_BR: {
             PNInstructionBr* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
                 PNInstructionBr, module, cur_bb);
+            instruction = &inst->base;
             inst->base.code = code;
             inst->true_bb_id = pn_record_read_uint32(&reader, "true_bb");
             inst->false_bb_id = PN_INVALID_BB_ID;
@@ -1104,6 +1077,7 @@ static void pn_function_block_read(PNModule* module,
           case PN_FUNCTION_CODE_INST_SWITCH: {
             PNInstructionSwitch* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
                 PNInstructionSwitch, module, cur_bb);
+            instruction = &inst->base;
 
             inst->type_id = pn_record_read_uint32(&reader, "type_id");
             inst->value_id = pn_record_read_uint32(&reader, "value");
@@ -1114,9 +1088,9 @@ static void pn_function_block_read(PNModule* module,
                                        &cur_bb->num_succ_bbs,
                                        inst->default_bb_id);
 
-              if (context->use_relative_ids) {
-                inst->value_id = rel_id - inst->value_id;
-              }
+            if (context->use_relative_ids) {
+              inst->value_id = rel_id - inst->value_id;
+            }
 
             inst->base.code = code;
             int32_t num_cases = pn_record_read_int32(&reader, "num cases");
@@ -1170,6 +1144,7 @@ static void pn_function_block_read(PNModule* module,
           case PN_FUNCTION_CODE_INST_UNREACHABLE: {
             PNInstructionUnreachable* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
                 PNInstructionUnreachable, module, cur_bb);
+            instruction = &inst->base;
             inst->base.code = code;
             is_terminator = PN_TRUE;
             break;
@@ -1178,6 +1153,7 @@ static void pn_function_block_read(PNModule* module,
           case PN_FUNCTION_CODE_INST_PHI: {
             PNInstructionPhi* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
                 PNInstructionPhi, module, cur_bb);
+            instruction = &inst->base;
 
             PNValueId value_id;
             PNValue* value =
@@ -1241,6 +1217,7 @@ static void pn_function_block_read(PNModule* module,
           case PN_FUNCTION_CODE_INST_ALLOCA: {
             PNInstructionAlloca* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
                 PNInstructionAlloca, module, cur_bb);
+            instruction = &inst->base;
 
             PNValueId value_id;
             PNValue* value =
@@ -1264,6 +1241,7 @@ static void pn_function_block_read(PNModule* module,
           case PN_FUNCTION_CODE_INST_LOAD: {
             PNInstructionLoad* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
                 PNInstructionLoad, module, cur_bb);
+            instruction = &inst->base;
 
             PNValueId value_id;
             PNValue* value =
@@ -1289,6 +1267,7 @@ static void pn_function_block_read(PNModule* module,
           case PN_FUNCTION_CODE_INST_STORE: {
             PNInstructionStore* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
                 PNInstructionStore, module, cur_bb);
+            instruction = &inst->base;
 
             inst->base.code = code;
             inst->dest_id = pn_record_read_uint32(&reader, "dest");
@@ -1307,6 +1286,7 @@ static void pn_function_block_read(PNModule* module,
           case PN_FUNCTION_CODE_INST_CMP2: {
             PNInstructionCmp2* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
                 PNInstructionCmp2, module, cur_bb);
+            instruction = &inst->base;
 
             PNValueId value_id;
             PNValue* value =
@@ -1330,6 +1310,7 @@ static void pn_function_block_read(PNModule* module,
           case PN_FUNCTION_CODE_INST_VSELECT: {
             PNInstructionVselect* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
                 PNInstructionVselect, module, cur_bb);
+            instruction = &inst->base;
 
             PNValueId value_id;
             PNValue* value =
@@ -1357,6 +1338,7 @@ static void pn_function_block_read(PNModule* module,
             PNInstructionForwardtyperef* inst =
                 PN_BASIC_BLOCK_APPEND_INSTRUCTION(PNInstructionForwardtyperef,
                                                   module, cur_bb);
+            instruction = &inst->base;
 
             inst->base.code = code;
             inst->value_id = pn_record_read_int32(&reader, "value");
@@ -1369,6 +1351,7 @@ static void pn_function_block_read(PNModule* module,
           case PN_FUNCTION_CODE_INST_CALL_INDIRECT: {
             PNInstructionCall* inst = PN_BASIC_BLOCK_APPEND_INSTRUCTION(
                 PNInstructionCall, module, cur_bb);
+            instruction = &inst->base;
 
             inst->base.code = code;
             inst->is_indirect = code == PN_FUNCTION_CODE_INST_CALL_INDIRECT;
@@ -1434,6 +1417,9 @@ static void pn_function_block_read(PNModule* module,
         }
 
         if (code != PN_FUNCTION_CODE_DECLAREBLOCKS) {
+          PN_CALLBACK(read_context, function_instruction,
+                      (module, function_id, function, instruction,
+                       read_context->user_data));
           function->num_instructions++;
         }
 
@@ -1457,10 +1443,14 @@ static void pn_function_block_read(PNModule* module,
   PN_FATAL("Unexpected end of stream.\n");
 }
 
-static void pn_module_block_read(PNModule* module,
+static void pn_module_block_read(PNReadContext* read_context,
+                                 PNModule* module,
                                  PNBlockInfoContext* context,
                                  PNBitStream* bs) {
   PN_BEGIN_TIME(MODULE_BLOCK_READ);
+  PN_CALLBACK(read_context, before_module_block,
+              (module, read_context->user_data));
+
   uint32_t codelen = pn_bitstream_read_vbr(bs, 4);
   PN_CHECK(codelen <= 32);
   pn_bitstream_align_32(bs);
@@ -1473,6 +1463,8 @@ static void pn_module_block_read(PNModule* module,
     uint32_t entry = pn_bitstream_read(bs, codelen);
     switch (entry) {
       case PN_ENTRY_END_BLOCK:
+        PN_CALLBACK(read_context, after_module_block,
+                    (module, read_context->user_data));
         pn_bitstream_align_32(bs);
         PN_END_TIME(MODULE_BLOCK_READ);
         return;
@@ -1483,16 +1475,16 @@ static void pn_module_block_read(PNModule* module,
         PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
         switch (id) {
           case PN_BLOCKID_BLOCKINFO:
-            pn_blockinfo_block_read(module, context, bs);
+            pn_blockinfo_block_read(read_context, module, context, bs);
             break;
           case PN_BLOCKID_TYPE:
-            pn_type_block_read(module, context, bs);
+            pn_type_block_read(read_context, module, context, bs);
             break;
           case PN_BLOCKID_GLOBALVAR:
-            pn_globalvar_block_read(module, context, bs);
+            pn_globalvar_block_read(read_context, module, context, bs);
             break;
           case PN_BLOCKID_VALUE_SYMTAB:
-            pn_value_symtab_block_read(module, context, bs);
+            pn_value_symtab_block_read(read_context, module, context, bs);
             break;
           case PN_BLOCKID_FUNCTION: {
             while (function_id < module->num_functions &&
@@ -1501,12 +1493,12 @@ static void pn_module_block_read(PNModule* module,
             }
 
             pn_function_id_check(module, function_id);
-            pn_function_block_read(module, context, bs, function_id);
+            pn_function_block_read(read_context, module, context, bs,
+                                   function_id);
             function_id++;
             break;
           }
           default:
-            PN_TRACE(MODULE_BLOCK, "*** SUBBLOCK (BAD) (%d)\n", id);
             PN_FATAL("bad block id %d\n", id);
         }
         pn_allocator_reset_to_mark(&module->temp_allocator, mark);
@@ -1516,8 +1508,10 @@ static void pn_module_block_read(PNModule* module,
       case PN_ENTRY_DEFINE_ABBREV: {
         PNAbbrev* abbrev =
             pn_abbrev_read(&module->temp_allocator, bs, &abbrevs);
-        uint32_t abbrev_id = abbrev - abbrevs.abbrevs;
-        pn_abbrev_trace(abbrev, abbrev_id, PN_FALSE);
+        PNAbbrevId abbrev_id = abbrev - abbrevs.abbrevs;
+        PN_CALLBACK(
+            read_context, define_abbrev,
+            (module, abbrev_id, abbrev, PN_FALSE, read_context->user_data));
         break;
       }
 
@@ -1532,7 +1526,8 @@ static void pn_module_block_read(PNModule* module,
           case PN_MODULE_CODE_VERSION: {
             module->version = pn_record_read_int32(&reader, "module version");
             context->use_relative_ids = module->version == 1;
-            PN_TRACE(MODULE_BLOCK, "version %d;\n", module->version);
+            PN_CALLBACK(read_context, module_version,
+                        (module, module->version, read_context->user_data));
             break;
           }
 
@@ -1561,7 +1556,6 @@ static void pn_module_block_read(PNModule* module,
             function->value_liveness_range = NULL;
 #endif /* PN_CALCULATE_LIVENESS */
 
-
             /* Cache number of arguments to function */
             PNType* function_type = &module->types[function->type_id];
             PN_CHECK(function_type->code == PN_TYPE_CODE_FUNCTION);
@@ -1573,19 +1567,9 @@ static void pn_module_block_read(PNModule* module,
             value->type_id = function->type_id;
             value->index = function_id;
 
-            if (PN_IS_TRACE(MODULE_BLOCK)) {
-              PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
-
-              PN_TRACE(
-                  MODULE_BLOCK, "%s %s %s;\n",
-                  function->is_proto ? "declare" : "define",
-                  function->linkage ? "internal" : "external",
-                  pn_type_describe_all(
-                      module, function->type_id,
-                      pn_value_describe(module, function, value_id), PN_FALSE));
-
-              pn_allocator_reset_to_mark(&module->temp_allocator, mark);
-            }
+            PN_CALLBACK(read_context, module_function,
+                        (module, function_id, function, value_id,
+                         read_context->user_data));
             break;
           }
 
@@ -1636,7 +1620,9 @@ static void pn_header_read(PNBitStream* bs) {
   }
 }
 
-void pn_module_read(PNModule* module, PNBitStream* bs) {
+void pn_module_read(PNReadContext* read_context,
+                    PNModule* module,
+                    PNBitStream* bs) {
   pn_header_read(bs);
   uint32_t entry = pn_bitstream_read(bs, 2);
   if (entry != PN_ENTRY_SUBBLOCK) {
@@ -1645,13 +1631,9 @@ void pn_module_read(PNModule* module, PNBitStream* bs) {
 
   PNBlockId block_id = pn_bitstream_read_vbr(bs, 8);
   PN_CHECK(block_id == PN_BLOCKID_MODULE);
-  PN_TRACE(MODULE_BLOCK, "module {  // BlockID = %d\n", block_id);
-  PN_TRACE_INDENT(MODULE_BLOCK, 2);
 
   PNBlockInfoContext context = {};
-  pn_module_block_read(module, &context, bs);
-  PN_TRACE_DEDENT(MODULE_BLOCK, 2);
-  PN_TRACE(MODULE_BLOCK, "}\n");
+  pn_module_block_read(read_context, module, &context, bs);
 }
 
 #endif /* PN_READ_H_ */

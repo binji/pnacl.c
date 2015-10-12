@@ -2110,6 +2110,370 @@ static void pn_runtime_instruction_trace_intrinsics(
 #undef PN_ARG
 }
 
+void pn_trace_define_abbrev(PNModule* module,
+                            PNAbbrevId abbrev_id,
+                            PNAbbrev* abbrev,
+                            PNBool in_blockinfo,
+                            void* user_data) {
+  pn_abbrev_trace(abbrev, abbrev_id, in_blockinfo);
+}
+
+void pn_trace_before_blockinfo_block(PNModule* module, void* user_data) {
+  PN_TRACE(BLOCKINFO_BLOCK, "abbreviations {  // BlockID = %d\n",
+           PN_BLOCKID_BLOCKINFO);
+  PN_TRACE_INDENT(BLOCKINFO_BLOCK, 2);
+
+  /* Indent 2 more, that we we can always dedent 2 on SETBID */
+  PN_TRACE_INDENT(BLOCKINFO_BLOCK, 2);
+}
+
+void pn_trace_blockinfo_setbid(PNModule* module, PNBlockId block_id, void* user_data) {
+  PN_TRACE_DEDENT(BLOCKINFO_BLOCK, 2);
+  const char* name = NULL;
+  (void)name;
+  switch (block_id) {
+    // clang-format off
+    case PN_BLOCKID_BLOCKINFO: name = "abbreviations"; break;
+    case PN_BLOCKID_MODULE: name = "module"; break;
+    case PN_BLOCKID_CONSTANTS: name = "constants"; break;
+    case PN_BLOCKID_FUNCTION: name = "function"; break;
+    case PN_BLOCKID_VALUE_SYMTAB: name = "valuesymtab"; break;
+    case PN_BLOCKID_TYPE: name = "type"; break;
+    case PN_BLOCKID_GLOBALVAR: name = "globals"; break;
+    default: PN_UNREACHABLE(); break;
+      // clang-format on
+  }
+  PN_TRACE(BLOCKINFO_BLOCK, "%s:\n", name);
+  PN_TRACE_INDENT(BLOCKINFO_BLOCK, 2);
+}
+
+void pn_trace_blockinfo_blockname(PNModule* module, void* user_data) {
+  PN_TRACE(BLOCKINFO_BLOCK, "block name\n");
+}
+
+void pn_trace_blockinfo_setrecordname(PNModule* module, void* user_data) {
+  PN_TRACE(BLOCKINFO_BLOCK, "block record name\n");
+}
+
+void pn_trace_after_blockinfo_block(PNModule* module, void* user_data) {
+  PN_TRACE_DEDENT(BLOCKINFO_BLOCK, 4);
+  PN_TRACE(BLOCKINFO_BLOCK, "}\n");
+}
+
+void pn_trace_before_type_block(PNModule* module, void* user_data) {
+  PN_TRACE(TYPE_BLOCK, "types {  // BlockID = %d\n", PN_BLOCKID_TYPE);
+  PN_TRACE_INDENT(TYPE_BLOCK, 2);
+}
+
+void pn_trace_type_num_entries(PNModule* module,
+                               uint32_t num_types,
+                               void* user_data) {
+  PN_TRACE(TYPE_BLOCK, "count %d;\n", module->num_types);
+}
+
+void pn_trace_type_entry(PNModule* module,
+                         PNTypeId type_id,
+                         PNType* type,
+                         void* user_data) {
+  PN_TRACE(TYPE_BLOCK, "@t%d = %s;\n", type_id - 1,
+           pn_type_describe_all(module, type_id - 1, NULL, PN_FALSE));
+}
+
+void pn_trace_after_type_block(PNModule* module, void* user_data) {
+  PN_TRACE_DEDENT(TYPE_BLOCK, 2);
+  PN_TRACE(TYPE_BLOCK, "}\n");
+}
+
+void pn_trace_before_globalvar_block(PNModule* module, void* user_data) {
+  PN_TRACE(GLOBALVAR_BLOCK, "globals {  // BlockID = %d\n",
+           PN_BLOCKID_GLOBALVAR);
+  PN_TRACE_INDENT(GLOBALVAR_BLOCK, 2);
+}
+
+void pn_trace_globalvar_before_var(PNModule* module,
+                                   PNGlobalVarId var_id,
+                                   PNGlobalVar* var,
+                                   PNValueId value_id,
+                                   void* user_data) {
+  PN_TRACE(GLOBALVAR_BLOCK, "%s %s, align %d,\n",
+           var->is_constant ? "const" : "var",
+           pn_value_describe(module, NULL, value_id), var->alignment);
+  PN_TRACE_INDENT(GLOBALVAR_BLOCK, 2);
+}
+
+void pn_trace_globalvar_compound(PNModule* module,
+                                 PNGlobalVarId var_id,
+                                 PNGlobalVar* var,
+                                 uint32_t num_initializers,
+                                 void* user_data) {
+  PN_TRACE(GLOBALVAR_BLOCK, "initializers %d {\n", var->num_initializers);
+  PN_TRACE_INDENT(GLOBALVAR_BLOCK, 2);
+}
+
+void pn_trace_globalvar_zerofill(PNModule* module,
+                                 PNGlobalVarId var_id,
+                                 PNGlobalVar* var,
+                                 uint32_t num_bytes,
+                                 void* user_data) {
+  PN_TRACE(GLOBALVAR_BLOCK, "zerofill %d;\n", num_bytes);
+}
+
+void pn_trace_globalvar_data(PNModule* module,
+                             PNGlobalVarId var_id,
+                             PNGlobalVar* var,
+                             uint8_t* data,
+                             uint32_t num_bytes,
+                             void* user_data) {
+  PN_TRACE(GLOBALVAR_BLOCK, "{");
+
+  if (PN_IS_TRACE(GLOBALVAR_BLOCK)) {
+    uint32_t i;
+    for (i = 0; i < num_bytes; ++i) {
+      if (i) {
+        PN_PRINT(", ");
+        if (i % 14 == 0) {
+          PN_PRINT("\n");
+          PN_TRACE_PRINT_INDENT();
+          PN_PRINT(" ");
+        }
+      }
+      PN_PRINT("%3d", data[i]);
+    }
+  }
+
+  if (PN_IS_TRACE(GLOBALVAR_BLOCK)) {
+    /* Use PN_PRINT instead of PN_TRACE to prevent the automatic inclusion of
+     * the current indentation */
+    PN_PRINT("}\n");
+  }
+}
+
+void pn_trace_globalvar_reloc(PNModule* module,
+                              PNGlobalVarId var_id,
+                              PNGlobalVar* var,
+                              uint32_t value_index,
+                              int32_t addend,
+                              void* user_data) {
+  if (addend > 0) {
+    PN_TRACE(GLOBALVAR_BLOCK, "reloc %s + %d;\n",
+             pn_value_describe(module, NULL, value_index), addend);
+  } else if (addend < 0) {
+    PN_TRACE(GLOBALVAR_BLOCK, "reloc %s - %d;\n",
+             pn_value_describe(module, NULL, value_index), -addend);
+  } else {
+    PN_TRACE(GLOBALVAR_BLOCK, "reloc %s;\n",
+             pn_value_describe(module, NULL, value_index));
+  }
+}
+
+void pn_trace_globalvar_count(PNModule * module, uint32_t count,
+                              void* user_data) {
+  PN_TRACE(GLOBALVAR_BLOCK, "count %d;\n", count);
+}
+
+void pn_trace_globalvar_after_var(PNModule* module,
+                                  PNGlobalVarId var_id,
+                                  PNGlobalVar* var,
+                                  void* user_data) {
+  /* Dedent if there was a previous variable */
+  PN_TRACE_DEDENT(GLOBALVAR_BLOCK, 2);
+  /* Additional dedent if there was a previous compound initializer
+   */
+  if (var->num_initializers > 1) {
+    PN_TRACE(GLOBALVAR_BLOCK, "}\n");
+    PN_TRACE_DEDENT(GLOBALVAR_BLOCK, 2);
+  }
+}
+
+void pn_trace_after_globalvar_block(PNModule* module, void* user_data) {
+  PN_TRACE_DEDENT(GLOBALVAR_BLOCK, 2);
+  PN_TRACE(GLOBALVAR_BLOCK, "}\n");
+}
+
+void pn_trace_before_value_symtab_block(PNModule* module, void* user_data) {
+  PN_TRACE(VALUE_SYMTAB_BLOCK, "valuesymtab {  // BlockID = %d\n",
+           PN_BLOCKID_VALUE_SYMTAB);
+  PN_TRACE_INDENT(VALUE_SYMTAB_BLOCK, 2);
+}
+
+void pn_trace_value_symtab_entry(PNModule* module,
+                                 PNValueId value_id,
+                                 const char* name,
+                                 void* user_data) {
+  PN_TRACE(VALUE_SYMTAB_BLOCK, "%s : \"%s\";\n",
+           pn_value_describe(module, NULL, value_id), name);
+}
+
+void pn_trace_value_symtab_intrinsic(PNModule* module,
+                                     PNIntrinsicId id,
+                                     const char* name,
+                                     void* user_data) {
+  PN_TRACE(INTRINSICS, "intrinsic \"%s\" (%d)\n", name, id);
+}
+
+void pn_trace_after_value_symtab_block(PNModule* module, void* user_data) {
+  PN_TRACE_DEDENT(VALUE_SYMTAB_BLOCK, 2);
+  PN_TRACE(VALUE_SYMTAB_BLOCK, "}\n");
+}
+
+void pn_trace_before_constants_block(PNModule* module,
+                                     PNFunction* function,
+                                     void* user_data) {
+  PN_TRACE(CONSTANTS_BLOCK, "constants {  // BlockID = %d\n",
+           PN_BLOCKID_CONSTANTS);
+  PN_TRACE_INDENT(CONSTANTS_BLOCK, 2);
+  /* Indent 2 more, that we we can always dedent 2 on PN_CONSTANTS_CODE_SETTYPE
+   */
+  PN_TRACE_INDENT(CONSTANTS_BLOCK, 2);
+}
+
+void pn_trace_constants_settype(PNModule* module,
+                                PNFunction* function,
+                                PNTypeId type_id,
+                                void* user_data) {
+  PN_TRACE_DEDENT(CONSTANTS_BLOCK, 2);
+  PN_TRACE(CONSTANTS_BLOCK, "%s:\n", pn_type_describe(module, type_id));
+  PN_TRACE_INDENT(CONSTANTS_BLOCK, 2);
+}
+
+void pn_trace_constants_value(PNModule* module,
+                              PNFunction* function,
+                              PNConstantId constant_id,
+                              PNConstant* constant,
+                              PNValueId value_id,
+                              void* user_data) {
+  switch (constant->code) {
+    case PN_CONSTANTS_CODE_UNDEF:
+      PN_TRACE(CONSTANTS_BLOCK, "%s = %s undef;\n",
+               pn_value_describe(module, function, value_id),
+               pn_type_describe(module, constant->type_id));
+      break;
+
+    case PN_CONSTANTS_CODE_INTEGER: {
+      uint32_t value;
+      switch (constant->basic_type) {
+        case PN_BASIC_TYPE_INT1:
+        case PN_BASIC_TYPE_INT8:
+          value = constant->value.i8;
+          goto int32;
+
+        case PN_BASIC_TYPE_INT16:
+          value = constant->value.i16;
+          goto int32;
+
+        case PN_BASIC_TYPE_INT32:
+          value = constant->value.i32;
+          goto int32;
+
+        int32:
+          PN_TRACE(CONSTANTS_BLOCK, "%s = %s %d;\n",
+                   pn_value_describe(module, function, value_id),
+                   pn_type_describe(module, constant->type_id), value);
+        break;
+
+        case PN_BASIC_TYPE_INT64:
+          PN_TRACE(CONSTANTS_BLOCK, "%s = %s %" PRId64 ";\n",
+                   pn_value_describe(module, function, value_id),
+                   pn_type_describe(module, constant->type_id),
+                   constant->value.i64);
+          break;
+
+        default:
+          PN_UNREACHABLE();
+          break;
+      }
+      break;
+    }
+
+    case PN_CONSTANTS_CODE_FLOAT:
+      if (constant->basic_type == PN_BASIC_TYPE_FLOAT) {
+        PN_TRACE(CONSTANTS_BLOCK, "%s = %s %g;\n",
+                 pn_value_describe(module, function, value_id),
+                 pn_type_describe(module, constant->type_id),
+                 constant->value.f32);
+      } else {
+        PN_TRACE(CONSTANTS_BLOCK, "%s = %s %g;\n",
+                 pn_value_describe(module, function, value_id),
+                 pn_type_describe(module, constant->type_id),
+                 constant->value.f64);
+      }
+      break;
+
+    default:
+      PN_UNREACHABLE();
+      break;
+  }
+}
+
+void pn_trace_after_constants_block(PNModule* module,
+                                    PNFunction* function,
+                                    void* user_data) {
+  PN_TRACE_DEDENT(CONSTANTS_BLOCK, 2);
+  PN_TRACE(CONSTANTS_BLOCK, "}\n");
+  PN_TRACE_DEDENT(CONSTANTS_BLOCK, 2);
+}
+
+void pn_trace_before_function_block(PNModule* module,
+                                    PNFunctionId function_id,
+                                    PNFunction* function,
+                                    void* user_data) {
+  if (PN_IS_TRACE(FUNCTION_BLOCK)) {
+    pn_function_print_header(module, function, function_id);
+  }
+}
+
+void pn_trace_function_numblocks(PNModule* module,
+                                 PNFunctionId function_id,
+                                 PNFunction* function,
+                                 uint32_t num_bbs,
+                                 void* user_data) {
+  PN_TRACE(FUNCTION_BLOCK, "blocks %d;\n", num_bbs);
+}
+
+void pn_trace_after_function_block(PNModule* module,
+                                   PNFunctionId function_id,
+                                   PNFunction* function,
+                                   void* user_data) {
+  pn_function_trace(module, function, function_id);
+  PN_TRACE_DEDENT(FUNCTION_BLOCK, 2);
+  PN_TRACE(FUNCTION_BLOCK, "}\n");
+}
+
+void pn_trace_before_module_block(PNModule* module, void* user_data) {
+  PN_TRACE(MODULE_BLOCK, "module {  // BlockID = %d\n", PN_BLOCKID_MODULE);
+  PN_TRACE_INDENT(MODULE_BLOCK, 2);
+}
+
+void pn_trace_module_version(PNModule* module,
+                             uint32_t version,
+                             void* user_data) {
+  PN_TRACE(MODULE_BLOCK, "version %d;\n", module->version);
+}
+
+void pn_trace_module_function(PNModule* module,
+                              PNFunctionId function_id,
+                              PNFunction* function,
+                              PNValueId value_id,
+                              void* user_data) {
+  if (PN_IS_TRACE(MODULE_BLOCK)) {
+    PNAllocatorMark mark = pn_allocator_mark(&module->temp_allocator);
+
+    PN_TRACE(MODULE_BLOCK, "%s %s %s;\n",
+             function->is_proto ? "declare" : "define",
+             function->linkage ? "internal" : "external",
+             pn_type_describe_all(module, function->type_id,
+                                  pn_value_describe(module, function, value_id),
+                                  PN_FALSE));
+
+    pn_allocator_reset_to_mark(&module->temp_allocator, mark);
+  }
+}
+
+void pn_trace_after_module_block(PNModule* module, void* user_data) {
+  PN_TRACE_DEDENT(MODULE_BLOCK, 2);
+  PN_TRACE(MODULE_BLOCK, "}\n");
+}
+
 #else
 
 static void pn_instruction_trace(PNModule* module,

@@ -60,6 +60,7 @@ typedef uint32_t PNGlobalVarId;
 typedef uint32_t PNInstructionId;
 typedef uint16_t PNBasicBlockId;
 typedef uint16_t PNAlignment;
+typedef uint32_t PNAbbrevId;
 typedef uint32_t PNJmpBufId;
 
 typedef uint8_t pn_u8;
@@ -1447,12 +1448,133 @@ typedef struct PNRuntimePhiAssign {
   PNValueId dest_value_id;
 } PNRuntimePhiAssign;
 
+typedef struct PNReadContext {
+  void* user_data;
+  void (*define_abbrev)(PNModule* module,
+                        PNAbbrevId abbrev_id,
+                        PNAbbrev* abbrev,
+                        PNBool in_blockinfo,
+                        void* user_data);
+
+  void (*before_blockinfo_block)(PNModule* module, void* user_data);
+  void (*blockinfo_setbid)(PNModule* module,
+                           PNBlockId block_id,
+                           void* user_data);
+  void (*blockinfo_blockname)(PNModule* module, void* user_data);
+  void (*blockinfo_setrecordname)(PNModule* module, void* user_data);
+  void (*after_blockinfo_block)(PNModule* module, void* user_data);
+
+  void (*before_type_block)(PNModule* module, void* user_data);
+  void (*type_num_entries)(PNModule* module,
+                           uint32_t num_types,
+                           void* user_data);
+  void (*type_entry)(PNModule* module,
+                     PNTypeId type_id,
+                     PNType* type,
+                     void* user_data);
+  void (*after_type_block)(PNModule* module, void* user_data);
+
+  void (*before_globalvar_block)(PNModule* module, void* user_data);
+  void (*globalvar_before_var)(PNModule* module,
+                               PNGlobalVarId var_id,
+                               PNGlobalVar* var,
+                               PNValueId value_id,
+                               void* user_data);
+  void (*globalvar_compound)(PNModule* module,
+                             PNGlobalVarId var_id,
+                             PNGlobalVar* var,
+                             uint32_t num_initializers,
+                             void* user_data);
+  void (*globalvar_zerofill)(PNModule* module,
+                             PNGlobalVarId var_id,
+                             PNGlobalVar* var,
+                             uint32_t num_bytes,
+                             void* user_data);
+  void (*globalvar_data)(PNModule* module,
+                         PNGlobalVarId var_id,
+                         PNGlobalVar* var,
+                         uint8_t* data_start,
+                         uint32_t num_bytes,
+                         void* user_data);
+  void (*globalvar_reloc)(PNModule* module,
+                          PNGlobalVarId var_id,
+                          PNGlobalVar* var,
+                          uint32_t value_index,
+                          int32_t addend,
+                          void* user_data);
+  void (*globalvar_count)(PNModule* module, uint32_t count, void* user_data);
+  void (*globalvar_after_var)(PNModule* module,
+                              PNGlobalVarId var_id,
+                              PNGlobalVar* var,
+                              void* user_data);
+  void (*after_globalvar_block)(PNModule* module, void* user_data);
+
+  void (*before_value_symtab_block)(PNModule* module, void* user_data);
+  void (*value_symtab_entry)(PNModule* module,
+                             PNValueId value_id,
+                             const char* name,
+                             void* user_data);
+  void (*value_symtab_intrinsic)(PNModule* module,
+                                 PNIntrinsicId id,
+                                 const char* name,
+                                 void* user_data);
+  void (*after_value_symtab_block)(PNModule* module, void* user_data);
+
+  void (*before_constants_block)(PNModule* module,
+                                 PNFunction* function,
+                                 void* user_data);
+  void (*constants_settype)(PNModule* module,
+                            PNFunction* function,
+                            PNTypeId type_id,
+                            void* user_data);
+  void (*constants_value)(PNModule* module,
+                          PNFunction* function,
+                          PNConstantId constant_id,
+                          PNConstant* constant,
+                          PNValueId value_id,
+                          void* user_data);
+  void (*after_constants_block)(PNModule* module,
+                                PNFunction* function,
+                                void* user_data);
+
+  void (*before_function_block)(PNModule* module,
+                                PNFunctionId function_id,
+                                PNFunction* function,
+                                void* user_data);
+  void (*function_numblocks)(PNModule* module,
+                             PNFunctionId function_id,
+                             PNFunction* function,
+                             uint32_t num_bbs,
+                             void* user_data);
+  void (*function_instruction)(PNModule* module,
+                               PNFunctionId function_id,
+                               PNFunction* function,
+                               PNInstruction* instruction,
+                               void* user_data);
+  void (*after_function_block)(PNModule* module,
+                               PNFunctionId function_id,
+                               PNFunction* function,
+                               void* user_data);
+
+  void (*before_module_block)(PNModule* module, void* user_data);
+  void (*module_version)(PNModule* module, uint32_t version, void* user_data);
+  void (*module_function)(PNModule* module,
+                          PNFunctionId function_id,
+                          PNFunction* function,
+                          PNValueId value_id,
+                          void* user_data);
+  void (*after_module_block)(PNModule* module, void* user_data);
+} PNReadContext;
+
+#define PN_CALLBACK(var, func, params) \
+  (var->func ? var->func params : 0) /* no semicolon */
+
 /**** FORWARD DECLARATIONS ****************************************************/
 
 #define PN_BUILTIN(e)                                                          \
   static PNRuntimeValue pn_builtin_##e(PNThread* thread, PNFunction* function, \
                                        uint32_t num_args, PNValueId* arg_ids);
-  PN_FOREACH_BUILTIN(PN_BUILTIN)
+PN_FOREACH_BUILTIN(PN_BUILTIN)
 #undef PN_BUILTIN
 
 #endif /* PNACL_H_ */
