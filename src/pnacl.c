@@ -88,6 +88,10 @@ static const char* g_pn_opcode_names[] = {
 #define PN_INTRINSIC_OPCODE(e, name) "INTRINSIC_" #e,
   PN_FOREACH_INTRINSIC(PN_INTRINSIC_OPCODE)
 #undef PN_INTRINSIC_OPCODE
+
+#define PN_ATOMIC_RMW_INTRINSIC_OPCODE(e) "INTRINSIC_" #e,
+  PN_FOREACH_ATOMIC_RMW_INTRINSIC_OPCODE(PN_ATOMIC_RMW_INTRINSIC_OPCODE)
+#undef PN_ATOMIC_RMW_INTRINSIC_OPCODE
 };
 
 /**** SOURCES *****************************************************************/

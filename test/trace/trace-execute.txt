@@ -1,8 +1,8 @@
 # FLAGS: --trace-execute
 # FILE: res/main.pexe
-intrinsic "llvm.nacl.read.tp" (28)
-intrinsic "llvm.trap" (34)
-intrinsic "_start" (35)
+intrinsic "llvm.nacl.read.tp" (29)
+intrinsic "llvm.trap" (35)
+intrinsic "_start" (36)
 intrinsic "llvm.memcpy.p0i8.p0i8.i32" (8)
 startinfo = 3640
 envc = 3644 (0)

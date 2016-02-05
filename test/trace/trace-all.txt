@@ -332,7 +332,7 @@ module {  // BlockID = 8
     @g0 : "__libnacl_irt_fdio";
     @g2 : "__libnacl_irt_basic";
     @f15 : "llvm.nacl.read.tp";
-    intrinsic "llvm.nacl.read.tp" (28)
+    intrinsic "llvm.nacl.read.tp" (29)
     @f2 : "__libnacl_mandatory_irt_query";
     @f9 : "stub_seek";
     @g5 : ".str";
@@ -349,7 +349,7 @@ module {  // BlockID = 8
     @f10 : "stub_fstat";
     @g8 : ".str9";
     @f1 : "llvm.trap";
-    intrinsic "llvm.trap" (34)
+    intrinsic "llvm.trap" (35)
     @g21 : ".str39";
     @g14 : ".str6";
     @f5 : "stub_dup";
@@ -358,7 +358,7 @@ module {  // BlockID = 8
     @f8 : "stub_write";
     @g7 : "__nacl_initial_thread_stack_end";
     @f12 : "_start";
-    intrinsic "_start" (35)
+    intrinsic "_start" (36)
     @f0 : "llvm.memcpy.p0i8.p0i8.i32";
     intrinsic "llvm.memcpy.p0i8.p0i8.i32" (8)
     @f13 : "__libnacl_irt_mprotect";

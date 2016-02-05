@@ -409,6 +409,7 @@ typedef enum PNBasicType {
   V(LLVM_NACL_ATOMIC_CMPXCHG_I16, "llvm.nacl.atomic.cmpxchg.i16") \
   V(LLVM_NACL_ATOMIC_CMPXCHG_I32, "llvm.nacl.atomic.cmpxchg.i32") \
   V(LLVM_NACL_ATOMIC_CMPXCHG_I64, "llvm.nacl.atomic.cmpxchg.i64") \
+  V(LLVM_NACL_ATOMIC_FENCE_ALL, "llvm.nacl.atomic.fence.all")     \
   V(LLVM_NACL_ATOMIC_LOAD_I8, "llvm.nacl.atomic.load.i8")         \
   V(LLVM_NACL_ATOMIC_LOAD_I16, "llvm.nacl.atomic.load.i16")       \
   V(LLVM_NACL_ATOMIC_LOAD_I32, "llvm.nacl.atomic.load.i32")       \
@@ -638,30 +639,6 @@ typedef enum PNIntrinsicId {
   V(ICMP_ULT_INT16)                          \
   V(ICMP_ULT_INT32)                          \
   V(ICMP_ULT_INT64)                          \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_ADD_I8)       \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_ADD_I16)      \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_ADD_I32)      \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_ADD_I64)      \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_AND_I8)       \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_AND_I16)      \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_AND_I32)      \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_AND_I64)      \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I8)  \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I16) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I32) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_EXCHANGE_I64) \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_OR_I8)        \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_OR_I16)       \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_OR_I32)       \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_OR_I64)       \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_SUB_I8)       \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_SUB_I16)      \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_SUB_I32)      \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_SUB_I64)      \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_XOR_I8)       \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_XOR_I16)      \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_XOR_I32)      \
-  V(INTRINSIC_LLVM_NACL_ATOMIC_XOR_I64)      \
   V(LOAD_DOUBLE)                             \
   V(LOAD_FLOAT)                              \
   V(LOAD_INT8)                               \
@@ -684,6 +661,32 @@ typedef enum PNIntrinsicId {
   V(UNREACHABLE)                             \
   V(VSELECT)
 
+#define PN_FOREACH_ATOMIC_RMW_INTRINSIC_OPCODE(V) \
+  V(LLVM_NACL_ATOMIC_ADD_I8)                      \
+  V(LLVM_NACL_ATOMIC_ADD_I16)                     \
+  V(LLVM_NACL_ATOMIC_ADD_I32)                     \
+  V(LLVM_NACL_ATOMIC_ADD_I64)                     \
+  V(LLVM_NACL_ATOMIC_AND_I8)                      \
+  V(LLVM_NACL_ATOMIC_AND_I16)                     \
+  V(LLVM_NACL_ATOMIC_AND_I32)                     \
+  V(LLVM_NACL_ATOMIC_AND_I64)                     \
+  V(LLVM_NACL_ATOMIC_EXCHANGE_I8)                 \
+  V(LLVM_NACL_ATOMIC_EXCHANGE_I16)                \
+  V(LLVM_NACL_ATOMIC_EXCHANGE_I32)                \
+  V(LLVM_NACL_ATOMIC_EXCHANGE_I64)                \
+  V(LLVM_NACL_ATOMIC_OR_I8)                       \
+  V(LLVM_NACL_ATOMIC_OR_I16)                      \
+  V(LLVM_NACL_ATOMIC_OR_I32)                      \
+  V(LLVM_NACL_ATOMIC_OR_I64)                      \
+  V(LLVM_NACL_ATOMIC_SUB_I8)                      \
+  V(LLVM_NACL_ATOMIC_SUB_I16)                     \
+  V(LLVM_NACL_ATOMIC_SUB_I32)                     \
+  V(LLVM_NACL_ATOMIC_SUB_I64)                     \
+  V(LLVM_NACL_ATOMIC_XOR_I8)                      \
+  V(LLVM_NACL_ATOMIC_XOR_I16)                     \
+  V(LLVM_NACL_ATOMIC_XOR_I32)                     \
+  V(LLVM_NACL_ATOMIC_XOR_I64)
+
 typedef enum PNOpcode {
 #define PN_OPCODE(e) PN_OPCODE_##e,
   PN_FOREACH_OPCODE(PN_OPCODE)
@@ -692,6 +695,10 @@ typedef enum PNOpcode {
 #define PN_INTRINSIC_OPCODE(e, name) PN_OPCODE_INTRINSIC_##e,
   PN_FOREACH_INTRINSIC(PN_INTRINSIC_OPCODE)
 #undef PN_INTRINSIC_OPCODE
+
+#define PN_ATOMIC_RMW_INTRINSIC_OPCODE(e) PN_OPCODE_INTRINSIC_##e,
+  PN_FOREACH_ATOMIC_RMW_INTRINSIC_OPCODE(PN_ATOMIC_RMW_INTRINSIC_OPCODE)
+#undef PN_ATOMIC_RMW_INTRINSIC_OPCODE
 
   PN_MAX_OPCODE,
 } PNOpcode;

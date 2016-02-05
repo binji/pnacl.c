@@ -110,6 +110,10 @@ static void pn_thread_push_function(PNThread* thread,
   thread->current_frame = frame;
   thread->function = function;
   thread->inst = function->instructions;
+  if (thread->inst == NULL) {
+    PN_CHECK(function->name);
+    PN_FATAL("Unimplemented intrinsic: %s\n", function->name);
+  }
 
   uint32_t n;
   for (n = 0; n < function->num_constants; ++n) {
@@ -805,6 +809,14 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       break;
 
 #undef PN_OPCODE_INTRINSIC_CMPXCHG
+
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_FENCE_ALL: {
+      /* Do nothing. */
+      PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
+      thread->inst +=
+          sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId);
+      break;
+    }
 
 #define PN_OPCODE_INTRINSIC_LOAD(ty)                                        \
   do {                                                                      \

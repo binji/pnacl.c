@@ -1,6 +1,6 @@
 # FLAGS: --trace-execute
 # FILE: res/bitcast.pexe
-intrinsic "_start" (35)
+intrinsic "_start" (36)
 startinfo = 1024
 envc = 1028 (0)
 argc = 1032 (1)

@@ -1,8 +1,8 @@
 # FLAGS: --trace-intrinsics
 # FILE: res/main.pexe
-intrinsic "llvm.nacl.read.tp" (28)
-intrinsic "llvm.trap" (34)
-intrinsic "_start" (35)
+intrinsic "llvm.nacl.read.tp" (29)
+intrinsic "llvm.trap" (35)
+intrinsic "_start" (36)
 intrinsic "llvm.memcpy.p0i8.p0i8.i32" (8)
     llvm.memcpy(dst_p:4096, src_p:2496, len:1144, align:1, is_volatile:0)
     llvm.nacl.read.tp()
