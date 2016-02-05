@@ -10,17 +10,6 @@
   pn_##ty name = value##n.ty;                                        \
   (void) name /* no semicolon */
 
-static PNErrno pn_from_errno(int e) {
-  switch (e) {
-#define PN_ERRNO(name, id, str) case name: return PN_##name;
-  PN_FOREACH_ERRNO(PN_ERRNO)
-#undef PN_ERRNO
-    default:
-      PN_FATAL("Unknown errno: %d\n", e);
-      return PN_ENOSYS;
-  }
-}
-
 static PNRuntimeValue pn_builtin_NACL_IRT_QUERY(PNThread* thread,
                                                 PNFunction* function,
                                                 uint32_t num_args,
@@ -203,15 +192,10 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_CLOSE(PNThread* thread,
                                                      PNFunction* function,
                                                      uint32_t num_args,
                                                      PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
   PN_CHECK(num_args == 1);
   PN_BUILTIN_ARG(fd, 0, u32);
-  PN_TRACE(IRT, "    NACL_IRT_FDIO_CLOSE(%u)\n", fd);
-  if (fd > 2) {
-    PN_TRACE(IRT, "      fd > 2, errno = EINVAL\n");
-    return pn_executor_value_u32(PN_EINVAL);
-  }
-  /* Lie and say we closed the fd */
-  return pn_executor_value_u32(0);
+  return pn_executor_value_u32(pn_filesystem_fdio_close(executor, fd));
 }
 
 static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_READ(PNThread* thread,
@@ -224,19 +208,22 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_READ(PNThread* thread,
   PN_BUILTIN_ARG(buf_p, 1, u32);
   PN_BUILTIN_ARG(count, 2, u32);
   PN_BUILTIN_ARG(nread_p, 3, u32);
-  PN_TRACE(IRT, "    NACL_IRT_FDIO_READ(%u, %u, %u, %u)\n", fd, buf_p, count,
-           nread_p);
-  if (fd != 0) {
-    PN_TRACE(IRT, "      fd != 0, errno = EINVAL\n");
-    return pn_executor_value_u32(PN_EINVAL);
-  }
+  return pn_executor_value_u32(
+      pn_filesystem_fdio_read(executor, fd, buf_p, count, nread_p));
+}
 
-  pn_memory_check(executor->memory, buf_p, count);
-  void* buf_pointer = executor->memory->data + buf_p;
-  ssize_t nread = read(fd, buf_pointer, count);
-  pn_memory_write_u32(executor->memory, nread_p, (int32_t)nread);
-  PN_TRACE(IRT, "      returning %d\n", (int32_t)nread);
-  return pn_executor_value_u32(0);
+static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_SEEK(PNThread* thread,
+                                                    PNFunction* function,
+                                                    uint32_t num_args,
+                                                    PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
+  PN_CHECK(num_args == 4);
+  PN_BUILTIN_ARG(fd, 0, u32);
+  PN_BUILTIN_ARG(offset, 1, u32);
+  PN_BUILTIN_ARG(whence, 2, u32);
+  PN_BUILTIN_ARG(new_offset_p, 3, u32);
+  return pn_executor_value_u32(
+      pn_filesystem_fdio_seek(executor, fd, offset, whence, new_offset_p));
 }
 
 static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_WRITE(PNThread* thread,
@@ -249,19 +236,8 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_WRITE(PNThread* thread,
   PN_BUILTIN_ARG(buf_p, 1, u32);
   PN_BUILTIN_ARG(count, 2, u32);
   PN_BUILTIN_ARG(nwrote_p, 3, u32);
-  PN_TRACE(IRT, "    NACL_IRT_FDIO_WRITE(%u, %u, %u, %u)\n", fd, buf_p, count,
-           nwrote_p);
-  if (fd != 1 && fd != 2) {
-    PN_TRACE(IRT, "      fd != 1 && fd != 2, errno = EINVAL\n");
-    return pn_executor_value_u32(PN_EINVAL);
-  }
-
-  pn_memory_check(executor->memory, buf_p, count);
-  void* buf_pointer = executor->memory->data + buf_p;
-  ssize_t nwrote = write(fd, buf_pointer, count);
-  pn_memory_write_u32(executor->memory, nwrote_p, (int32_t)nwrote);
-  PN_TRACE(IRT, "      returning %d\n", (int32_t)nwrote);
-  return pn_executor_value_u32(0);
+  return pn_executor_value_u32(
+      pn_filesystem_fdio_write(executor, fd, buf_p, count, nwrote_p));
 }
 
 static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_FSTAT(PNThread* thread,
@@ -272,59 +248,7 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_FSTAT(PNThread* thread,
   PN_CHECK(num_args == 2);
   PN_BUILTIN_ARG(fd, 0, u32);
   PN_BUILTIN_ARG(stat_p, 1, u32);
-  PN_TRACE(IRT, "    NACL_IRT_FDIO_FSTAT(%u, %u)\n", fd, stat_p);
-  if (fd > 2) {
-    PN_TRACE(IRT, "      fd > 2, errno = EINVAL\n");
-    return pn_executor_value_u32(PN_EINVAL);
-  }
-
-  /* TODO(binji): fake values? */
-  struct stat buf;
-  int result = fstat(fd, &buf);
-  if (result != 0) {
-    PNErrno err = pn_from_errno(errno);
-    PN_TRACE(IRT, "      errno = %d\n", err);
-    return pn_executor_value_u32(err);
-  }
-
-  /*
-  * offset size
-  * 0  8 dev_t     st_dev;
-  * 8  8 ino_t     st_ino;
-  * 16 4 mode_t    st_mode;
-  * 20 4 nlink_t   st_nlink;
-  * 24 4 uid_t     st_uid;
-  * 28 4 gid_t     st_gid;
-  * 32 8 dev_t     st_rdev;
-  * 40 8 off_t     st_size;
-  * 48 4 blksize_t st_blksize;
-  * 52 4 blkcnt_t  st_blocks;
-  * 56 8 time_t    st_atime;
-  * 64 8 int64_t   st_atimensec;
-  * 72 8 time_t    st_mtime;
-  * 80 8 int64_t   st_mtimensec;
-  * 88 8 time_t    st_ctime;
-  * 96 8 int64_t   st_ctimensec;
-  * 104 total
-  */
-  pn_memory_write_u64(executor->memory, stat_p + 0, buf.st_dev);
-  pn_memory_write_u64(executor->memory, stat_p + 8, buf.st_ino);
-  pn_memory_write_u32(executor->memory, stat_p + 16, buf.st_mode);
-  pn_memory_write_u32(executor->memory, stat_p + 20, buf.st_nlink);
-  pn_memory_write_u32(executor->memory, stat_p + 24, buf.st_uid);
-  pn_memory_write_u32(executor->memory, stat_p + 28, buf.st_gid);
-  pn_memory_write_u64(executor->memory, stat_p + 32, buf.st_rdev);
-  pn_memory_write_u64(executor->memory, stat_p + 40, buf.st_size);
-  pn_memory_write_u32(executor->memory, stat_p + 48, buf.st_blksize);
-  pn_memory_write_u32(executor->memory, stat_p + 52, buf.st_blocks);
-  pn_memory_write_u64(executor->memory, stat_p + 56, buf.st_atime);
-  pn_memory_write_u64(executor->memory, stat_p + 64, buf.st_atim.tv_nsec);
-  pn_memory_write_u64(executor->memory, stat_p + 72, buf.st_mtime);
-  pn_memory_write_u64(executor->memory, stat_p + 80, buf.st_mtim.tv_nsec);
-  pn_memory_write_u64(executor->memory, stat_p + 88, buf.st_ctime);
-  pn_memory_write_u64(executor->memory, stat_p + 96, buf.st_ctim.tv_nsec);
-
-  return pn_executor_value_u32(0);
+  return pn_executor_value_u32(pn_filesystem_fdio_fstat(executor, fd, stat_p));
 }
 
 static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_ISATTY(PNThread* thread,
@@ -335,17 +259,8 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FDIO_ISATTY(PNThread* thread,
   PN_CHECK(num_args == 2);
   PN_BUILTIN_ARG(fd, 0, u32);
   PN_BUILTIN_ARG(result_p, 1, u32);
-  PN_TRACE(IRT, "    NACL_IRT_FDIO_ISATTY(%u, %u)\n", fd, result_p);
-
-  if (fd > 2) {
-    PN_TRACE(IRT, "      fd > 2, errno = EINVAL\n");
-    return pn_executor_value_u32(PN_EINVAL);
-  }
-
-  int32_t result = isatty(fd);
-  pn_memory_write_i32(executor->memory, result_p, result);
-  PN_TRACE(IRT, "      returning %d, errno = 0\n", result);
-  return pn_executor_value_u32(0);
+  return pn_executor_value_u32(
+      pn_filesystem_fdio_isatty(executor, fd, result_p));
 }
 
 static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_GETCWD(PNThread* thread,
@@ -356,14 +271,8 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_GETCWD(PNThread* thread,
   PN_CHECK(num_args == 2);
   PN_BUILTIN_ARG(pathname_p, 0, u32);
   PN_BUILTIN_ARG(len, 1, u32);
-  PN_TRACE(IRT, "    NACL_IRT_FILENAME_GETCWD(%u, %u)\n", pathname_p, len);
-
-  pn_memory_check(executor->memory, pathname_p, len);
-  void* pathname = executor->memory->data + pathname_p;
-  void* result = getcwd(pathname, len);
-  PNErrno err = result ? 0 : pn_from_errno(errno);
-  PN_TRACE(IRT, "      returning %s, errno = %d\n", (char*)pathname, err);
-  return pn_executor_value_u32(err);
+  return pn_executor_value_u32(
+      pn_filesystem_filename_getcwd(executor, pathname_p, len));
 }
 
 static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_OPEN(PNThread* thread,
@@ -376,15 +285,20 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_OPEN(PNThread* thread,
   PN_BUILTIN_ARG(oflag, 1, u32);
   PN_BUILTIN_ARG(cmode, 2, u32);
   PN_BUILTIN_ARG(newfd_p, 3, u32);
+  return pn_executor_value_u32(
+      pn_filesystem_filename_open(executor, pathname_p, oflag, cmode, newfd_p));
+}
 
-  pn_memory_check_cstr(executor->memory, pathname_p);
-  char* pathname = executor->memory->data + pathname_p;
-  PN_TRACE(IRT, "    NACL_IRT_FILENAME_OPEN(%u (%s), %u, %u, %u)\n", pathname_p,
-           pathname, oflag, cmode, newfd_p);
-  PN_TRACE(IRT, "      errno = ENOENT\n");
-  (void)executor;
-  (void)pathname;
-  return pn_executor_value_u32(PN_ENOENT);
+static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_ACCESS(PNThread* thread,
+                                                          PNFunction* function,
+                                                          uint32_t num_args,
+                                                          PNValueId* arg_ids) {
+  PNExecutor* executor = thread->executor;
+  PN_CHECK(num_args == 2);
+  PN_BUILTIN_ARG(pathname_p, 0, u32);
+  PN_BUILTIN_ARG(amode, 1, u32);
+  return pn_executor_value_u32(
+      pn_filesystem_filename_access(executor, pathname_p, amode));
 }
 
 static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_READLINK(
@@ -398,19 +312,8 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_READLINK(
   PN_BUILTIN_ARG(buf_p, 1, u32);
   PN_BUILTIN_ARG(count, 2, u32);
   PN_BUILTIN_ARG(nread_p, 3, u32);
-
-  pn_memory_check_cstr(executor->memory, path_p);
-  char* path = executor->memory->data + path_p;
-
-  PN_TRACE(IRT, "    NACL_IRT_FILENAME_READLINK(%u (%s), %u, %u, %u)\n", path_p,
-           path, buf_p, count, nread_p);
-  pn_memory_check(executor->memory, buf_p, count);
-  void* buf = executor->memory->data + buf_p;
-  ssize_t nread = readlink(path, buf, count);
-  pn_memory_write_u32(executor->memory, nread_p, (int32_t)nread);
-  PNErrno err = nread >= 0 ? 0 : pn_from_errno(errno);
-  PN_TRACE(IRT, "      nread = %d, errno = %d\n", (int32_t)nread, err);
-  return pn_executor_value_u32(err);
+  return pn_executor_value_u32(
+      pn_filesystem_filename_readlink(executor, path_p, buf_p, count, nread_p));
 }
 
 static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_STAT(PNThread* thread,
@@ -421,39 +324,8 @@ static PNRuntimeValue pn_builtin_NACL_IRT_FILENAME_STAT(PNThread* thread,
   PN_CHECK(num_args == 2);
   PN_BUILTIN_ARG(pathname_p, 0, u32);
   PN_BUILTIN_ARG(stat_p, 1, u32);
-
-  pn_memory_check_cstr(executor->memory, pathname_p);
-  char* pathname = executor->memory->data + pathname_p;
-
-  PN_TRACE(IRT, "    NACL_IRT_FILENAME_STAT(%u (%s), %u)\n", pathname_p,
-           pathname, stat_p);
-
-  struct stat buf;
-  int result = stat(pathname, &buf);
-  if (result != 0) {
-    PNErrno err = pn_from_errno(errno);
-    PN_TRACE(IRT, "      errno = %d\n", err);
-    return pn_executor_value_u32(err);
-  }
-
-  pn_memory_write_u64(executor->memory, stat_p + 0, buf.st_dev);
-  pn_memory_write_u64(executor->memory, stat_p + 8, buf.st_ino);
-  pn_memory_write_u32(executor->memory, stat_p + 16, buf.st_mode);
-  pn_memory_write_u32(executor->memory, stat_p + 20, buf.st_nlink);
-  pn_memory_write_u32(executor->memory, stat_p + 24, buf.st_uid);
-  pn_memory_write_u32(executor->memory, stat_p + 28, buf.st_gid);
-  pn_memory_write_u64(executor->memory, stat_p + 32, buf.st_rdev);
-  pn_memory_write_u64(executor->memory, stat_p + 40, buf.st_size);
-  pn_memory_write_u32(executor->memory, stat_p + 48, buf.st_blksize);
-  pn_memory_write_u32(executor->memory, stat_p + 52, buf.st_blocks);
-  pn_memory_write_u64(executor->memory, stat_p + 56, buf.st_atime);
-  pn_memory_write_u64(executor->memory, stat_p + 64, buf.st_atim.tv_nsec);
-  pn_memory_write_u64(executor->memory, stat_p + 72, buf.st_mtime);
-  pn_memory_write_u64(executor->memory, stat_p + 80, buf.st_mtim.tv_nsec);
-  pn_memory_write_u64(executor->memory, stat_p + 88, buf.st_ctime);
-  pn_memory_write_u64(executor->memory, stat_p + 96, buf.st_ctim.tv_nsec);
-
-  return pn_executor_value_u32(0);
+  return pn_executor_value_u32(
+      pn_filesystem_filename_stat(executor, pathname_p, stat_p));
 }
 
 static PNRuntimeValue pn_builtin_NACL_IRT_MEMORY_MMAP(PNThread* thread,
@@ -843,7 +715,6 @@ PN_BUILTIN_STUB(NACL_IRT_BASIC_NANOSLEEP)
 PN_BUILTIN_STUB(NACL_IRT_BASIC_SCHED_YIELD)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_DUP)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_DUP2)
-PN_BUILTIN_STUB(NACL_IRT_FDIO_SEEK)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_GETDENTS)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_FCHDIR)
 PN_BUILTIN_STUB(NACL_IRT_FDIO_FCHMOD)
@@ -860,7 +731,6 @@ PN_BUILTIN_STUB(NACL_IRT_FILENAME_LINK)
 PN_BUILTIN_STUB(NACL_IRT_FILENAME_RENAME)
 PN_BUILTIN_STUB(NACL_IRT_FILENAME_SYMLINK)
 PN_BUILTIN_STUB(NACL_IRT_FILENAME_CHMOD)
-PN_BUILTIN_STUB(NACL_IRT_FILENAME_ACCESS)
 PN_BUILTIN_STUB(NACL_IRT_FILENAME_UTIMES)
 PN_BUILTIN_STUB(NACL_IRT_MEMORY_MPROTECT)
 PN_BUILTIN_STUB(NACL_IRT_TLS_GET)

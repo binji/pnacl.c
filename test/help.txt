@@ -5,6 +5,7 @@ options:
   -h, --help                          
   -m, --memory-size=SIZE              size of runtime memory. suffixes k=1024, m=1024*1024
   -n, --no-run                        
+  -a, --filesystem-access             allow access to host filesystem
   -e, --env=KEY=VALUE                 set runtime environment variable KEY to VALUE
   -E, --use-host-env                  
       --no-dedupe-phi-nodes           

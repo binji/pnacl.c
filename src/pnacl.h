@@ -42,12 +42,14 @@
 
 #define PN_DEFAULT_ALIGN 8
 
+#define PN_MAX_FDS 1000
 #define PN_MIN_CHUNKSIZE (64 * 1024)
 #define PN_DEFAULT_MEMORY_SIZE (1024 * 1024)
 #define PN_MEMORY_GUARD_SIZE 1024
 #define PN_PAGESHIFT 12
 #define PN_PAGESIZE (1 << PN_PAGESHIFT)
 #define PN_INSTRUCTIONS_QUANTUM 100
+#define PN_FAKE_GETCWD "/home"
 
 /**** TYPEDEFS  ***************************************************************/
 
@@ -804,40 +806,41 @@ typedef enum PNPppInterfaceId {
 } PNPppInterfaceId;
 #endif /* PN_PPAPI */
 
-#define PN_FOREACH_ERRNO(V)                 \
-  V(EPERM, 1, "Operation not permitted")    \
-  V(ENOENT, 2, "No such file or directory") \
-  V(ESRCH, 3, "No such process")            \
-  V(EINTR, 4, "Interrupted system call")    \
-  V(EIO, 5, "I/O error")                    \
-  V(ENXIO, 6, "No such device or address")  \
-  V(E2BIG, 7, "Argument list too long")     \
-  V(ENOEXEC, 8, "Exec format error")        \
-  V(EBADF, 9, "Bad file number")            \
-  V(ECHILD, 10, "No child processes")       \
-  V(EAGAIN, 11, "Try again")                \
-  V(ENOMEM, 12, "Out of memory")            \
-  V(EACCES, 13, "Permission denied")        \
-  V(EFAULT, 14, "Bad address")              \
-  V(EBUSY, 16, "Device or resource busy")   \
-  V(EEXIST, 17, "File exists")              \
-  V(EXDEV, 18, "Cross-device link")         \
-  V(ENODEV, 19, "No such device")           \
-  V(ENOTDIR, 20, "Not a directory")         \
-  V(EISDIR, 21, "Is a directory")           \
-  V(EINVAL, 22, "Invalid argument")         \
-  V(ENFILE, 23, "File table overflow")      \
-  V(EMFILE, 24, "Too many open files")      \
-  V(ENOTTY, 25, "Not a typewriter")         \
-  V(EFBIG, 27, "File too large")            \
-  V(ENOSPC, 28, "No space left on device")  \
-  V(ESPIPE, 29, "Illegal seek")             \
-  V(EROFS, 30, "Read-only file system")     \
-  V(EMLINK, 31, "Too many links")           \
-  V(EPIPE, 32, "Broken pipe")               \
-  V(ENAMETOOLONG, 36, "File name too long") \
-  V(ENOSYS, 38, "Function not implemented") \
-  V(EDQUOT, 122, "Quota exceeded")          \
+#define PN_FOREACH_ERRNO(V)                      \
+  V(EPERM, 1, "Operation not permitted")         \
+  V(ENOENT, 2, "No such file or directory")      \
+  V(ESRCH, 3, "No such process")                 \
+  V(EINTR, 4, "Interrupted system call")         \
+  V(EIO, 5, "I/O error")                         \
+  V(ENXIO, 6, "No such device or address")       \
+  V(E2BIG, 7, "Argument list too long")          \
+  V(ENOEXEC, 8, "Exec format error")             \
+  V(EBADF, 9, "Bad file number")                 \
+  V(ECHILD, 10, "No child processes")            \
+  V(EAGAIN, 11, "Try again")                     \
+  V(ENOMEM, 12, "Out of memory")                 \
+  V(EACCES, 13, "Permission denied")             \
+  V(EFAULT, 14, "Bad address")                   \
+  V(EBUSY, 16, "Device or resource busy")        \
+  V(EEXIST, 17, "File exists")                   \
+  V(EXDEV, 18, "Cross-device link")              \
+  V(ENODEV, 19, "No such device")                \
+  V(ENOTDIR, 20, "Not a directory")              \
+  V(EISDIR, 21, "Is a directory")                \
+  V(EINVAL, 22, "Invalid argument")              \
+  V(ENFILE, 23, "File table overflow")           \
+  V(EMFILE, 24, "Too many open files")           \
+  V(ENOTTY, 25, "Not a typewriter")              \
+  V(EFBIG, 27, "File too large")                 \
+  V(ENOSPC, 28, "No space left on device")       \
+  V(ESPIPE, 29, "Illegal seek")                  \
+  V(EROFS, 30, "Read-only file system")          \
+  V(EMLINK, 31, "Too many links")                \
+  V(EPIPE, 32, "Broken pipe")                    \
+  V(ERANGE, 34, "Math result not representable") \
+  V(ENAMETOOLONG, 36, "File name too long")      \
+  V(ENOSYS, 38, "Function not implemented")      \
+  V(EDQUOT, 122, "Quota exceeded")               \
   V(ETIMEDOUT, 110, "Connection timed out")
 
 typedef enum PNErrno {
@@ -1338,6 +1341,7 @@ typedef struct PNExecutor {
   PNBitSet mapped_pages;
   PNAllocator allocator;
   PNJmpBufId next_jmpbuf_id;
+  int fd_map[PN_MAX_FDS]; /* Map from target fd to host fd */
 #if PN_PPAPI
   PNPpapi ppapi;
 #endif

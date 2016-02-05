@@ -218,6 +218,13 @@ void pn_executor_init(PNExecutor* executor, PNModule* module) {
          sizeof(executor->memory->ppapi_ppp_interfaces));
 #endif /* PN_PPAPI */
 
+  /* Initalize all fds to -1 */
+  memset(executor->fd_map, 0xff, sizeof(executor->fd_map));
+  /* Passthrough for std{in,out,err} */
+  executor->fd_map[0] = 0;
+  executor->fd_map[1] = 1;
+  executor->fd_map[2] = 2;
+
   pn_executor_init_module_values(executor);
 
   PNThread* thread = &executor->start_thread;

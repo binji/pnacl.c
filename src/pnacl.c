@@ -6,6 +6,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <getopt.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -65,6 +66,7 @@ static PNBool g_pn_repeat_load_times = 1;
 #if PN_PPAPI
 static PNBool g_pn_ppapi = PN_FALSE;
 #endif /* PN_PPAPI */
+static PNBool g_pn_filesystem_access = PN_FALSE;
 
 #if PN_TRACING
 static const char* g_pn_trace_function_filter;
@@ -117,6 +119,7 @@ static const char* g_pn_opcode_names[] = {
 #include "pn_calculate_liveness.h"
 #include "pn_read.h"
 #include "pn_executor.h"
+#include "pn_filesystem.h"
 #include "pn_builtins.h"
 #include "pn_ppapi.h"
 
@@ -127,6 +130,7 @@ enum {
   PN_FLAG_HELP,
   PN_FLAG_MEMORY_SIZE,
   PN_FLAG_NO_RUN,
+  PN_FLAG_FILESYSTEM_ACCESS,
 #if PN_PPAPI
   PN_FLAG_PPAPI,
 #endif /* PN_PPAPI */
@@ -162,6 +166,7 @@ static struct option g_pn_long_options[] = {
     {"help", no_argument, NULL, 'h'},
     {"memory-size", required_argument, NULL, 'm'},
     {"no-run", no_argument, NULL, 'n'},
+    {"filesystem-access", no_argument, NULL, 'a'},
 #if PN_PPAPI
     {"ppapi", no_argument, NULL, 0},
 #endif /* PN_PPAPI */
@@ -205,6 +210,7 @@ static PNOptionHelp g_pn_option_help[] = {
     {PN_FLAG_MEMORY_SIZE, "SIZE",
      "size of runtime memory. suffixes k=1024, m=1024*1024"},
     {PN_FLAG_ENV, "KEY=VALUE", "set runtime environment variable KEY to VALUE"},
+    {PN_FLAG_FILESYSTEM_ACCESS, NULL, "allow access to host filesystem"},
 #if PN_TRACING
     {PN_FLAG_TRACE_FUNCTION_FILTER, "NAME",
      "only trace function with given name or id"},
@@ -336,7 +342,8 @@ static void pn_options_parse(int argc, char** argv, char** env) {
   char** environ_copy = pn_environ_copy(env);
 
   while (1) {
-    c = getopt_long(argc, argv, "vm:ne:Ehtp", g_pn_long_options, &option_index);
+    c = getopt_long(argc, argv, "vm:nae:Ehtp", g_pn_long_options,
+                    &option_index);
     if (c == -1) {
       break;
     }
@@ -523,6 +530,10 @@ static void pn_options_parse(int argc, char** argv, char** env) {
         g_pn_print_time = PN_TRUE;
 #endif /* PN_TIMERS */
         g_pn_print_stats = PN_TRUE;
+        break;
+
+      case 'a':
+        g_pn_filesystem_access = PN_TRUE;
         break;
 
       case 'h':
