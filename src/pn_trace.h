@@ -1468,6 +1468,22 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
 
 #undef PN_OPCODE_CMP2
 
+    case PN_OPCODE_INTRINSIC_LLVM_CTLZ_I32:
+    case PN_OPCODE_INTRINSIC_LLVM_CTTZ_I32: {
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_TRACE(EXECUTE, "    %s = %u  %s = %u\n", PN_VALUE(arg_ids[0], u32),
+               PN_VALUE(arg_ids[1], u8));
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_CTLZ_I64:
+    case PN_OPCODE_INTRINSIC_LLVM_CTTZ_I64: {
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_TRACE(EXECUTE, "    %s = " PN_FORMAT_u64 "  %s = %u\n",
+               PN_VALUE(arg_ids[0], u64), PN_VALUE(arg_ids[1], u8));
+      break;
+    }
+
     case PN_OPCODE_INTRINSIC_LLVM_MEMCPY:
     case PN_OPCODE_INTRINSIC_LLVM_MEMMOVE: {
       PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
@@ -1513,6 +1529,9 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
       break;
 
 #undef PN_OPCODE_INTRINSIC_CMPXCHG
+
+    case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_FENCE_ALL:
+      break;
 
 #define PN_OPCODE_INTRINSIC_LOAD(ty)                                        \
   do {                                                                      \
@@ -1668,8 +1687,6 @@ static void pn_runtime_instruction_trace_values(PNThread* thread,
     case PN_OPCODE_INTRINSIC_LLVM_BSWAP_I16:
     case PN_OPCODE_INTRINSIC_LLVM_BSWAP_I32:
     case PN_OPCODE_INTRINSIC_LLVM_BSWAP_I64:
-    case PN_OPCODE_INTRINSIC_LLVM_CTLZ_I32:
-    case PN_OPCODE_INTRINSIC_LLVM_CTTZ_I32:
     case PN_OPCODE_INTRINSIC_LLVM_FABS_F32:
     case PN_OPCODE_INTRINSIC_LLVM_FABS_F64:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I8:
@@ -2042,8 +2059,6 @@ static void pn_runtime_instruction_trace_intrinsics(
     case PN_OPCODE_INTRINSIC_LLVM_BSWAP_I16:
     case PN_OPCODE_INTRINSIC_LLVM_BSWAP_I32:
     case PN_OPCODE_INTRINSIC_LLVM_BSWAP_I64:
-    case PN_OPCODE_INTRINSIC_LLVM_CTLZ_I32:
-    case PN_OPCODE_INTRINSIC_LLVM_CTTZ_I32:
     case PN_OPCODE_INTRINSIC_LLVM_FABS_F32:
     case PN_OPCODE_INTRINSIC_LLVM_FABS_F64:
     case PN_OPCODE_INTRINSIC_LLVM_NACL_ATOMIC_RMW_I8:

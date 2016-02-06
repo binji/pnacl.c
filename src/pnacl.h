@@ -401,7 +401,9 @@ typedef enum PNBasicType {
   V(LLVM_BSWAP_I32, "llvm.bswap.i32")                             \
   V(LLVM_BSWAP_I64, "llvm.bswap.i64")                             \
   V(LLVM_CTLZ_I32, "llvm.ctlz.i32")                               \
+  V(LLVM_CTLZ_I64, "llvm.ctlz.i64")                               \
   V(LLVM_CTTZ_I32, "llvm.cttz.i32")                               \
+  V(LLVM_CTTZ_I64, "llvm.cttz.i64")                               \
   V(LLVM_FABS_F32, "llvm.fabs.f32")                               \
   V(LLVM_FABS_F64, "llvm.fabs.f64")                               \
   V(LLVM_MEMCPY, "llvm.memcpy.p0i8.p0i8.i32")                     \

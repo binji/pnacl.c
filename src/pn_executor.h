@@ -723,6 +723,66 @@ static void pn_thread_execute_instruction(PNThread* thread) {
 
 #define PN_ARG(i, ty) pn_thread_get_value(thread, arg_ids[i]).ty
 
+    case PN_OPCODE_INTRINSIC_LLVM_CTLZ_I32: {
+      PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_CHECK(i->num_args == 2);
+      uint32_t src = PN_ARG(0, u32);
+      uint32_t is_zero_undef = PN_ARG(1, u32);
+      uint32_t result = src == 0 ? 0 : __builtin_clz(src);
+      (void)is_zero_undef;
+      pn_thread_set_value(thread, i->result_value_id,
+                          pn_executor_value_u32(result));
+      thread->inst +=
+          sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId);
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_CTLZ_I64: {
+      PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_CHECK(i->num_args == 2);
+      uint64_t src = PN_ARG(0, u64);
+      uint32_t is_zero_undef = PN_ARG(1, u32);
+      uint64_t result = src == 0 ? 0 : __builtin_clzll(src);
+      (void)is_zero_undef;
+      pn_thread_set_value(thread, i->result_value_id,
+                          pn_executor_value_u64(result));
+      thread->inst +=
+          sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId);
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_CTTZ_I32: {
+      PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_CHECK(i->num_args == 2);
+      uint32_t src = PN_ARG(0, u32);
+      uint32_t is_zero_undef = PN_ARG(1, u32);
+      uint32_t result = src == 0 ? 0 : __builtin_ctz(src);
+      (void)is_zero_undef;
+      pn_thread_set_value(thread, i->result_value_id,
+                          pn_executor_value_u32(result));
+      thread->inst +=
+          sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId);
+      break;
+    }
+
+    case PN_OPCODE_INTRINSIC_LLVM_CTTZ_I64: {
+      PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
+      PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
+      PN_CHECK(i->num_args == 2);
+      uint64_t src = PN_ARG(0, u64);
+      uint32_t is_zero_undef = PN_ARG(1, u32);
+      uint64_t result = src == 0 ? 0 : __builtin_ctzll(src);
+      (void)is_zero_undef;
+      pn_thread_set_value(thread, i->result_value_id,
+                          pn_executor_value_u64(result));
+      thread->inst +=
+          sizeof(PNRuntimeInstructionCall) + i->num_args * sizeof(PNValueId);
+      break;
+    }
+
     case PN_OPCODE_INTRINSIC_LLVM_MEMCPY: {
       PNRuntimeInstructionCall* i = (PNRuntimeInstructionCall*)inst;
       PNValueId* arg_ids = (void*)inst + sizeof(PNRuntimeInstructionCall);
@@ -1136,8 +1196,6 @@ static void pn_thread_execute_instruction(PNThread* thread) {
       PN_OPCODE_INTRINSIC_STUB(LLVM_BSWAP_I16)
       PN_OPCODE_INTRINSIC_STUB(LLVM_BSWAP_I32)
       PN_OPCODE_INTRINSIC_STUB(LLVM_BSWAP_I64)
-      PN_OPCODE_INTRINSIC_STUB(LLVM_CTLZ_I32)
-      PN_OPCODE_INTRINSIC_STUB(LLVM_CTTZ_I32)
       PN_OPCODE_INTRINSIC_STUB(LLVM_FABS_F32)
       PN_OPCODE_INTRINSIC_STUB(LLVM_FABS_F64)
       PN_OPCODE_INTRINSIC_STUB(LLVM_NACL_ATOMIC_RMW_I8)

@@ -46,7 +46,7 @@ module {  // BlockID = 8
   }
   valuesymtab {  // BlockID = 14
     @f0 : "_start";
-    intrinsic "_start" (36)
+    intrinsic "_start" (38)
   }
   function void @f0(i32 %p0) {  // BlockID = 12
     blocks 1;
